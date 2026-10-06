@@ -59,8 +59,7 @@ class TestModels(unittest.TestCase):
 
     def test_subscription_defaults(self):
         subscription = UserSubscription(
-            guild_id=123,
-            user_id=456,
+            user_id=123456789,
         )
 
         self.assertFalse(

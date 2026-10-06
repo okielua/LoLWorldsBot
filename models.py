@@ -95,7 +95,6 @@ class Standing:
 
 @dataclass
 class UserSubscription:
-    guild_id: int
     user_id: int
 
     subscribed_to_all_matches: bool = False
@@ -107,7 +106,6 @@ class UserSubscription:
 
 @dataclass
 class Prediction:
-    guild_id: int
     user_id: int
     match_id: str
 
