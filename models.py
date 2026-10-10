@@ -64,6 +64,7 @@ class Match:
     start_time: datetime
     best_of: int
 
+    round_name: str | None = None
     status: MatchStatus = MatchStatus.SCHEDULED
 
     team1_score: int | None = None
