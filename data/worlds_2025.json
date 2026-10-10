@@ -1,0 +1,917 @@
+{
+  "_meta": {
+    "purpose": "Static historical test fixture for LoLWorldsBot development",
+    "created_for": "LoLWorldsBot",
+    "data_scope": "Worlds 2025 tournament metadata, stages, teams, series results, and Swiss standings",
+    "time_note": "Match dates/results are historical. For Swiss days with multiple series, start_time values are deterministic test slots derived from Riot's official daily broadcast start time and are not guaranteed to equal each series' exact historical scheduled start. Knockout start times use Riot's published daily start.",
+    "sources": [
+      {
+        "name": "Riot Games - Worlds 2025 Primer",
+        "url": "https://lolesports.com/en-GB/news/worlds-2025-primer",
+        "used_for": [
+          "official tournament dates",
+          "stage format",
+          "qualified teams",
+          "official daily start times"
+        ]
+      },
+      {
+        "name": "Leaguepedia - Worlds 2025",
+        "url": "https://lol.fandom.com/wiki/2025_Season_World_Championship",
+        "used_for": [
+          "Swiss standings",
+          "match progression",
+          "Play-In result"
+        ]
+      },
+      {
+        "name": "Esports.gg - Worlds 2025 schedule and results",
+        "url": "https://esports.gg/guides/league-of-legends/league-of-legends-worlds-2025-schedule-matches-and-results/",
+        "used_for": [
+          "historical matchups",
+          "Swiss series scores",
+          "knockout series scores"
+        ]
+      },
+      {
+        "name": "Games of Legends - Worlds 2025 Main Event",
+        "url": "https://gol.gg/tournament/tournament-stats/Worlds%202025%20Main%20Event/",
+        "used_for": [
+          "cross-checking main-event existence and aggregate game count"
+        ]
+      }
+    ]
+  },
+  "tournament": {
+    "id": "worlds-2025",
+    "name": "2025 League of Legends World Championship",
+    "year": 2025,
+    "status": "completed",
+    "start_date": "2025-10-14",
+    "end_date": "2025-11-09"
+  },
+  "stages": [
+    {
+      "id": "worlds-2025-play-in",
+      "tournament_id": "worlds-2025",
+      "name": "Play-In",
+      "order": 1,
+      "format": "Bo5"
+    },
+    {
+      "id": "worlds-2025-swiss",
+      "tournament_id": "worlds-2025",
+      "name": "Swiss Stage",
+      "order": 2,
+      "format": "Bo1 except advancement/elimination matches, which are Bo3"
+    },
+    {
+      "id": "worlds-2025-quarterfinals",
+      "tournament_id": "worlds-2025",
+      "name": "Quarterfinals",
+      "order": 3,
+      "format": "Bo5"
+    },
+    {
+      "id": "worlds-2025-semifinals",
+      "tournament_id": "worlds-2025",
+      "name": "Semifinals",
+      "order": 4,
+      "format": "Bo5"
+    },
+    {
+      "id": "worlds-2025-final",
+      "tournament_id": "worlds-2025",
+      "name": "Final",
+      "order": 5,
+      "format": "Bo5"
+    }
+  ],
+  "teams": [
+    {
+      "id": "BLG",
+      "name": "Bilibili Gaming",
+      "short_name": "BLG",
+      "region": "LPL",
+      "logo_url": null
+    },
+    {
+      "id": "AL",
+      "name": "Anyone's Legend",
+      "short_name": "AL",
+      "region": "LPL",
+      "logo_url": null
+    },
+    {
+      "id": "TES",
+      "name": "Top Esports",
+      "short_name": "TES",
+      "region": "LPL",
+      "logo_url": null
+    },
+    {
+      "id": "IG",
+      "name": "Invictus Gaming",
+      "short_name": "IG",
+      "region": "LPL",
+      "logo_url": null
+    },
+    {
+      "id": "GEN",
+      "name": "Gen.G",
+      "short_name": "GEN",
+      "region": "LCK",
+      "logo_url": null
+    },
+    {
+      "id": "HLE",
+      "name": "Hanwha Life Esports",
+      "short_name": "HLE",
+      "region": "LCK",
+      "logo_url": null
+    },
+    {
+      "id": "KT",
+      "name": "KT Rolster",
+      "short_name": "KT",
+      "region": "LCK",
+      "logo_url": null
+    },
+    {
+      "id": "T1",
+      "name": "T1",
+      "short_name": "T1",
+      "region": "LCK",
+      "logo_url": null
+    },
+    {
+      "id": "G2",
+      "name": "G2 Esports",
+      "short_name": "G2",
+      "region": "LEC",
+      "logo_url": null
+    },
+    {
+      "id": "MKOI",
+      "name": "Movistar KOI",
+      "short_name": "MKOI",
+      "region": "LEC",
+      "logo_url": null
+    },
+    {
+      "id": "FNC",
+      "name": "Fnatic",
+      "short_name": "FNC",
+      "region": "LEC",
+      "logo_url": null
+    },
+    {
+      "id": "FLY",
+      "name": "FlyQuest",
+      "short_name": "FLY",
+      "region": "LTA",
+      "logo_url": null
+    },
+    {
+      "id": "VKS",
+      "name": "Vivo Keyd Stars",
+      "short_name": "VKS",
+      "region": "LTA",
+      "logo_url": null
+    },
+    {
+      "id": "100T",
+      "name": "100 Thieves",
+      "short_name": "100T",
+      "region": "LTA",
+      "logo_url": null
+    },
+    {
+      "id": "CFO",
+      "name": "CTBC Flying Oyster",
+      "short_name": "CFO",
+      "region": "LCP",
+      "logo_url": null
+    },
+    {
+      "id": "TSW",
+      "name": "Team Secret Whales",
+      "short_name": "TSW",
+      "region": "LCP",
+      "logo_url": null
+    },
+    {
+      "id": "PSG",
+      "name": "PSG Talon",
+      "short_name": "PSG",
+      "region": "LCP",
+      "logo_url": null
+    }
+  ],
+  "matches": [
+    {
+      "id": "w25-playin-t1-ig",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-play-in",
+      "round_name": "Qualification Match",
+      "team1_id": "T1",
+      "team2_id": "IG",
+      "start_time": "2025-10-14T08:00:00Z",
+      "best_of": 5,
+      "status": "completed",
+      "team1_score": 3,
+      "team2_score": 1,
+      "winner_id": "T1"
+    },
+    {
+      "id": "w25-swiss-01",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 1",
+      "team1_id": "TSW",
+      "team2_id": "VKS",
+      "start_time": "2025-10-15T05:00:00Z",
+      "best_of": 1,
+      "status": "completed",
+      "team1_score": 1,
+      "team2_score": 0,
+      "winner_id": "TSW"
+    },
+    {
+      "id": "w25-swiss-02",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 1",
+      "team1_id": "CFO",
+      "team2_id": "FNC",
+      "start_time": "2025-10-15T06:00:00Z",
+      "best_of": 1,
+      "status": "completed",
+      "team1_score": 1,
+      "team2_score": 0,
+      "winner_id": "CFO"
+    },
+    {
+      "id": "w25-swiss-03",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 1",
+      "team1_id": "KT",
+      "team2_id": "MKOI",
+      "start_time": "2025-10-15T07:00:00Z",
+      "best_of": 1,
+      "status": "completed",
+      "team1_score": 1,
+      "team2_score": 0,
+      "winner_id": "KT"
+    },
+    {
+      "id": "w25-swiss-04",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 1",
+      "team1_id": "BLG",
+      "team2_id": "100T",
+      "start_time": "2025-10-15T08:00:00Z",
+      "best_of": 1,
+      "status": "completed",
+      "team1_score": 0,
+      "team2_score": 1,
+      "winner_id": "100T"
+    },
+    {
+      "id": "w25-swiss-05",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 1",
+      "team1_id": "FLY",
+      "team2_id": "T1",
+      "start_time": "2025-10-15T09:00:00Z",
+      "best_of": 1,
+      "status": "completed",
+      "team1_score": 0,
+      "team2_score": 1,
+      "winner_id": "T1"
+    },
+    {
+      "id": "w25-swiss-06",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 1",
+      "team1_id": "HLE",
+      "team2_id": "AL",
+      "start_time": "2025-10-15T10:00:00Z",
+      "best_of": 1,
+      "status": "completed",
+      "team1_score": 0,
+      "team2_score": 1,
+      "winner_id": "AL"
+    },
+    {
+      "id": "w25-swiss-07",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 1",
+      "team1_id": "G2",
+      "team2_id": "TES",
+      "start_time": "2025-10-15T11:00:00Z",
+      "best_of": 1,
+      "status": "completed",
+      "team1_score": 0,
+      "team2_score": 1,
+      "winner_id": "TES"
+    },
+    {
+      "id": "w25-swiss-08",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 1",
+      "team1_id": "GEN",
+      "team2_id": "PSG",
+      "start_time": "2025-10-15T12:00:00Z",
+      "best_of": 1,
+      "status": "completed",
+      "team1_score": 1,
+      "team2_score": 0,
+      "winner_id": "GEN"
+    },
+    {
+      "id": "w25-swiss-09",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 2",
+      "team1_id": "VKS",
+      "team2_id": "FLY",
+      "start_time": "2025-10-16T05:00:00Z",
+      "best_of": 1,
+      "status": "completed",
+      "team1_score": 0,
+      "team2_score": 1,
+      "winner_id": "FLY"
+    },
+    {
+      "id": "w25-swiss-10",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 2",
+      "team1_id": "KT",
+      "team2_id": "TSW",
+      "start_time": "2025-10-16T06:00:00Z",
+      "best_of": 1,
+      "status": "completed",
+      "team1_score": 1,
+      "team2_score": 0,
+      "winner_id": "KT"
+    },
+    {
+      "id": "w25-swiss-11",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 2",
+      "team1_id": "MKOI",
+      "team2_id": "G2",
+      "start_time": "2025-10-16T07:00:00Z",
+      "best_of": 1,
+      "status": "completed",
+      "team1_score": 0,
+      "team2_score": 1,
+      "winner_id": "G2"
+    },
+    {
+      "id": "w25-swiss-12",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 2",
+      "team1_id": "TES",
+      "team2_id": "100T",
+      "start_time": "2025-10-16T08:00:00Z",
+      "best_of": 1,
+      "status": "completed",
+      "team1_score": 1,
+      "team2_score": 0,
+      "winner_id": "TES"
+    },
+    {
+      "id": "w25-swiss-13",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 2",
+      "team1_id": "CFO",
+      "team2_id": "T1",
+      "start_time": "2025-10-16T09:00:00Z",
+      "best_of": 1,
+      "status": "completed",
+      "team1_score": 1,
+      "team2_score": 0,
+      "winner_id": "CFO"
+    },
+    {
+      "id": "w25-swiss-14",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 2",
+      "team1_id": "GEN",
+      "team2_id": "AL",
+      "start_time": "2025-10-16T10:00:00Z",
+      "best_of": 1,
+      "status": "completed",
+      "team1_score": 0,
+      "team2_score": 1,
+      "winner_id": "AL"
+    },
+    {
+      "id": "w25-swiss-15",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 2",
+      "team1_id": "BLG",
+      "team2_id": "FNC",
+      "start_time": "2025-10-16T11:00:00Z",
+      "best_of": 1,
+      "status": "completed",
+      "team1_score": 1,
+      "team2_score": 0,
+      "winner_id": "BLG"
+    },
+    {
+      "id": "w25-swiss-16",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 2",
+      "team1_id": "HLE",
+      "team2_id": "PSG",
+      "start_time": "2025-10-16T12:00:00Z",
+      "best_of": 1,
+      "status": "completed",
+      "team1_score": 1,
+      "team2_score": 0,
+      "winner_id": "HLE"
+    },
+    {
+      "id": "w25-swiss-17",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 3",
+      "team1_id": "KT",
+      "team2_id": "TES",
+      "start_time": "2025-10-17T08:00:00Z",
+      "best_of": 3,
+      "status": "completed",
+      "team1_score": 2,
+      "team2_score": 0,
+      "winner_id": "KT"
+    },
+    {
+      "id": "w25-swiss-18",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 3",
+      "team1_id": "CFO",
+      "team2_id": "AL",
+      "start_time": "2025-10-17T11:00:00Z",
+      "best_of": 3,
+      "status": "completed",
+      "team1_score": 1,
+      "team2_score": 2,
+      "winner_id": "AL"
+    },
+    {
+      "id": "w25-swiss-19",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 3",
+      "team1_id": "FLY",
+      "team2_id": "TSW",
+      "start_time": "2025-10-18T08:00:00Z",
+      "best_of": 1,
+      "status": "completed",
+      "team1_score": 1,
+      "team2_score": 0,
+      "winner_id": "FLY"
+    },
+    {
+      "id": "w25-swiss-20",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 3",
+      "team1_id": "GEN",
+      "team2_id": "T1",
+      "start_time": "2025-10-18T09:00:00Z",
+      "best_of": 1,
+      "status": "completed",
+      "team1_score": 1,
+      "team2_score": 0,
+      "winner_id": "GEN"
+    },
+    {
+      "id": "w25-swiss-21",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 3",
+      "team1_id": "BLG",
+      "team2_id": "G2",
+      "start_time": "2025-10-18T10:00:00Z",
+      "best_of": 1,
+      "status": "completed",
+      "team1_score": 0,
+      "team2_score": 1,
+      "winner_id": "G2"
+    },
+    {
+      "id": "w25-swiss-22",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 3",
+      "team1_id": "HLE",
+      "team2_id": "100T",
+      "start_time": "2025-10-18T11:00:00Z",
+      "best_of": 1,
+      "status": "completed",
+      "team1_score": 1,
+      "team2_score": 0,
+      "winner_id": "HLE"
+    },
+    {
+      "id": "w25-swiss-23",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 3",
+      "team1_id": "MKOI",
+      "team2_id": "FNC",
+      "start_time": "2025-10-19T08:00:00Z",
+      "best_of": 3,
+      "status": "completed",
+      "team1_score": 2,
+      "team2_score": 1,
+      "winner_id": "MKOI"
+    },
+    {
+      "id": "w25-swiss-24",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 3",
+      "team1_id": "PSG",
+      "team2_id": "VKS",
+      "start_time": "2025-10-19T11:00:00Z",
+      "best_of": 3,
+      "status": "completed",
+      "team1_score": 1,
+      "team2_score": 2,
+      "winner_id": "VKS"
+    },
+    {
+      "id": "w25-swiss-25",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 4",
+      "team1_id": "CFO",
+      "team2_id": "HLE",
+      "start_time": "2025-10-22T08:00:00Z",
+      "best_of": 3,
+      "status": "completed",
+      "team1_score": 0,
+      "team2_score": 2,
+      "winner_id": "HLE"
+    },
+    {
+      "id": "w25-swiss-26",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 4",
+      "team1_id": "FLY",
+      "team2_id": "G2",
+      "start_time": "2025-10-22T11:00:00Z",
+      "best_of": 3,
+      "status": "completed",
+      "team1_score": 1,
+      "team2_score": 2,
+      "winner_id": "G2"
+    },
+    {
+      "id": "w25-swiss-27",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 4",
+      "team1_id": "MKOI",
+      "team2_id": "TSW",
+      "start_time": "2025-10-23T08:00:00Z",
+      "best_of": 3,
+      "status": "completed",
+      "team1_score": 2,
+      "team2_score": 1,
+      "winner_id": "MKOI"
+    },
+    {
+      "id": "w25-swiss-28",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 4",
+      "team1_id": "GEN",
+      "team2_id": "TES",
+      "start_time": "2025-10-23T11:00:00Z",
+      "best_of": 3,
+      "status": "completed",
+      "team1_score": 2,
+      "team2_score": 0,
+      "winner_id": "GEN"
+    },
+    {
+      "id": "w25-swiss-29",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 4",
+      "team1_id": "BLG",
+      "team2_id": "VKS",
+      "start_time": "2025-10-24T08:00:00Z",
+      "best_of": 3,
+      "status": "completed",
+      "team1_score": 2,
+      "team2_score": 0,
+      "winner_id": "BLG"
+    },
+    {
+      "id": "w25-swiss-30",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 4",
+      "team1_id": "100T",
+      "team2_id": "T1",
+      "start_time": "2025-10-24T11:00:00Z",
+      "best_of": 3,
+      "status": "completed",
+      "team1_score": 0,
+      "team2_score": 2,
+      "winner_id": "T1"
+    },
+    {
+      "id": "w25-swiss-31",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 5",
+      "team1_id": "CFO",
+      "team2_id": "FLY",
+      "start_time": "2025-10-25T05:00:00Z",
+      "best_of": 3,
+      "status": "completed",
+      "team1_score": 2,
+      "team2_score": 0,
+      "winner_id": "CFO"
+    },
+    {
+      "id": "w25-swiss-32",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 5",
+      "team1_id": "TES",
+      "team2_id": "BLG",
+      "start_time": "2025-10-25T08:00:00Z",
+      "best_of": 3,
+      "status": "completed",
+      "team1_score": 2,
+      "team2_score": 1,
+      "winner_id": "TES"
+    },
+    {
+      "id": "w25-swiss-33",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "round_name": "Round 5",
+      "team1_id": "MKOI",
+      "team2_id": "T1",
+      "start_time": "2025-10-25T11:00:00Z",
+      "best_of": 3,
+      "status": "completed",
+      "team1_score": 0,
+      "team2_score": 2,
+      "winner_id": "T1"
+    },
+    {
+      "id": "w25-qf-01",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-quarterfinals",
+      "round_name": "Quarterfinal",
+      "team1_id": "GEN",
+      "team2_id": "HLE",
+      "start_time": "2025-10-28T07:00:00Z",
+      "best_of": 5,
+      "status": "completed",
+      "team1_score": 3,
+      "team2_score": 1,
+      "winner_id": "GEN"
+    },
+    {
+      "id": "w25-qf-02",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-quarterfinals",
+      "round_name": "Quarterfinal",
+      "team1_id": "KT",
+      "team2_id": "CFO",
+      "start_time": "2025-10-29T07:00:00Z",
+      "best_of": 5,
+      "status": "completed",
+      "team1_score": 3,
+      "team2_score": 0,
+      "winner_id": "KT"
+    },
+    {
+      "id": "w25-qf-03",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-quarterfinals",
+      "round_name": "Quarterfinal",
+      "team1_id": "TES",
+      "team2_id": "G2",
+      "start_time": "2025-10-30T07:00:00Z",
+      "best_of": 5,
+      "status": "completed",
+      "team1_score": 3,
+      "team2_score": 1,
+      "winner_id": "TES"
+    },
+    {
+      "id": "w25-qf-04",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-quarterfinals",
+      "round_name": "Quarterfinal",
+      "team1_id": "AL",
+      "team2_id": "T1",
+      "start_time": "2025-10-31T07:00:00Z",
+      "best_of": 5,
+      "status": "completed",
+      "team1_score": 2,
+      "team2_score": 3,
+      "winner_id": "T1"
+    },
+    {
+      "id": "w25-sf-01",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-semifinals",
+      "round_name": "Semifinal",
+      "team1_id": "GEN",
+      "team2_id": "KT",
+      "start_time": "2025-11-01T07:00:00Z",
+      "best_of": 5,
+      "status": "completed",
+      "team1_score": 1,
+      "team2_score": 3,
+      "winner_id": "KT"
+    },
+    {
+      "id": "w25-sf-02",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-semifinals",
+      "round_name": "Semifinal",
+      "team1_id": "TES",
+      "team2_id": "T1",
+      "start_time": "2025-11-02T07:00:00Z",
+      "best_of": 5,
+      "status": "completed",
+      "team1_score": 0,
+      "team2_score": 3,
+      "winner_id": "T1"
+    },
+    {
+      "id": "w25-final",
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-final",
+      "round_name": "Final",
+      "team1_id": "T1",
+      "team2_id": "KT",
+      "start_time": "2025-11-09T07:00:00Z",
+      "best_of": 5,
+      "status": "completed",
+      "team1_score": 3,
+      "team2_score": 2,
+      "winner_id": "T1"
+    }
+  ],
+  "standings": [
+    {
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "team_id": "AL",
+      "wins": 3,
+      "losses": 0,
+      "rank": 1
+    },
+    {
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "team_id": "KT",
+      "wins": 3,
+      "losses": 0,
+      "rank": 1
+    },
+    {
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "team_id": "G2",
+      "wins": 3,
+      "losses": 1,
+      "rank": 3
+    },
+    {
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "team_id": "GEN",
+      "wins": 3,
+      "losses": 1,
+      "rank": 3
+    },
+    {
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "team_id": "HLE",
+      "wins": 3,
+      "losses": 1,
+      "rank": 3
+    },
+    {
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "team_id": "CFO",
+      "wins": 3,
+      "losses": 2,
+      "rank": 6
+    },
+    {
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "team_id": "T1",
+      "wins": 3,
+      "losses": 2,
+      "rank": 6
+    },
+    {
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "team_id": "TES",
+      "wins": 3,
+      "losses": 2,
+      "rank": 6
+    },
+    {
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "team_id": "BLG",
+      "wins": 2,
+      "losses": 3,
+      "rank": 9
+    },
+    {
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "team_id": "FLY",
+      "wins": 2,
+      "losses": 3,
+      "rank": 9
+    },
+    {
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "team_id": "MKOI",
+      "wins": 2,
+      "losses": 3,
+      "rank": 9
+    },
+    {
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "team_id": "100T",
+      "wins": 1,
+      "losses": 3,
+      "rank": 12
+    },
+    {
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "team_id": "TSW",
+      "wins": 1,
+      "losses": 3,
+      "rank": 12
+    },
+    {
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "team_id": "VKS",
+      "wins": 1,
+      "losses": 3,
+      "rank": 12
+    },
+    {
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "team_id": "FNC",
+      "wins": 0,
+      "losses": 3,
+      "rank": 15
+    },
+    {
+      "tournament_id": "worlds-2025",
+      "stage_id": "worlds-2025-swiss",
+      "team_id": "PSG",
+      "wins": 0,
+      "losses": 3,
+      "rank": 15
+    }
+  ]
+}
