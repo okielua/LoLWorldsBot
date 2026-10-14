@@ -17,10 +17,12 @@ from services.tournament_queries import (
     get_standings,
 )
 from services.user_settings import (
+    get_all_games_server_ping,
     get_followed_team_ids,
     get_notification_settings,
     get_user_timezone,
     initialize_database,
+    set_all_games_server_ping,
     set_dm_notifications,
     set_followed_team_ids,
     set_reminder_minutes,
@@ -128,15 +130,15 @@ def format_reminder_time(
     minutes: int,
 ) -> str:
     labels = {
-        60: "1 hour before",
-        30: "30 minutes before",
-        15: "15 minutes before",
+        60: "1 hour before match start",
+        30: "30 minutes before match start",
+        15: "15 minutes before match start",
         0: "At match start",
     }
 
     return labels.get(
         minutes,
-        f"{minutes} minutes before",
+        f"{minutes} minutes before match start",
     )
 
 
@@ -326,13 +328,14 @@ def build_setup_content(
 
     (
         dm_notifications,
-        server_ping,
+        followed_team_server_ping,
         reminder_minutes,
     ) = get_notification_settings(user_id)
 
+    all_games_server_ping = get_all_games_server_ping(user_id)
+
     if timezone_name:
         timezone_text = timezone_name
-
     else:
         timezone_text = "Not set"
 
@@ -345,19 +348,27 @@ def build_setup_content(
 
         followed_teams = sorted(
             followed_teams,
-            key=lambda team: (team.short_name),
+            key=lambda team: team.short_name,
         )
 
         team_text = ", ".join(team.short_name for team in followed_teams)
-
     else:
         team_text = "None selected"
 
-    dm_text = "On" if dm_notifications else "Off"
+    if all_games_server_ping:
+        all_games_text = "**On** " "*(5 minutes before match start)*"
+    else:
+        all_games_text = "**Off**"
 
-    ping_text = "On" if server_ping else "Off"
+    if followed_team_server_ping:
+        followed_ping_text = "**On** " "*(5 minutes before match start)*"
+    else:
+        followed_ping_text = "**Off**"
 
-    reminder_text = format_reminder_time(reminder_minutes)
+    if dm_notifications:
+        dm_text = f"**On** " f"*({format_reminder_time(reminder_minutes)})*"
+    else:
+        dm_text = "**Off**"
 
     return (
         f"## Worlds Bot Setup for @{safe_display_name}\n\n"
@@ -365,9 +376,12 @@ def build_setup_content(
         f"**{timezone_text}**\n\n"
         f"⭐ Teams you are following:\n"
         f"**{team_text}**\n\n"
-        f"🔔 Reminders for your teams: **{reminder_text}**\n"
-        f"\u2003\u2003↳ 📣 Server ping: **{ping_text}**\n"
-        f"\u2003\u2003↳ 💌 DM: **{dm_text}**\u200b"
+        f"🔔 Server pings for all games:\n"
+        f"{all_games_text}\n\n"
+        f"📣 Server pings for followed teams:\n"
+        f"{followed_ping_text}\n\n"
+        f"💌 DM reminders for followed teams:\n"
+        f"{dm_text}\n\u200b"
     )
 
 
@@ -411,7 +425,7 @@ class TimezoneRegionSelect(discord.ui.Select):
 
 class TimezoneRegionView(discord.ui.View):
     def __init__(self):
-        super().__init__(timeout=180)
+        super().__init__(timeout=900)
 
         self.add_item(TimezoneRegionSelect())
 
@@ -466,7 +480,7 @@ class TimezoneCityView(discord.ui.View):
         self,
         region: str,
     ):
-        super().__init__(timeout=180)
+        super().__init__(timeout=900)
 
         self.add_item(TimezoneCitySelect(region))
 
@@ -530,7 +544,7 @@ class TeamSelectView(discord.ui.View):
         self,
         user_id: int,
     ):
-        super().__init__(timeout=180)
+        super().__init__(timeout=900)
 
         self.add_item(TeamSelect(user_id))
 
@@ -583,7 +597,7 @@ class ReminderSelect(discord.ui.Select):
         ]
 
         super().__init__(
-            placeholder=("Choose reminder time..."),
+            placeholder=("Choose DM reminder time..."),
             min_values=1,
             max_values=1,
             options=options,
@@ -614,7 +628,7 @@ class ReminderSelectView(discord.ui.View):
         self,
         user_id: int,
     ):
-        super().__init__(timeout=180)
+        super().__init__(timeout=900)
 
         self.add_item(ReminderSelect(user_id))
 
@@ -629,33 +643,42 @@ class SetupView(discord.ui.View):
         self,
         user_id: int,
     ):
-        super().__init__(timeout=180)
+        super().__init__(timeout=900)
 
         self.user_id = user_id
 
         (
             dm_notifications,
-            server_ping,
+            followed_team_server_ping,
             _,
         ) = get_notification_settings(user_id)
 
-        if server_ping:
-            self.toggle_server_ping.label = "Turn Server Ping Off"
+        all_games_server_ping = get_all_games_server_ping(user_id)
+
+        if all_games_server_ping:
+            self.toggle_all_games_ping.label = "Turn All-Game Pings Off"
+
+            self.toggle_all_games_ping.style = discord.ButtonStyle.success
+        else:
+            self.toggle_all_games_ping.label = "Turn All-Game Pings On"
+
+            self.toggle_all_games_ping.style = discord.ButtonStyle.secondary
+
+        if followed_team_server_ping:
+            self.toggle_server_ping.label = "Turn Followed-Team Pings Off"
 
             self.toggle_server_ping.style = discord.ButtonStyle.success
-
         else:
-            self.toggle_server_ping.label = "Turn Server Ping On"
+            self.toggle_server_ping.label = "Turn Followed-Team Pings On"
 
             self.toggle_server_ping.style = discord.ButtonStyle.secondary
 
         if dm_notifications:
-            self.toggle_dm.label = "Turn DM Off"
+            self.toggle_dm.label = "Turn DM Reminders Off"
 
             self.toggle_dm.style = discord.ButtonStyle.success
-
         else:
-            self.toggle_dm.label = "Turn DM On"
+            self.toggle_dm.label = "Turn DM Reminders On"
 
             self.toggle_dm.style = discord.ButtonStyle.secondary
 
@@ -679,7 +702,7 @@ class SetupView(discord.ui.View):
         label="Change Followed Teams",
         style=discord.ButtonStyle.secondary,
         emoji="⭐",
-        row=1,
+        row=0,
     )
     async def edit_teams(
         self,
@@ -696,10 +719,36 @@ class SetupView(discord.ui.View):
         )
 
     @discord.ui.button(
-        label="Server Ping",
+        label="All-Game Pings",
+        style=discord.ButtonStyle.secondary,
+        emoji="🔔",
+        row=1,
+    )
+    async def toggle_all_games_ping(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ):
+        currently_enabled = get_all_games_server_ping(interaction.user.id)
+
+        set_all_games_server_ping(
+            interaction.user.id,
+            not currently_enabled,
+        )
+
+        await interaction.response.edit_message(
+            content=build_setup_content(
+                interaction.user.id,
+                interaction.user.display_name,
+            ),
+            view=SetupView(interaction.user.id),
+        )
+
+    @discord.ui.button(
+        label="Followed-Team Pings",
         style=discord.ButtonStyle.secondary,
         emoji="📣",
-        row=3,
+        row=2,
     )
     async def toggle_server_ping(
         self,
@@ -726,7 +775,7 @@ class SetupView(discord.ui.View):
         )
 
     @discord.ui.button(
-        label="DM",
+        label="DM Reminders",
         style=discord.ButtonStyle.secondary,
         emoji="💌",
         row=3,
@@ -756,10 +805,10 @@ class SetupView(discord.ui.View):
         )
 
     @discord.ui.button(
-        label="Change Personal Reminder Time",
+        label="Change DM Reminder Time",
         style=discord.ButtonStyle.secondary,
-        emoji="🔔",
-        row=2,
+        emoji="⏰",
+        row=3,
     )
     async def change_reminder_time(
         self,
@@ -768,11 +817,10 @@ class SetupView(discord.ui.View):
     ):
         await interaction.response.edit_message(
             content=(
-                "## Personal Reminder Time\n\n"
-                "Choose when you want your "
-                "personal notification for "
-                "matches involving teams "
-                "you follow."
+                "## DM Reminder Time\n\n"
+                "Choose when you want a DM "
+                "for matches involving "
+                "teams you follow."
             ),
             view=ReminderSelectView(interaction.user.id),
         )

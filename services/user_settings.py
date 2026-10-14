@@ -22,12 +22,11 @@ def initialize_database():
                 timezone TEXT,
                 dm_notifications INTEGER NOT NULL DEFAULT 0,
                 server_ping INTEGER NOT NULL DEFAULT 1,
-                reminder_minutes INTEGER NOT NULL DEFAULT 0
+                reminder_minutes INTEGER NOT NULL DEFAULT 0,
+                all_games_server_ping INTEGER NOT NULL DEFAULT 0
             )
             """)
 
-        # Upgrade databases created before notification
-        # settings existed.
         columns = {
             row[1] for row in connection.execute("PRAGMA table_info(user_settings)")
         }
@@ -50,6 +49,13 @@ def initialize_database():
             connection.execute("""
                 ALTER TABLE user_settings
                 ADD COLUMN reminder_minutes
+                INTEGER NOT NULL DEFAULT 0
+                """)
+
+        if "all_games_server_ping" not in columns:
+            connection.execute("""
+                ALTER TABLE user_settings
+                ADD COLUMN all_games_server_ping
                 INTEGER NOT NULL DEFAULT 0
                 """)
 
@@ -179,6 +185,49 @@ def get_notification_settings(
         bool(row[1]),
         int(row[2]),
     )
+
+
+def get_all_games_server_ping(
+    user_id: int,
+) -> bool:
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT all_games_server_ping
+            FROM user_settings
+            WHERE user_id = ?
+            """,
+            (user_id,),
+        ).fetchone()
+
+    if row is None:
+        return False
+
+    return bool(row[0])
+
+
+def set_all_games_server_ping(
+    user_id: int,
+    enabled: bool,
+) -> None:
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO user_settings (
+                user_id,
+                all_games_server_ping
+            )
+            VALUES (?, ?)
+            ON CONFLICT(user_id)
+            DO UPDATE SET
+                all_games_server_ping =
+                    excluded.all_games_server_ping
+            """,
+            (
+                user_id,
+                int(enabled),
+            ),
+        )
 
 
 def set_dm_notifications(
