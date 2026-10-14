@@ -8,7 +8,7 @@ import discord
 from discord import app_commands
 from dotenv import load_dotenv
 
-from services.timezones import TIMEZONE_REGIONS, get_timezone_label
+from services.timezones import TIMEZONE_REGIONS
 from services.tournament_data import load_tournament_data
 from services.tournament_queries import (
     get_matches_for_stage,
@@ -18,9 +18,13 @@ from services.tournament_queries import (
 )
 from services.user_settings import (
     get_followed_team_ids,
+    get_notification_settings,
     get_user_timezone,
     initialize_database,
+    set_dm_notifications,
     set_followed_team_ids,
+    set_reminder_minutes,
+    set_server_ping,
     set_user_timezone,
 )
 
@@ -62,6 +66,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_FILE = BASE_DIR / "data" / "worlds_2025.json"
 
 worlds = load_tournament_data(DATA_FILE)
+
 initialize_database()
 
 logger.info(
@@ -87,7 +92,11 @@ def format_local_date(
     dt: datetime,
     timezone_name: str,
 ) -> str:
-    local = local_datetime(dt, timezone_name)
+    local = local_datetime(
+        dt,
+        timezone_name,
+    )
+
     return f"{local.day} {local.strftime('%B %Y')}"
 
 
@@ -95,10 +104,14 @@ def format_local_time(
     dt: datetime,
     timezone_name: str,
 ) -> str:
-    local = local_datetime(dt, timezone_name)
+    local = local_datetime(
+        dt,
+        timezone_name,
+    )
+
     timezone_abbreviation = local.tzname() or timezone_name
 
-    return f"{local.strftime('%H:%M')} {timezone_abbreviation}"
+    return f"{local.strftime('%H:%M')} " f"{timezone_abbreviation}"
 
 
 def labels_are_duplicate(
@@ -109,6 +122,22 @@ def labels_are_duplicate(
         return value.lower().replace(" ", "").replace("-", "").rstrip("s")
 
     return normalize(stage_name) == normalize(round_name)
+
+
+def format_reminder_time(
+    minutes: int,
+) -> str:
+    labels = {
+        60: "1 hour before",
+        30: "30 minutes before",
+        15: "15 minutes before",
+        0: "At match start",
+    }
+
+    return labels.get(
+        minutes,
+        f"{minutes} minutes before",
+    )
 
 
 # --------------------------------------------------
@@ -122,7 +151,9 @@ def format_match(
     include_date: bool = True,
 ) -> str:
     team1 = worlds.teams_by_id[match.team1_id]
+
     team2 = worlds.teams_by_id[match.team2_id]
+
     stage = worlds.stages_by_id[match.stage_id]
 
     local_date = format_local_date(
@@ -152,7 +183,9 @@ def format_match(
 
     parts.append(f"**{' · '.join(stage_details)}**")
 
-    parts.append(f"`{local_time}` · " f"**{team1.short_name} vs {team2.short_name}**")
+    parts.append(
+        f"`{local_time}` · " f"**{team1.short_name} " f"vs {team2.short_name}**"
+    )
 
     if (
         match.status.value == "completed"
@@ -162,7 +195,8 @@ def format_match(
         parts.append(
             f"✅ **FINAL** · "
             f"{team1.short_name} "
-            f"{match.team1_score}–{match.team2_score} "
+            f"{match.team1_score}"
+            f"–{match.team2_score} "
             f"{team2.short_name}"
         )
 
@@ -171,9 +205,11 @@ def format_match(
             parts.append(
                 f"🔴 **LIVE** · "
                 f"{team1.short_name} "
-                f"{match.team1_score}–{match.team2_score} "
+                f"{match.team1_score}"
+                f"–{match.team2_score} "
                 f"{team2.short_name}"
             )
+
         else:
             parts.append("🔴 **LIVE**")
 
@@ -191,7 +227,11 @@ def format_match(
 
 def default_schedule_stage():
     now = datetime.now(UTC)
-    next_match = get_next_match(worlds, now)
+
+    next_match = get_next_match(
+        worlds,
+        now,
+    )
 
     if next_match:
         return worlds.stages_by_id[next_match.stage_id]
@@ -215,7 +255,9 @@ async def send_long_message(
 
         if len(current) + len(addition) > 1900:
             chunks.append(current)
+
             current = line
+
         else:
             current += addition
 
@@ -238,12 +280,14 @@ intents = discord.Intents.default()
 class WorldsBot(discord.Client):
     def __init__(self):
         super().__init__(intents=intents)
+
         self.tree = app_commands.CommandTree(self)
 
     async def setup_hook(self):
         guild = discord.Object(id=GUILD_ID)
 
         self.tree.copy_global_to(guild=guild)
+
         synced = await self.tree.sync(guild=guild)
 
         logger.info(
@@ -272,16 +316,25 @@ async def on_ready():
 
 def build_setup_content(
     user_id: int,
+    display_name: str,
 ) -> str:
+    safe_display_name = discord.utils.escape_markdown(display_name)
+
     timezone_name = get_user_timezone(user_id)
+
     followed_team_ids = get_followed_team_ids(user_id)
 
-    if timezone_name:
-        timezone_label = get_timezone_label(timezone_name)
+    (
+        dm_notifications,
+        server_ping,
+        reminder_minutes,
+    ) = get_notification_settings(user_id)
 
-        timezone_text = f"**{timezone_label}** " f"(`{timezone_name}`)"
+    if timezone_name:
+        timezone_text = timezone_name
+
     else:
-        timezone_text = "*Not set*"
+        timezone_text = "Not set"
 
     if followed_team_ids:
         followed_teams = [
@@ -292,18 +345,29 @@ def build_setup_content(
 
         followed_teams = sorted(
             followed_teams,
-            key=lambda team: team.short_name,
+            key=lambda team: (team.short_name),
         )
 
-        team_text = ", ".join(f"**{team.short_name}**" for team in followed_teams)
+        team_text = ", ".join(team.short_name for team in followed_teams)
 
     else:
-        team_text = "*None selected*"
+        team_text = "None selected"
+
+    dm_text = "On" if dm_notifications else "Off"
+
+    ping_text = "On" if server_ping else "Off"
+
+    reminder_text = format_reminder_time(reminder_minutes)
 
     return (
-        "## Worlds Bot Setup\n\n"
-        f"🌍 **Timezone:** {timezone_text}\n"
-        f"⭐ **Following:** {team_text}"
+        f"## Worlds Bot Setup for @{safe_display_name}\n\n"
+        f"🌍 Timezone:\n"
+        f"**{timezone_text}**\n\n"
+        f"⭐ Teams you are following:\n"
+        f"**{team_text}**\n\n"
+        f"🔔 Reminders for your teams: **{reminder_text}**\n"
+        f"\u2003\u2003↳ 📣 Server ping: **{ping_text}**\n"
+        f"\u2003\u2003↳ 💌 DM: **{dm_text}**\u200b"
     )
 
 
@@ -323,7 +387,7 @@ class TimezoneRegionSelect(discord.ui.Select):
         ]
 
         super().__init__(
-            placeholder="Choose your region...",
+            placeholder=("Choose your region..."),
             min_values=1,
             max_values=1,
             options=options,
@@ -364,11 +428,14 @@ class TimezoneCitySelect(discord.ui.Select):
                 label=label,
                 value=timezone_name,
             )
-            for label, timezone_name in TIMEZONE_REGIONS[region]
+            for (
+                label,
+                timezone_name,
+            ) in TIMEZONE_REGIONS[region]
         ]
 
         super().__init__(
-            placeholder="Choose the closest city...",
+            placeholder=("Choose the closest city..."),
             min_values=1,
             max_values=1,
             options=options,
@@ -386,7 +453,10 @@ class TimezoneCitySelect(discord.ui.Select):
         )
 
         await interaction.response.edit_message(
-            content=build_setup_content(interaction.user.id),
+            content=build_setup_content(
+                interaction.user.id,
+                interaction.user.display_name,
+            ),
             view=SetupView(interaction.user.id),
         )
 
@@ -415,13 +485,13 @@ class TeamSelect(discord.ui.Select):
 
         teams = sorted(
             worlds.teams,
-            key=lambda team: team.short_name,
+            key=lambda team: (team.short_name),
         )
 
         options = [
             discord.SelectOption(
                 label=team.name,
-                description=team.short_name,
+                description=(team.short_name),
                 value=team.id,
                 default=(team.id in followed_team_ids),
             )
@@ -429,7 +499,7 @@ class TeamSelect(discord.ui.Select):
         ]
 
         super().__init__(
-            placeholder="Choose teams to follow...",
+            placeholder=("Choose teams to follow..."),
             min_values=0,
             max_values=len(options),
             options=options,
@@ -447,7 +517,10 @@ class TeamSelect(discord.ui.Select):
         )
 
         await interaction.response.edit_message(
-            content=build_setup_content(interaction.user.id),
+            content=build_setup_content(
+                interaction.user.id,
+                interaction.user.display_name,
+            ),
             view=SetupView(interaction.user.id),
         )
 
@@ -460,6 +533,90 @@ class TeamSelectView(discord.ui.View):
         super().__init__(timeout=180)
 
         self.add_item(TeamSelect(user_id))
+
+
+# --------------------------------------------------
+# Reminder picker
+# --------------------------------------------------
+
+
+class ReminderSelect(discord.ui.Select):
+    def __init__(
+        self,
+        user_id: int,
+    ):
+        (
+            _,
+            _,
+            current_minutes,
+        ) = get_notification_settings(user_id)
+
+        choices = [
+            (
+                "1 hour before",
+                60,
+            ),
+            (
+                "30 minutes before",
+                30,
+            ),
+            (
+                "15 minutes before",
+                15,
+            ),
+            (
+                "At match start",
+                0,
+            ),
+        ]
+
+        options = [
+            discord.SelectOption(
+                label=label,
+                value=str(minutes),
+                default=(minutes == current_minutes),
+            )
+            for (
+                label,
+                minutes,
+            ) in choices
+        ]
+
+        super().__init__(
+            placeholder=("Choose reminder time..."),
+            min_values=1,
+            max_values=1,
+            options=options,
+        )
+
+    async def callback(
+        self,
+        interaction: discord.Interaction,
+    ):
+        minutes = int(self.values[0])
+
+        set_reminder_minutes(
+            interaction.user.id,
+            minutes,
+        )
+
+        await interaction.response.edit_message(
+            content=build_setup_content(
+                interaction.user.id,
+                interaction.user.display_name,
+            ),
+            view=SetupView(interaction.user.id),
+        )
+
+
+class ReminderSelectView(discord.ui.View):
+    def __init__(
+        self,
+        user_id: int,
+    ):
+        super().__init__(timeout=180)
+
+        self.add_item(ReminderSelect(user_id))
 
 
 # --------------------------------------------------
@@ -476,10 +633,37 @@ class SetupView(discord.ui.View):
 
         self.user_id = user_id
 
+        (
+            dm_notifications,
+            server_ping,
+            _,
+        ) = get_notification_settings(user_id)
+
+        if server_ping:
+            self.toggle_server_ping.label = "Turn Server Ping Off"
+
+            self.toggle_server_ping.style = discord.ButtonStyle.success
+
+        else:
+            self.toggle_server_ping.label = "Turn Server Ping On"
+
+            self.toggle_server_ping.style = discord.ButtonStyle.secondary
+
+        if dm_notifications:
+            self.toggle_dm.label = "Turn DM Off"
+
+            self.toggle_dm.style = discord.ButtonStyle.success
+
+        else:
+            self.toggle_dm.label = "Turn DM On"
+
+            self.toggle_dm.style = discord.ButtonStyle.secondary
+
     @discord.ui.button(
         label="Change Timezone",
         style=discord.ButtonStyle.secondary,
         emoji="🌍",
+        row=0,
     )
     async def change_timezone(
         self,
@@ -495,6 +679,7 @@ class SetupView(discord.ui.View):
         label="Change Followed Teams",
         style=discord.ButtonStyle.secondary,
         emoji="⭐",
+        row=1,
     )
     async def edit_teams(
         self,
@@ -503,9 +688,93 @@ class SetupView(discord.ui.View):
     ):
         await interaction.response.edit_message(
             content=(
-                "## Choose teams to follow\n\n" "Select any teams you want to follow."
+                "## Choose teams to follow\n\n"
+                "Select any teams you want "
+                "to follow."
             ),
             view=TeamSelectView(interaction.user.id),
+        )
+
+    @discord.ui.button(
+        label="Server Ping",
+        style=discord.ButtonStyle.secondary,
+        emoji="📣",
+        row=3,
+    )
+    async def toggle_server_ping(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ):
+        (
+            _,
+            server_ping,
+            _,
+        ) = get_notification_settings(interaction.user.id)
+
+        set_server_ping(
+            interaction.user.id,
+            not server_ping,
+        )
+
+        await interaction.response.edit_message(
+            content=build_setup_content(
+                interaction.user.id,
+                interaction.user.display_name,
+            ),
+            view=SetupView(interaction.user.id),
+        )
+
+    @discord.ui.button(
+        label="DM",
+        style=discord.ButtonStyle.secondary,
+        emoji="💌",
+        row=3,
+    )
+    async def toggle_dm(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ):
+        (
+            dm_notifications,
+            _,
+            _,
+        ) = get_notification_settings(interaction.user.id)
+
+        set_dm_notifications(
+            interaction.user.id,
+            not dm_notifications,
+        )
+
+        await interaction.response.edit_message(
+            content=build_setup_content(
+                interaction.user.id,
+                interaction.user.display_name,
+            ),
+            view=SetupView(interaction.user.id),
+        )
+
+    @discord.ui.button(
+        label="Change Personal Reminder Time",
+        style=discord.ButtonStyle.secondary,
+        emoji="🔔",
+        row=2,
+    )
+    async def change_reminder_time(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ):
+        await interaction.response.edit_message(
+            content=(
+                "## Personal Reminder Time\n\n"
+                "Choose when you want your "
+                "personal notification for "
+                "matches involving teams "
+                "you follow."
+            ),
+            view=ReminderSelectView(interaction.user.id),
         )
 
 
@@ -525,7 +794,8 @@ async def require_timezone(
     await interaction.response.send_message(
         "## Set your timezone first\n\n"
         "Choose your region below. "
-        "The bot will use your timezone for all match times.",
+        "The bot will use your timezone "
+        "for all match times.",
         view=TimezoneRegionView(),
         ephemeral=True,
     )
@@ -552,7 +822,7 @@ async def team_autocomplete(
 
     return [
         app_commands.Choice(
-            name=f"{team.name} ({team.short_name})",
+            name=(f"{team.name} " f"({team.short_name})"),
             value=team.id,
         )
         for team in matches[:25]
@@ -565,7 +835,7 @@ async def stage_autocomplete(
 ):
     current = current.lower()
 
-    matches = [stage for stage in worlds.stages if current in stage.name.lower()]
+    matches = [stage for stage in worlds.stages if (current in stage.name.lower())]
 
     return [
         app_commands.Choice(
@@ -583,7 +853,7 @@ async def stage_autocomplete(
 
 @bot.tree.command(
     name="ping",
-    description="Check whether the Worlds bot is online.",
+    description=("Check whether the Worlds bot is online."),
 )
 async def ping(
     interaction: discord.Interaction,
@@ -595,21 +865,25 @@ async def ping(
 
 @bot.tree.command(
     name="setup",
-    description="Set up your Worlds preferences.",
+    description=("Set up your Worlds preferences."),
 )
 async def setup(
     interaction: discord.Interaction,
 ):
-    await interaction.response.send_message(
-        build_setup_content(interaction.user.id),
+    await interaction.response.defer(ephemeral=True)
+
+    await interaction.edit_original_response(
+        content=build_setup_content(
+            interaction.user.id,
+            interaction.user.display_name,
+        ),
         view=SetupView(interaction.user.id),
-        ephemeral=True,
     )
 
 
 @bot.tree.command(
     name="next",
-    description="Show the next Worlds match.",
+    description=("Show the next Worlds match."),
 )
 async def next_match_command(
     interaction: discord.Interaction,
@@ -628,6 +902,7 @@ async def next_match_command(
         await interaction.response.send_message(
             "There are no upcoming matches " "in the current tournament data."
         )
+
         return
 
     formatted_match = format_match(
@@ -642,7 +917,7 @@ async def next_match_command(
 
 @bot.tree.command(
     name="schedule",
-    description="Show the Worlds match schedule.",
+    description=("Show the Worlds match schedule."),
 )
 @app_commands.describe(
     stage="Optional tournament stage",
@@ -668,6 +943,7 @@ async def schedule(
                 "I couldn't find that stage.",
                 ephemeral=True,
             )
+
             return
 
     matches = get_matches_for_stage(
@@ -677,16 +953,17 @@ async def schedule(
 
     matches = sorted(
         matches,
-        key=lambda match: match.start_time,
+        key=lambda match: (match.start_time),
     )
 
     if not matches:
         await interaction.response.send_message(
-            f"No matches found for {selected_stage.name}."
+            f"No matches found for " f"{selected_stage.name}."
         )
+
         return
 
-    header = f"# {worlds.tournament.year} Worlds Schedule"
+    header = f"# {worlds.tournament.year} " f"Worlds Schedule"
 
     lines = []
     current_date = None
@@ -726,7 +1003,7 @@ async def schedule(
 
 @bot.tree.command(
     name="team",
-    description="Show a team's Worlds matches.",
+    description=("Show a team's Worlds matches."),
 )
 @app_commands.describe(
     team="Choose a Worlds team",
@@ -748,6 +1025,7 @@ async def team(
             "I couldn't find that team.",
             ephemeral=True,
         )
+
         return
 
     matches = get_matches_for_team(
@@ -757,10 +1035,10 @@ async def team(
 
     matches = sorted(
         matches,
-        key=lambda match: match.start_time,
+        key=lambda match: (match.start_time),
     )
 
-    header = f"## {selected_team.name}\n" f"**Region:** {selected_team.region}"
+    header = f"## {selected_team.name}\n" f"**Region:** " f"{selected_team.region}"
 
     lines = [
         format_match(
@@ -779,13 +1057,13 @@ async def team(
 
 @bot.tree.command(
     name="standings",
-    description="Show the Worlds Swiss standings.",
+    description=("Show the Worlds Swiss standings."),
 )
 async def standings(
     interaction: discord.Interaction,
 ):
     swiss_stage = next(
-        stage for stage in worlds.stages if "swiss" in stage.name.lower()
+        stage for stage in worlds.stages if ("swiss" in stage.name.lower())
     )
 
     table = get_standings(
@@ -795,6 +1073,7 @@ async def standings(
 
     if not table:
         await interaction.response.send_message("No standings are available.")
+
         return
 
     lines = []
@@ -807,17 +1086,18 @@ async def standings(
         lines.append(
             f"`{str(rank).rjust(2)}.` "
             f"**{team.short_name}** "
-            f"{standing.wins}-{standing.losses}"
+            f"{standing.wins}"
+            f"-{standing.losses}"
         )
 
-    message = "## Worlds 2025 — Swiss Standings\n\n" + "\n".join(lines)
+    message = "## Worlds 2025 — " "Swiss Standings\n\n" + "\n".join(lines)
 
     await interaction.response.send_message(message)
 
 
 @bot.tree.command(
     name="help",
-    description="Show the available bot commands.",
+    description=("Show the available bot commands."),
 )
 async def help_command(
     interaction: discord.Interaction,
@@ -828,7 +1108,7 @@ async def help_command(
         "`/schedule` — Match schedule\n"
         "`/standings` — Current standings\n"
         "`/team` — Team matches\n"
-        "`/setup` — Your timezone and followed teams\n"
+        "`/setup` — Your personal setup\n"
         "`/ping` — Check bot status"
     )
 
@@ -850,19 +1130,26 @@ async def on_app_command_error(
         error,
     )
 
-    message = "Something went wrong while running that command."
+    message = "Something went wrong while " "running that command."
 
-    if interaction.response.is_done():
-        await interaction.followup.send(
-            message,
-            ephemeral=True,
-        )
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send(
+                message,
+                ephemeral=True,
+            )
 
-    else:
-        await interaction.response.send_message(
-            message,
-            ephemeral=True,
-        )
+        else:
+            await interaction.response.send_message(
+                message,
+                ephemeral=True,
+            )
+
+    except (
+        discord.NotFound,
+        discord.HTTPException,
+    ):
+        logger.warning("Could not send error message " "for expired interaction.")
 
 
 # --------------------------------------------------
