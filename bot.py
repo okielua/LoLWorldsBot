@@ -1,6 +1,6 @@
 import logging
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -8,7 +8,11 @@ import discord
 from discord import app_commands
 from dotenv import load_dotenv
 
-from services.reminder_engine import get_server_ping_user_ids
+from services.reminder_scheduler import check_reminders
+from services.reminder_engine import (
+    ReminderTracker,
+    get_server_ping_user_ids,
+)
 from services.timezones import TIMEZONE_REGIONS
 from services.tournament_data import load_tournament_data
 from services.tournament_queries import (
@@ -939,6 +943,81 @@ async def test_reminder(
         "**Match:** T1 vs G2\n\n"
         "**Users who would be server-pinged:**\n"
         f"{user_list}"
+    )
+
+    await interaction.response.send_message(
+        message,
+        ephemeral=True,
+    )
+
+
+# Temporary developer command
+@bot.tree.command(
+    name="simulate-reminder",
+    description="Simulate a reminder using historical Worlds data.",
+)
+async def simulate_reminder(
+    interaction: discord.Interaction,
+):
+    users = get_all_user_reminder_preferences()
+
+    t1_matches = sorted(
+        [
+            match
+            for match in worlds.matches
+            if (match.team1_id == "T1" or match.team2_id == "T1")
+        ],
+        key=lambda match: match.start_time,
+    )
+
+    if not t1_matches:
+        await interaction.response.send_message(
+            "No T1 matches found in the test data.",
+            ephemeral=True,
+        )
+        return
+
+    match = t1_matches[0]
+
+    simulated_now = match.start_time - timedelta(minutes=5)
+
+    tracker = ReminderTracker()
+
+    result = check_reminders(
+        matches=[match],
+        users=users,
+        now=simulated_now,
+        tracker=tracker,
+    )
+
+    if not result.server_reminders:
+        await interaction.response.send_message(
+            "No server reminder was triggered.",
+            ephemeral=True,
+        )
+        return
+
+    reminder = result.server_reminders[0]
+
+    team1 = worlds.teams_by_id[reminder.team1_id]
+
+    team2 = worlds.teams_by_id[reminder.team2_id]
+
+    if reminder.ping_user_ids:
+        mentions = " ".join(
+            f"<@{user_id}>" for user_id in sorted(reminder.ping_user_ids)
+        )
+    else:
+        mentions = "*Nobody would be pinged.*"
+
+    message = (
+        "## 🧪 Simulated Server Reminder\n\n"
+        f"**{team1.short_name} vs "
+        f"{team2.short_name} starts "
+        f"in 5 minutes!**\n\n"
+        f"{mentions}\n\n"
+        f"-# Simulated time: "
+        f"{simulated_now.isoformat()}"
     )
 
     await interaction.response.send_message(
