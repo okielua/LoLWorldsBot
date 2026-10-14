@@ -1,5 +1,6 @@
 import sqlite3
 from pathlib import Path
+from services.reminder_engine import UserReminderPreferences
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATABASE_FILE = BASE_DIR / "data" / "worldsbot.db"
@@ -307,3 +308,60 @@ def set_reminder_minutes(
                 minutes,
             ),
         )
+
+
+# Load every user's notification preferences and followed teams
+# into the format used by the reminder engine.
+def get_all_user_reminder_preferences() -> list[UserReminderPreferences]:
+    with get_connection() as connection:
+        user_rows = connection.execute("""
+            SELECT
+                user_id,
+                dm_notifications,
+                server_ping,
+                reminder_minutes,
+                all_games_server_ping
+            FROM user_settings
+            """).fetchall()
+
+        followed_rows = connection.execute("""
+            SELECT
+                user_id,
+                team_id
+            FROM followed_teams
+            """).fetchall()
+
+    followed_by_user: dict[int, set[str]] = {}
+
+    for user_id, team_id in followed_rows:
+        followed_by_user.setdefault(
+            user_id,
+            set(),
+        ).add(team_id)
+
+    preferences = []
+
+    for (
+        user_id,
+        dm_notifications,
+        server_ping,
+        reminder_minutes,
+        all_games_server_ping,
+    ) in user_rows:
+        preferences.append(
+            UserReminderPreferences(
+                user_id=user_id,
+                followed_team_ids=frozenset(
+                    followed_by_user.get(
+                        user_id,
+                        set(),
+                    )
+                ),
+                all_games_server_ping=bool(all_games_server_ping),
+                followed_team_server_ping=bool(server_ping),
+                dm_enabled=bool(dm_notifications),
+                dm_reminder_minutes=int(reminder_minutes),
+            )
+        )
+
+    return preferences

@@ -2,21 +2,32 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 
-PUBLIC_REMINDER_MINUTES = 5
-PERSONAL_REMINDER_OPTIONS = {0, 15, 30, 60}
+SERVER_REMINDER_MINUTES = 5
+DM_REMINDER_OPTIONS = {0, 15, 30, 60}
 
 
 class ReminderType(str, Enum):
-    PUBLIC = "public"
-    PERSONAL = "personal"
+    SERVER = "server"
+    DM = "dm"
 
 
 @dataclass(frozen=True)
 class ReminderKey:
     match_id: str
     reminder_type: ReminderType
-    offset_minutes: int
     user_id: int | None = None
+
+
+@dataclass(frozen=True)
+class UserReminderPreferences:
+    user_id: int
+    followed_team_ids: frozenset[str]
+
+    all_games_server_ping: bool = False
+    followed_team_server_ping: bool = True
+
+    dm_enabled: bool = False
+    dm_reminder_minutes: int = 0
 
 
 def get_reminder_time(
@@ -46,9 +57,70 @@ def is_reminder_due(
         offset_minutes,
     )
 
-    window_end = trigger_time + timedelta(seconds=window_seconds)
+    return trigger_time <= now < trigger_time + timedelta(seconds=window_seconds)
 
-    return trigger_time <= now < window_end
+
+def follows_match(
+    preferences: UserReminderPreferences,
+    team1_id: str,
+    team2_id: str,
+) -> bool:
+    return bool(
+        preferences.followed_team_ids
+        & {
+            team1_id,
+            team2_id,
+        }
+    )
+
+
+def get_server_ping_user_ids(
+    users: list[UserReminderPreferences],
+    team1_id: str,
+    team2_id: str,
+) -> set[int]:
+    ping_user_ids = set()
+
+    for user in users:
+        if user.all_games_server_ping:
+            ping_user_ids.add(user.user_id)
+            continue
+
+        if user.followed_team_server_ping and follows_match(
+            user,
+            team1_id,
+            team2_id,
+        ):
+            ping_user_ids.add(user.user_id)
+
+    return ping_user_ids
+
+
+def get_dm_user_ids(
+    users: list[UserReminderPreferences],
+    team1_id: str,
+    team2_id: str,
+    reminder_minutes: int,
+) -> set[int]:
+    dm_user_ids = set()
+
+    for user in users:
+        if not user.dm_enabled:
+            continue
+
+        if user.dm_reminder_minutes != reminder_minutes:
+            continue
+
+        if not follows_match(
+            user,
+            team1_id,
+            team2_id,
+        ):
+            continue
+
+        dm_user_ids.add(user.user_id)
+
+    return dm_user_ids
 
 
 class ReminderTracker:

@@ -4,10 +4,16 @@ from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+# can delete this later
+from services.reminder_engine import (
+    get_server_ping_user_ids,
+)
+
 import discord
 from discord import app_commands
 from dotenv import load_dotenv
 
+from services.reminder_engine import get_server_ping_user_ids
 from services.timezones import TIMEZONE_REGIONS
 from services.tournament_data import load_tournament_data
 from services.tournament_queries import (
@@ -18,6 +24,7 @@ from services.tournament_queries import (
 )
 from services.user_settings import (
     get_all_games_server_ping,
+    get_all_user_reminder_preferences,
     get_followed_team_ids,
     get_notification_settings,
     get_user_timezone,
@@ -656,20 +663,20 @@ class SetupView(discord.ui.View):
         all_games_server_ping = get_all_games_server_ping(user_id)
 
         if all_games_server_ping:
-            self.toggle_all_games_ping.label = "Turn All-Game Pings Off"
+            self.toggle_all_games_ping.label = "Turn Server Pings for All Games OFF"
 
             self.toggle_all_games_ping.style = discord.ButtonStyle.success
         else:
-            self.toggle_all_games_ping.label = "Turn All-Game Pings On"
+            self.toggle_all_games_ping.label = "Turn Server Pings for All Games ON"
 
             self.toggle_all_games_ping.style = discord.ButtonStyle.secondary
 
         if followed_team_server_ping:
-            self.toggle_server_ping.label = "Turn Followed-Team Pings Off"
+            self.toggle_server_ping.label = "Turn Server Pings for Your Teams OFF"
 
             self.toggle_server_ping.style = discord.ButtonStyle.success
         else:
-            self.toggle_server_ping.label = "Turn Followed-Team Pings On"
+            self.toggle_server_ping.label = "Turn Server Pings for Your Teams ON"
 
             self.toggle_server_ping.style = discord.ButtonStyle.secondary
 
@@ -909,6 +916,40 @@ async def ping(
     latency_ms = round(bot.latency * 1000)
 
     await interaction.response.send_message(f"🏓 Pong! `{latency_ms} ms`")
+
+
+# Temporary developer command
+@bot.tree.command(
+    name="test-reminder",
+    description="Developer test for reminder targeting.",
+)
+async def test_reminder(
+    interaction: discord.Interaction,
+):
+    users = get_all_user_reminder_preferences()
+
+    ping_user_ids = get_server_ping_user_ids(
+        users,
+        "T1",
+        "G2",
+    )
+
+    if ping_user_ids:
+        user_list = "\n".join(f"- `{user_id}`" for user_id in sorted(ping_user_ids))
+    else:
+        user_list = "Nobody"
+
+    message = (
+        "## Reminder Target Test\n\n"
+        "**Match:** T1 vs G2\n\n"
+        "**Users who would be server-pinged:**\n"
+        f"{user_list}"
+    )
+
+    await interaction.response.send_message(
+        message,
+        ephemeral=True,
+    )
 
 
 @bot.tree.command(
