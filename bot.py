@@ -4,11 +4,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-# can delete this later
-from services.reminder_engine import (
-    get_server_ping_user_ids,
-)
-
 import discord
 from discord import app_commands
 from dotenv import load_dotenv
