@@ -1,125 +1,227 @@
 {
-  "_meta": {
-    "purpose": "Active Worlds 2026 data for LoLWorldsBot",
-    "created_for": "LoLWorldsBot",
-    "data_scope": "Qualified teams, tournament stages, and currently confirmed Worlds 2026 Play-In matches",
-    "time_note": "Match start_time values are stored in UTC. Only matchups currently confirmed by Riot are included; TBD bracket matches will be added as they become known.",
-    "sources": [
-      {
-        "name": "Riot Games - Worlds 2026 Primer",
-        "url": "https://lolesports.com/en-GB/news/worlds-2026-primer",
-        "used_for": [
-          "official tournament dates",
-          "stage format",
-          "qualified teams",
-          "Play-In participants"
+    "_meta": {
+        "purpose": "Live Worlds 2026 tournament data for LoLWorldsBot",
+        "updated": "2026-10-14",
+        "sources": [
+            {
+                "name": "Riot Games - Worlds 2026 Primer",
+                "url": "https://lolesports.com/en-GB/news/worlds-2026-primer"
+            },
+            {
+                "name": "LoL Esports Schedule",
+                "url": "https://lolesports.com/en-US/leagues/worlds"
+            }
         ]
-      },
-      {
-        "name": "LoL Esports - Schedule",
-        "url": "https://lolesports.com/en-US/leagues/worlds%2Clcs%2Clec%2Clck",
-        "used_for": [
-          "confirmed Play-In matchups",
-          "confirmed Play-In start times"
-        ]
-      }
-    ]
-  },
-  "tournament": {
-    "id": "worlds-2026",
-    "name": "2026 League of Legends World Championship",
-    "year": 2026,
-    "status": "upcoming",
-    "start_date": "2026-10-15",
-    "end_date": "2026-11-14"
-  },
-  "stages": [
-    {
-      "id": "worlds-2026-play-in",
-      "tournament_id": "worlds-2026",
-      "name": "Play-Ins",
-      "order": 1,
-      "format": "Bo5 double elimination"
     },
-    {
-      "id": "worlds-2026-swiss",
-      "tournament_id": "worlds-2026",
-      "name": "Swiss Stage",
-      "order": 2,
-      "format": "Bo1 except advancement/elimination matches, which are Bo3"
+    "tournament": {
+        "id": "worlds-2026",
+        "name": "2026 League of Legends World Championship",
+        "year": 2026,
+        "status": "upcoming",
+        "start_date": "2026-10-15",
+        "end_date": "2026-11-14"
     },
-    {
-      "id": "worlds-2026-quarterfinals",
-      "tournament_id": "worlds-2026",
-      "name": "Quarterfinals",
-      "order": 3,
-      "format": "Bo5"
-    },
-    {
-      "id": "worlds-2026-semifinals",
-      "tournament_id": "worlds-2026",
-      "name": "Semifinals",
-      "order": 4,
-      "format": "Bo5"
-    },
-    {
-      "id": "worlds-2026-final",
-      "tournament_id": "worlds-2026",
-      "name": "Final",
-      "order": 5,
-      "format": "Bo5"
-    }
-  ],
-  "teams": [
-    {"id": "AL", "name": "Anyone's Legend", "short_name": "AL", "region": "LPL", "logo_url": null},
-    {"id": "BLG", "name": "Bilibili Gaming", "short_name": "BLG", "region": "LPL", "logo_url": null},
-    {"id": "TES", "name": "Top Esports", "short_name": "TES", "region": "LPL", "logo_url": null},
-    {"id": "IG", "name": "Invictus Gaming", "short_name": "IG", "region": "LPL", "logo_url": null},
-    {"id": "GEN", "name": "Gen.G", "short_name": "GEN", "region": "LCK", "logo_url": null},
-    {"id": "HLE", "name": "Hanwha Life Esports", "short_name": "HLE", "region": "LCK", "logo_url": null},
-    {"id": "T1", "name": "T1", "short_name": "T1", "region": "LCK", "logo_url": null},
-    {"id": "DK", "name": "Dplus Kia", "short_name": "DK", "region": "LCK", "logo_url": null},
-    {"id": "G2", "name": "G2 Esports", "short_name": "G2", "region": "LEC", "logo_url": null},
-    {"id": "MKOI", "name": "Movistar KOI", "short_name": "MKOI", "region": "LEC", "logo_url": null},
-    {"id": "KC", "name": "Karmine Corp", "short_name": "KC", "region": "LEC", "logo_url": null},
-    {"id": "TLAW", "name": "Team Liquid Alienware", "short_name": "TLAW", "region": "LCS", "logo_url": null},
-    {"id": "LYON", "name": "LYON", "short_name": "LYON", "region": "LCS", "logo_url": null},
-    {"id": "C9", "name": "Cloud9 Kia", "short_name": "C9", "region": "LCS", "logo_url": null},
-    {"id": "TSW", "name": "Team Secret Whales", "short_name": "TSW", "region": "LCP", "logo_url": null},
-    {"id": "CFO", "name": "CTBC Flying Oyster", "short_name": "CFO", "region": "LCP", "logo_url": null},
-    {"id": "MVK", "name": "MVK Esports", "short_name": "MVK", "region": "LCP", "logo_url": null},
-    {"id": "LOS", "name": "LOS", "short_name": "LOS", "region": "CBLOL", "logo_url": null},
-    {"id": "FUR", "name": "FURIA", "short_name": "FUR", "region": "CBLOL", "logo_url": null}
-  ],
-  "matches": [
-    {
-      "id": "w26-playin-c9-kc",
-      "tournament_id": "worlds-2026",
-      "stage_id": "worlds-2026-play-in",
-      "round_name": "Opening Match",
-      "team1_id": "C9",
-      "team2_id": "KC",
-      "start_time": "2026-10-15T18:00:00Z",
-      "best_of": 5,
-      "status": "scheduled",
-      "team1_score": null,
-      "team2_score": null,
-      "winner_id": null
-    },
-    {
-      "id": "w26-playin-fur-mvk",
-      "tournament_id": "worlds-2026",
-      "stage_id": "worlds-2026-play-in",
-      "round_name": "Opening Match",
-      "team1_id": "FUR",
-      "team2_id": "MVK",
-      "start_time": "2026-10-15T23:00:00Z",
-      "best_of": 5,
-      "status": "scheduled",
-      "team1_score": null,
-      "team2_score": null,
-      "winner_id": null
-    }
-  ],
-  "standings": []
+    "stages": [
+        {
+            "id": "worlds-2026-play-in",
+            "tournament_id": "worlds-2026",
+            "name": "Play-In",
+            "order": 1,
+            "format": "Double-elimination Bo5"
+        },
+        {
+            "id": "worlds-2026-swiss",
+            "tournament_id": "worlds-2026",
+            "name": "Swiss Stage",
+            "order": 2,
+            "format": "Five-round Swiss"
+        },
+        {
+            "id": "worlds-2026-quarterfinals",
+            "tournament_id": "worlds-2026",
+            "name": "Quarterfinals",
+            "order": 3,
+            "format": "Bo5"
+        },
+        {
+            "id": "worlds-2026-semifinals",
+            "tournament_id": "worlds-2026",
+            "name": "Semifinals",
+            "order": 4,
+            "format": "Bo5"
+        },
+        {
+            "id": "worlds-2026-final",
+            "tournament_id": "worlds-2026",
+            "name": "Final",
+            "order": 5,
+            "format": "Bo5"
+        }
+    ],
+    "teams": [
+        {
+            "id": "AL",
+            "name": "Anyone's Legend",
+            "short_name": "AL",
+            "region": "LPL",
+            "logo_url": null
+        },
+        {
+            "id": "BLG",
+            "name": "Bilibili Gaming",
+            "short_name": "BLG",
+            "region": "LPL",
+            "logo_url": null
+        },
+        {
+            "id": "TES",
+            "name": "TOP Esports",
+            "short_name": "TES",
+            "region": "LPL",
+            "logo_url": null
+        },
+        {
+            "id": "IG",
+            "name": "Invictus Gaming",
+            "short_name": "IG",
+            "region": "LPL",
+            "logo_url": null
+        },
+        {
+            "id": "GEN",
+            "name": "Gen.G",
+            "short_name": "GEN",
+            "region": "LCK",
+            "logo_url": null
+        },
+        {
+            "id": "HLE",
+            "name": "Hanwha Life Esports",
+            "short_name": "HLE",
+            "region": "LCK",
+            "logo_url": null
+        },
+        {
+            "id": "T1",
+            "name": "T1",
+            "short_name": "T1",
+            "region": "LCK",
+            "logo_url": null
+        },
+        {
+            "id": "DK",
+            "name": "Dplus Kia",
+            "short_name": "DK",
+            "region": "LCK",
+            "logo_url": null
+        },
+        {
+            "id": "G2",
+            "name": "G2 Esports",
+            "short_name": "G2",
+            "region": "LEC",
+            "logo_url": null
+        },
+        {
+            "id": "MKOI",
+            "name": "Movistar KOI",
+            "short_name": "MKOI",
+            "region": "LEC",
+            "logo_url": null
+        },
+        {
+            "id": "KC",
+            "name": "Karmine Corp",
+            "short_name": "KC",
+            "region": "LEC",
+            "logo_url": null
+        },
+        {
+            "id": "TLAW",
+            "name": "Team Liquid Alienware",
+            "short_name": "TLAW",
+            "region": "LCS",
+            "logo_url": null
+        },
+        {
+            "id": "LYON",
+            "name": "LYON",
+            "short_name": "LYON",
+            "region": "LCS",
+            "logo_url": null
+        },
+        {
+            "id": "C9",
+            "name": "Cloud9 Kia",
+            "short_name": "C9",
+            "region": "LCS",
+            "logo_url": null
+        },
+        {
+            "id": "TSW",
+            "name": "Team Secret Whales",
+            "short_name": "TSW",
+            "region": "LCP",
+            "logo_url": null
+        },
+        {
+            "id": "CFO",
+            "name": "CTBC Flying Oyster",
+            "short_name": "CFO",
+            "region": "LCP",
+            "logo_url": null
+        },
+        {
+            "id": "MVK",
+            "name": "MVK Esports",
+            "short_name": "MVK",
+            "region": "LCP",
+            "logo_url": null
+        },
+        {
+            "id": "LOS",
+            "name": "LOS",
+            "short_name": "LOS",
+            "region": "CBLOL",
+            "logo_url": null
+        },
+        {
+            "id": "FUR",
+            "name": "FURIA",
+            "short_name": "FUR",
+            "region": "CBLOL",
+            "logo_url": null
+        }
+    ],
+    "matches": [
+        {
+            "id": "w26-playin-c9-kc",
+            "tournament_id": "worlds-2026",
+            "stage_id": "worlds-2026-play-in",
+            "round_name": "Opening Round",
+            "team1_id": "C9",
+            "team2_id": "KC",
+            "start_time": "2026-10-15T18:00:00Z",
+            "best_of": 5,
+            "status": "scheduled",
+            "team1_score": null,
+            "team2_score": null,
+            "winner_id": null
+        },
+        {
+            "id": "w26-playin-fur-mvk",
+            "tournament_id": "worlds-2026",
+            "stage_id": "worlds-2026-play-in",
+            "round_name": "Opening Round",
+            "team1_id": "FUR",
+            "team2_id": "MVK",
+            "start_time": "2026-10-15T23:00:00Z",
+            "best_of": 5,
+            "status": "scheduled",
+            "team1_score": null,
+            "team2_score": null,
+            "winner_id": null
+        }
+    ],
+    "standings": []
 }

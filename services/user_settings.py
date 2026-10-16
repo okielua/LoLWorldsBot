@@ -1,5 +1,7 @@
 import sqlite3
+from contextlib import closing
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from services.reminder_engine import UserReminderPreferences
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -31,6 +33,9 @@ def initialize_database():
         columns = {
             row[1] for row in connection.execute("PRAGMA table_info(user_settings)")
         }
+
+        if "time_format" not in columns:
+            connection.execute("ALTER TABLE user_settings ADD COLUMN time_format TEXT NOT NULL DEFAULT '24h'")
 
         if "dm_notifications" not in columns:
             connection.execute("""
@@ -67,6 +72,22 @@ def initialize_database():
                 PRIMARY KEY (user_id, team_id)
             )
             """)
+
+
+def get_user_time_format(user_id: int) -> str:
+    with closing(get_connection()) as connection:
+        row = connection.execute("SELECT time_format FROM user_settings WHERE user_id = ?", (user_id,)).fetchone()
+    return "12h" if row and row[0] == "12h" else "24h"
+
+
+def set_user_time_format(user_id: int, time_format: str) -> None:
+    if time_format not in {"12h", "24h"}:
+        raise ValueError("Choose either 12-hour or 24-hour time.")
+    with closing(get_connection()) as connection, connection:
+        connection.execute("""
+            INSERT INTO user_settings (user_id, time_format) VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET time_format = excluded.time_format
+        """, (user_id, time_format))
 
 
 def get_user_timezone(
@@ -109,6 +130,22 @@ def set_user_timezone(
                 timezone,
             ),
         )
+
+
+def get_registered_timezones() -> list[str]:
+    """Unique valid setup zones, including preferences saved before this feature."""
+    with closing(get_connection()) as connection:
+        rows = connection.execute(
+            "SELECT DISTINCT timezone FROM user_settings WHERE timezone IS NOT NULL ORDER BY timezone"
+        ).fetchall()
+    zones = []
+    for (name,) in rows:
+        try:
+            ZoneInfo(name)
+        except (ZoneInfoNotFoundError, ValueError):
+            continue
+        zones.append(name)
+    return zones
 
 
 def get_followed_team_ids(
@@ -316,12 +353,18 @@ def get_all_user_reminder_preferences() -> list[UserReminderPreferences]:
     with get_connection() as connection:
         user_rows = connection.execute("""
             SELECT
-                user_id,
-                dm_notifications,
-                server_ping,
-                reminder_minutes,
-                all_games_server_ping
-            FROM user_settings
+                users.user_id,
+                COALESCE(settings.dm_notifications, 0),
+                COALESCE(settings.server_ping, 1),
+                COALESCE(settings.reminder_minutes, 0),
+                COALESCE(settings.all_games_server_ping, 0)
+            FROM (
+                SELECT user_id FROM user_settings
+                UNION
+                SELECT user_id FROM followed_teams
+            ) AS users
+            LEFT JOIN user_settings AS settings
+                ON settings.user_id = users.user_id
             """).fetchall()
 
         followed_rows = connection.execute("""

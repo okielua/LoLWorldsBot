@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 
 SERVER_REMINDER_MINUTES = 5
+SERVER_RECOVERY_WINDOW_SECONDS = SERVER_REMINDER_MINUTES * 60
 DM_REMINDER_OPTIONS = {0, 15, 30, 60}
 
 
@@ -141,3 +142,6 @@ class ReminderTracker:
 
     def clear(self) -> None:
         self._sent.clear()
+
+    def forget_match(self, match_id: str) -> None:
+        self._sent = {key for key in self._sent if key.match_id != match_id}

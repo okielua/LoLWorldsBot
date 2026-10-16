@@ -1,6 +1,8 @@
 from datetime import UTC, datetime, timedelta
 
-from models import Match
+import pytest
+
+from models import Match, MatchStatus
 from services.reminder_engine import (
     ReminderTracker,
     UserReminderPreferences,
@@ -31,6 +33,34 @@ def make_match():
     )
 
 
+@pytest.mark.parametrize("status", [s for s in MatchStatus if s != MatchStatus.SCHEDULED])
+@pytest.mark.parametrize("minutes", [5, 0, 15, 30, 60])
+def test_non_scheduled_matches_never_generate_reminders(status, minutes):
+    match = make_match()
+    match.status = status
+    user = UserReminderPreferences(
+        user_id=1,
+        followed_team_ids=frozenset({"T1"}),
+        all_games_server_ping=True,
+        dm_enabled=True,
+        dm_reminder_minutes=minutes if minutes != 5 else 0,
+    )
+    tracker = ReminderTracker()
+    now = MATCH_START - timedelta(minutes=minutes)
+
+    result = check_reminders([match], [user], now, tracker)
+
+    assert result.server_reminders == ()
+    assert result.dm_reminders == ()
+    # Skipping an ineligible match must not consume its reminder keys.
+    match.status = MatchStatus.SCHEDULED
+    eligible_result = check_reminders([match], [user], now, tracker)
+    if minutes == 5:
+        assert len(eligible_result.server_reminders) == 1
+    else:
+        assert len(eligible_result.dm_reminders) == 1
+
+
 def test_server_reminder_fires_five_minutes_before():
     match = make_match()
 
@@ -52,6 +82,16 @@ def test_server_reminder_fires_five_minutes_before():
     assert len(result.server_reminders) == 1
 
     assert result.server_reminders[0].ping_user_ids == frozenset({1})
+
+
+def test_delivery_candidates_do_not_consume_keys_before_success():
+    tracker = ReminderTracker()
+    match = make_match()
+    now = MATCH_START - timedelta(minutes=5)
+    first = check_reminders([match], [], now, tracker, mark_sent=False)
+    second = check_reminders([match], [], now, tracker, mark_sent=False)
+    assert len(first.server_reminders) == 1
+    assert second == first
 
 
 def test_server_reminder_still_exists_with_no_pings():

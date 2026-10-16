@@ -1,7 +1,16 @@
-from datetime import datetime
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
-from models import Match, Standing
+from models import Match, MatchStatus, Standing
 from services.tournament_data import TournamentData
+
+
+def get_matches_for_local_date(data: TournamentData, local_date: date, timezone_name: str) -> list[Match]:
+    zone = ZoneInfo(timezone_name)
+    return sorted(
+        (match for match in data.matches if match.start_time.astimezone(zone).date() == local_date),
+        key=lambda match: match.start_time,
+    )
 
 
 def get_matches_for_team(
@@ -36,7 +45,7 @@ def get_next_match(
     upcoming = [
         match
         for match in data.matches
-        if match.start_time > now
+        if match.status == MatchStatus.SCHEDULED and match.start_time > now
     ]
 
     if not upcoming:
@@ -46,6 +55,24 @@ def get_next_match(
         upcoming,
         key=lambda match: match.start_time,
     )
+
+
+def get_matches_for_votes(data, now, recent_completed_ids):
+    next_match = get_next_match(data, now)
+    return sorted(
+        (match for match in data.matches
+         if match == next_match or match.status == MatchStatus.LIVE
+         or (match.status == MatchStatus.COMPLETED and match.id in recent_completed_ids)),
+        key=lambda match: match.start_time,
+    )
+
+
+def get_previous_matches(data: TournamentData, now: datetime, limit: int = 2) -> list[Match]:
+    """Newest completed series first; never treat a past start time as a result."""
+    return sorted(
+        (match for match in data.matches if match.status == MatchStatus.COMPLETED and match.start_time <= now),
+        key=lambda match: match.start_time, reverse=True,
+    )[:limit]
 
 
 def get_standings(

@@ -1,13 +1,32 @@
 import logging
+import asyncio
 import os
 from datetime import UTC, datetime, timedelta
+from math import ceil
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import discord
+from services.presentation import embed_card_payload, message_payload
 from discord import app_commands
 from dotenv import load_dotenv
 
+from models import MatchStatus
+from services.delivery_records import initialize_delivery_records
+from services.background_polling import BackgroundPolling
+from services.live_tournament import LiveTournamentStore, TBD_TEAM_ID
+from services.lolesports import LoLEsportsClient, QUERY_HASH
+from services.server_reminders import ServerReminderDelivery
+from services.server_settings import initialize_server_settings
+from services.server_setup import ServerSetupView, build_server_setup_content
+from services.polls import get_user_votes, get_upcoming_match_votes, get_recent_completed_match_ids, has_match_votes, initialize_polls
+from services.prediction_display import PREDICTION_BLUE, change_vote_text, group_voting_messages, hidden_votes_payload, my_votes_embeds, upcoming_votes_embed
+from services.match_times import TOURNAMENT_TIMEZONE, format_clock_time, format_timezone_times, private_match_details
+from services.user_settings import get_registered_timezones
+from services.server_settings import get_server_settings
+from services.voting import PersonalVoteView, VotingManager
+from services.prediction_stats import get_competition_stats
+from services.status_labels import MATCH_STATUS_LABELS
 from services.reminder_scheduler import check_reminders
 from services.reminder_engine import (
     ReminderTracker,
@@ -16,6 +35,9 @@ from services.reminder_engine import (
 from services.timezones import TIMEZONE_REGIONS
 from services.tournament_data import load_tournament_data
 from services.tournament_queries import (
+    get_previous_matches,
+    get_matches_for_local_date,
+    get_matches_for_votes,
     get_matches_for_stage,
     get_matches_for_team,
     get_next_match,
@@ -27,13 +49,13 @@ from services.user_settings import (
     get_followed_team_ids,
     get_notification_settings,
     get_user_timezone,
+    get_user_time_format,
     initialize_database,
     set_all_games_server_ping,
-    set_dm_notifications,
     set_followed_team_ids,
-    set_reminder_minutes,
     set_server_ping,
     set_user_timezone,
+    set_user_time_format,
 )
 
 # --------------------------------------------------
@@ -71,11 +93,22 @@ logger = logging.getLogger("worldsbot")
 # --------------------------------------------------
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_FILE = BASE_DIR / "data" / "worlds_2025.json"
+DATA_FILE = BASE_DIR / "data" / "worlds_2026.json"
 
-worlds = load_tournament_data(DATA_FILE)
+tournament_store = LiveTournamentStore(
+    load_tournament_data(DATA_FILE),
+    BASE_DIR / "data" / "worlds_2026_cache.json",
+    LoLEsportsClient(
+        client_version=os.getenv("LOLESPORTS_CLIENT_VERSION", "4078aa9"),
+        query_hash=os.getenv("LOLESPORTS_QUERY_HASH", QUERY_HASH),
+    ),
+)
+worlds = tournament_store.data
 
 initialize_database()
+initialize_server_settings()
+initialize_delivery_records()
+initialize_polls()
 
 logger.info(
     "Loaded %s with %s matches",
@@ -119,7 +152,7 @@ def format_local_time(
 
     timezone_abbreviation = local.tzname() or timezone_name
 
-    return f"{local.strftime('%H:%M')} " f"{timezone_abbreviation}"
+    return format_clock_time(local, timezone_abbreviation)
 
 
 def labels_are_duplicate(
@@ -132,20 +165,24 @@ def labels_are_duplicate(
     return normalize(stage_name) == normalize(round_name)
 
 
-def format_reminder_time(
-    minutes: int,
-) -> str:
-    labels = {
-        60: "1 hour before match start",
-        30: "30 minutes before match start",
-        15: "15 minutes before match start",
-        0: "At match start",
-    }
+def display_stage_name(name: str) -> str:
+    return "Play-ins" if name in {"Play-In", "Play-Ins"} else name
 
-    return labels.get(
-        minutes,
-        f"{minutes} minutes before match start",
-    )
+
+def format_relative_time(dt: datetime, now: datetime) -> str:
+    seconds = (dt - now).total_seconds()
+    if seconds <= 0:
+        return ""
+    if seconds < 60:
+        return "in less than a minute"
+
+    hours, minutes = divmod(ceil(seconds / 60), 60)
+    parts = []
+    if hours:
+        parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
+    if minutes:
+        parts.append(f"{minutes} minute{'s' if minutes != 1 else ''}")
+    return f"in {' '.join(parts)}"
 
 
 # --------------------------------------------------
@@ -157,6 +194,10 @@ def format_match(
     match,
     timezone_name: str,
     include_date: bool = True,
+    now: datetime | None = None,
+    timezones: list[str] | None = None,
+    hide_result: bool = True,
+    small_details: bool = True,
 ) -> str:
     team1 = worlds.teams_by_id[match.team1_id]
 
@@ -166,20 +207,21 @@ def format_match(
 
     local_date = format_local_date(
         match.start_time,
-        timezone_name,
+        TOURNAMENT_TIMEZONE,
     )
 
-    local_time = format_local_time(
-        match.start_time,
-        timezone_name,
-    )
+    relative_time = ""
+    if match.status == MatchStatus.SCHEDULED:
+        relative = format_relative_time(match.start_time, now or datetime.now(UTC))
+        if relative:
+            relative_time = f" ({relative})"
 
     parts = []
 
     if include_date:
-        parts.append(f"### {local_date}")
+        parts.append(f"## __{local_date}__")
 
-    stage_details = [stage.name]
+    stage_details = [display_stage_name(stage.name)]
 
     if match.round_name and not labels_are_duplicate(
         stage.name,
@@ -189,48 +231,71 @@ def format_match(
 
     stage_details.append(f"Bo{match.best_of}")
 
-    parts.append(f"**{' · '.join(stage_details)}**")
+    parts.append(('-# ' if small_details else '') + ' · '.join(stage_details))
+    times = format_timezone_times(match.start_time, timezones or [timezone_name])
+    if small_details:
+        times = "\n".join(f"-# {line}" for line in times.splitlines())
+    countdown = f"-# {relative_time.strip()}\n" if relative_time else ""
+    parts.append(f"## {team1.short_name} vs {team2.short_name}\n{countdown}{times}")
 
-    parts.append(
-        f"`{local_time}` · " f"**{team1.short_name} " f"vs {team2.short_name}**"
-    )
-
-    if (
-        match.status.value == "completed"
-        and match.team1_score is not None
-        and match.team2_score is not None
-    ):
-        parts.append(
-            f"✅ **FINAL** · "
-            f"{team1.short_name} "
-            f"{match.team1_score}"
-            f"–{match.team2_score} "
-            f"{team2.short_name}"
-        )
+    if match.status == MatchStatus.COMPLETED:
+        if match.team1_score is not None and match.team2_score is not None:
+            result = f"{team1.short_name} {match.team1_score}–{match.team2_score} {team2.short_name}"
+        elif match.winner_id:
+            result = f"Winner: {worlds.teams_by_id[match.winner_id].short_name}"
+        else:
+            result = "Result unavailable."
+        if hide_result:
+            result = f"||{result}||"
+        parts.append(f"{MATCH_STATUS_LABELS[match.status]}\n### Result: {result}")
 
     elif match.status.value == "live":
         if match.team1_score is not None and match.team2_score is not None:
-            parts.append(
-                f"🔴 **LIVE** · "
+            result = (
                 f"{team1.short_name} "
                 f"{match.team1_score}"
                 f"–{match.team2_score} "
                 f"{team2.short_name}"
             )
+            if hide_result:
+                result = f"||{result}||"
+            parts.append(f"{MATCH_STATUS_LABELS[match.status]} · {result}")
 
         else:
-            parts.append("🔴 **LIVE**")
+            parts.append(MATCH_STATUS_LABELS[match.status])
 
     elif match.status.value == "postponed":
-        parts.append("⚠️ **POSTPONED**")
+        parts.append(MATCH_STATUS_LABELS[match.status])
 
     elif match.status.value == "cancelled":
-        parts.append("⛔ **CANCELLED**")
+        parts.append(MATCH_STATUS_LABELS[match.status])
 
     else:
-        parts.append("🕒 **UPCOMING**")
+        parts.append(MATCH_STATUS_LABELS[match.status])
 
     return "\n".join(parts)
+
+
+def format_next_match(match, timezone_name: str, now: datetime, timezones=None) -> str:
+    team1 = worlds.teams_by_id[match.team1_id]
+    team2 = worlds.teams_by_id[match.team2_id]
+    stage = worlds.stages_by_id[match.stage_id]
+    stage_name = display_stage_name(stage.name)
+    stage_details = stage_name
+    if match.round_name and not labels_are_duplicate(stage.name, match.round_name):
+        stage_details += f" · {match.round_name}"
+    relative = format_relative_time(match.start_time, now)
+    official = local_datetime(match.start_time, TOURNAMENT_TIMEZONE)
+    date_time_label = f"__{official.strftime('%a')}, {official.day} {official.strftime('%b %Y')}__\n"
+    if relative:
+        date_time_label += f"\n-# ({relative})"
+    date_time_label += "\n" + "\n".join(f"-# {line}" for line in format_timezone_times(match.start_time, timezones or [timezone_name]).splitlines())
+    return (
+        f"# __Next Worlds Match:__\n"
+        f"-# {stage_details} (Bo{match.best_of})\n"
+        f"## {team1.short_name} vs {team2.short_name}\n\n"
+        f"{date_time_label}"
+    )
 
 
 def default_schedule_stage():
@@ -257,14 +322,20 @@ async def send_long_message(
 ):
     chunks = []
     current = header
+    date_heading = None
 
     for line in lines:
+        if line.startswith("## __"):
+            date_heading = line
         addition = f"\n\n{line}"
 
         if len(current) + len(addition) > 1900:
             chunks.append(current)
 
-            current = line
+            current = header
+            if date_heading and line != date_heading:
+                current += f"\n\n{date_heading}"
+            current += addition
 
         else:
             current += addition
@@ -272,10 +343,10 @@ async def send_long_message(
     if current:
         chunks.append(current)
 
-    await interaction.response.send_message(chunks[0])
+    await interaction.response.send_message(**message_payload(chunks[0]))
 
     for chunk in chunks[1:]:
-        await interaction.followup.send(chunk)
+        await interaction.followup.send(**message_payload(chunk))
 
 
 # --------------------------------------------------
@@ -290,8 +361,31 @@ class WorldsBot(discord.Client):
         super().__init__(intents=intents)
 
         self.tree = app_commands.CommandTree(self)
+        self.voting_manager = VotingManager(self, tournament_store, GUILD_ID)
+        self.server_delivery = ServerReminderDelivery(self, tournament_store, GUILD_ID, poll_manager=self.voting_manager)
+        self.background_polling = BackgroundPolling(
+            tournament_store,
+            get_all_user_reminder_preferences,
+            self.publish_tournament_data,
+            self.wait_until_ready,
+            server_delivery=self.server_delivery,
+            voting_manager=self.voting_manager,
+        )
+
+    def publish_tournament_data(self, data):
+        global worlds
+        worlds = data
 
     async def setup_hook(self):
+        global worlds
+        await tournament_store.refresh()
+        worlds = tournament_store.data
+        if tournament_store.last_error:
+            logger.warning(
+                "Using %s tournament data (last successful fetch: %s)",
+                tournament_store.source, tournament_store.fetched_at or "never",
+            )
+
         guild = discord.Object(id=GUILD_ID)
 
         self.tree.copy_global_to(guild=guild)
@@ -303,6 +397,11 @@ class WorldsBot(discord.Client):
             len(synced),
             GUILD_ID,
         )
+        self.background_polling.start()
+
+    async def close(self):
+        await self.background_polling.stop()
+        await super().close()
 
 
 bot = WorldsBot()
@@ -329,13 +428,14 @@ def build_setup_content(
     safe_display_name = discord.utils.escape_markdown(display_name)
 
     timezone_name = get_user_timezone(user_id)
+    time_format_text = "1:00 am (CEST)" if get_user_time_format(user_id) == "12h" else "1:00h (CEST)"
 
     followed_team_ids = get_followed_team_ids(user_id)
 
     (
-        dm_notifications,
+        _,
         followed_team_server_ping,
-        reminder_minutes,
+        _,
     ) = get_notification_settings(user_id)
 
     all_games_server_ping = get_all_games_server_ping(user_id)
@@ -371,23 +471,17 @@ def build_setup_content(
     else:
         followed_ping_text = "**Off**"
 
-    if dm_notifications:
-        dm_text = f"**On** " f"*({format_reminder_time(reminder_minutes)})*"
-    else:
-        dm_text = "**Off**"
-
     return (
         f"## Worlds Bot Setup for @{safe_display_name}\n\n"
         f"🌍 Timezone:\n"
-        f"**{timezone_text}**\n\n"
+        f"{timezone_text}\n\n"
+        f"🕐 Time format:\n{time_format_text}\n\n"
         f"⭐ Teams you are following:\n"
         f"**{team_text}**\n\n"
         f"🔔 Server pings for all games:\n"
         f"{all_games_text}\n\n"
         f"📣 Server pings for followed teams:\n"
-        f"{followed_ping_text}\n\n"
-        f"💌 DM reminders for followed teams:\n"
-        f"{dm_text}\n\u200b"
+        f"{followed_ping_text}\n\u200b"
     )
 
 
@@ -420,12 +514,10 @@ class TimezoneRegionSelect(discord.ui.Select):
         region = self.values[0]
 
         await interaction.response.edit_message(
-            content=(
-                "## Choose your timezone\n\n"
+            **message_payload("## Choose your timezone\n\n"
                 f"Region: **{region}**\n\n"
-                "Choose the closest city."
-            ),
-            view=TimezoneCityView(region),
+                "Choose the closest city.", controls=TimezoneCityView(region)),
+
         )
 
 
@@ -473,11 +565,11 @@ class TimezoneCitySelect(discord.ui.Select):
         )
 
         await interaction.response.edit_message(
-            content=build_setup_content(
+            **message_payload(build_setup_content(
                 interaction.user.id,
                 interaction.user.display_name,
-            ),
-            view=SetupView(interaction.user.id),
+            ), controls=SetupView(interaction.user.id)),
+
         )
 
 
@@ -504,7 +596,7 @@ class TeamSelect(discord.ui.Select):
         followed_team_ids = get_followed_team_ids(user_id)
 
         teams = sorted(
-            worlds.teams,
+            [team for team in worlds.teams if team.id != TBD_TEAM_ID],
             key=lambda team: (team.short_name),
         )
 
@@ -537,11 +629,11 @@ class TeamSelect(discord.ui.Select):
         )
 
         await interaction.response.edit_message(
-            content=build_setup_content(
+            **message_payload(build_setup_content(
                 interaction.user.id,
                 interaction.user.display_name,
-            ),
-            view=SetupView(interaction.user.id),
+            ), controls=SetupView(interaction.user.id)),
+
         )
 
 
@@ -556,92 +648,27 @@ class TeamSelectView(discord.ui.View):
 
 
 # --------------------------------------------------
-# Reminder picker
-# --------------------------------------------------
-
-
-class ReminderSelect(discord.ui.Select):
-    def __init__(
-        self,
-        user_id: int,
-    ):
-        (
-            _,
-            _,
-            current_minutes,
-        ) = get_notification_settings(user_id)
-
-        choices = [
-            (
-                "1 hour before",
-                60,
-            ),
-            (
-                "30 minutes before",
-                30,
-            ),
-            (
-                "15 minutes before",
-                15,
-            ),
-            (
-                "At match start",
-                0,
-            ),
-        ]
-
-        options = [
-            discord.SelectOption(
-                label=label,
-                value=str(minutes),
-                default=(minutes == current_minutes),
-            )
-            for (
-                label,
-                minutes,
-            ) in choices
-        ]
-
-        super().__init__(
-            placeholder=("Choose DM reminder time..."),
-            min_values=1,
-            max_values=1,
-            options=options,
-        )
-
-    async def callback(
-        self,
-        interaction: discord.Interaction,
-    ):
-        minutes = int(self.values[0])
-
-        set_reminder_minutes(
-            interaction.user.id,
-            minutes,
-        )
-
-        await interaction.response.edit_message(
-            content=build_setup_content(
-                interaction.user.id,
-                interaction.user.display_name,
-            ),
-            view=SetupView(interaction.user.id),
-        )
-
-
-class ReminderSelectView(discord.ui.View):
-    def __init__(
-        self,
-        user_id: int,
-    ):
-        super().__init__(timeout=900)
-
-        self.add_item(ReminderSelect(user_id))
-
-
-# --------------------------------------------------
 # Main setup view
 # --------------------------------------------------
+
+
+class TimeFormatSelect(discord.ui.Select):
+    def __init__(self, user_id):
+        self.user_id = user_id
+        current = get_user_time_format(user_id)
+        super().__init__(placeholder="Choose your time format", row=3, options=[
+            discord.SelectOption(label="24-hour: 1:00h (CEST)", value="24h", default=current == "24h"),
+            discord.SelectOption(label="12-hour: 1:00 am (CEST)", value="12h", default=current == "12h"),
+        ])
+
+    async def callback(self, interaction):
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message(**message_payload("Use `/setup` to change your own settings."), ephemeral=True)
+            return
+        set_user_time_format(interaction.user.id, self.values[0])
+        await interaction.response.edit_message(**message_payload(
+            build_setup_content(interaction.user.id, interaction.user.display_name),
+            controls=SetupView(interaction.user.id)))
 
 
 class SetupView(discord.ui.View):
@@ -652,9 +679,10 @@ class SetupView(discord.ui.View):
         super().__init__(timeout=900)
 
         self.user_id = user_id
+        self.add_item(TimeFormatSelect(user_id))
 
         (
-            dm_notifications,
+            _,
             followed_team_server_ping,
             _,
         ) = get_notification_settings(user_id)
@@ -679,15 +707,6 @@ class SetupView(discord.ui.View):
 
             self.toggle_server_ping.style = discord.ButtonStyle.secondary
 
-        if dm_notifications:
-            self.toggle_dm.label = "Turn DM Reminders Off"
-
-            self.toggle_dm.style = discord.ButtonStyle.success
-        else:
-            self.toggle_dm.label = "Turn DM Reminders On"
-
-            self.toggle_dm.style = discord.ButtonStyle.secondary
-
     @discord.ui.button(
         label="Change Timezone",
         style=discord.ButtonStyle.secondary,
@@ -700,8 +719,8 @@ class SetupView(discord.ui.View):
         button: discord.ui.Button,
     ):
         await interaction.response.edit_message(
-            content=("## Choose your timezone\n\n" "First choose your region."),
-            view=TimezoneRegionView(),
+            **message_payload("## Choose your timezone\n\n" "First choose your region.", controls=TimezoneRegionView()),
+
         )
 
     @discord.ui.button(
@@ -716,12 +735,10 @@ class SetupView(discord.ui.View):
         button: discord.ui.Button,
     ):
         await interaction.response.edit_message(
-            content=(
-                "## Choose teams to follow\n\n"
+            **message_payload("## Choose teams to follow\n\n"
                 "Select any teams you want "
-                "to follow."
-            ),
-            view=TeamSelectView(interaction.user.id),
+                "to follow.", controls=TeamSelectView(interaction.user.id)),
+
         )
 
     @discord.ui.button(
@@ -743,11 +760,11 @@ class SetupView(discord.ui.View):
         )
 
         await interaction.response.edit_message(
-            content=build_setup_content(
+            **message_payload(build_setup_content(
                 interaction.user.id,
                 interaction.user.display_name,
-            ),
-            view=SetupView(interaction.user.id),
+            ), controls=SetupView(interaction.user.id)),
+
         )
 
     @discord.ui.button(
@@ -773,64 +790,12 @@ class SetupView(discord.ui.View):
         )
 
         await interaction.response.edit_message(
-            content=build_setup_content(
+            **message_payload(build_setup_content(
                 interaction.user.id,
                 interaction.user.display_name,
-            ),
-            view=SetupView(interaction.user.id),
+            ), controls=SetupView(interaction.user.id)),
+
         )
-
-    @discord.ui.button(
-        label="DM Reminders",
-        style=discord.ButtonStyle.secondary,
-        emoji="💌",
-        row=3,
-    )
-    async def toggle_dm(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button,
-    ):
-        (
-            dm_notifications,
-            _,
-            _,
-        ) = get_notification_settings(interaction.user.id)
-
-        set_dm_notifications(
-            interaction.user.id,
-            not dm_notifications,
-        )
-
-        await interaction.response.edit_message(
-            content=build_setup_content(
-                interaction.user.id,
-                interaction.user.display_name,
-            ),
-            view=SetupView(interaction.user.id),
-        )
-
-    @discord.ui.button(
-        label="Change DM Reminder Time",
-        style=discord.ButtonStyle.secondary,
-        emoji="⏰",
-        row=3,
-    )
-    async def change_reminder_time(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button,
-    ):
-        await interaction.response.edit_message(
-            content=(
-                "## DM Reminder Time\n\n"
-                "Choose when you want a DM "
-                "for matches involving "
-                "teams you follow."
-            ),
-            view=ReminderSelectView(interaction.user.id),
-        )
-
 
 # --------------------------------------------------
 # User requirements
@@ -846,11 +811,11 @@ async def require_timezone(
         return timezone_name
 
     await interaction.response.send_message(
-        "## Set your timezone first\n\n"
-        "Choose your region below. "
+        **message_payload("## Set your timezone first\n\n"
+        "Run `/setup` to set your timezone, or choose your region below. "
         "The bot will use your timezone "
-        "for all match times.",
-        view=TimezoneRegionView(),
+        "for all match times.", controls=TimezoneRegionView()),
+
         ephemeral=True,
     )
 
@@ -871,6 +836,7 @@ async def team_autocomplete(
     matches = [
         team
         for team in worlds.teams
+        if team.id != TBD_TEAM_ID
         if (current in team.name.lower() or current in team.short_name.lower())
     ]
 
@@ -914,7 +880,7 @@ async def ping(
 ):
     latency_ms = round(bot.latency * 1000)
 
-    await interaction.response.send_message(f"🏓 Pong! `{latency_ms} ms`")
+    await interaction.response.send_message(**message_payload(f"🏓 Pong! `{latency_ms} ms`"))
 
 
 # Temporary developer command
@@ -946,7 +912,7 @@ async def test_reminder(
     )
 
     await interaction.response.send_message(
-        message,
+        **message_payload(message),
         ephemeral=True,
     )
 
@@ -954,30 +920,30 @@ async def test_reminder(
 # Temporary developer command
 @bot.tree.command(
     name="simulate-reminder",
-    description="Simulate a reminder using historical Worlds data.",
+    description="Simulate a reminder using the current tournament data.",
 )
 async def simulate_reminder(
     interaction: discord.Interaction,
 ):
     users = get_all_user_reminder_preferences()
 
-    t1_matches = sorted(
+    scheduled_matches = sorted(
         [
             match
             for match in worlds.matches
-            if (match.team1_id == "T1" or match.team2_id == "T1")
+            if match.status == MatchStatus.SCHEDULED
         ],
         key=lambda match: match.start_time,
     )
 
-    if not t1_matches:
+    if not scheduled_matches:
         await interaction.response.send_message(
-            "No T1 matches found in the test data.",
+            **message_payload("No scheduled matches found in the current tournament data."),
             ephemeral=True,
         )
         return
 
-    match = t1_matches[0]
+    match = scheduled_matches[0]
 
     simulated_now = match.start_time - timedelta(minutes=5)
 
@@ -992,7 +958,7 @@ async def simulate_reminder(
 
     if not result.server_reminders:
         await interaction.response.send_message(
-            "No server reminder was triggered.",
+            **message_payload("No server reminder was triggered."),
             ephemeral=True,
         )
         return
@@ -1010,19 +976,35 @@ async def simulate_reminder(
     else:
         mentions = "*Nobody would be pinged.*"
 
+    date, time = private_match_details(simulated_now, get_user_timezone(interaction.user.id),
+                                      time_format=get_user_time_format(interaction.user.id))
     message = (
         "## 🧪 Simulated Server Reminder\n\n"
-        f"**{team1.short_name} vs "
-        f"{team2.short_name} starts "
-        f"in 5 minutes!**\n\n"
+        f"**{team1.short_name}** vs "
+        f"**{team2.short_name}** starts "
+        f"in 5 minutes!\n\n"
         f"{mentions}\n\n"
         f"-# Simulated time: "
-        f"{simulated_now.isoformat()}"
+        f"{date} · {time}"
     )
 
     await interaction.response.send_message(
-        message,
+        **message_payload(message),
         ephemeral=True,
+    )
+
+
+@bot.tree.command(name="serversetup", description="Choose the server's reminder channel and public notification settings.")
+@app_commands.guild_only()
+@app_commands.default_permissions(manage_guild=True)
+@app_commands.checks.has_permissions(manage_guild=True)
+async def server_setup(interaction: discord.Interaction):
+    if interaction.guild_id != GUILD_ID:
+        await interaction.response.send_message(**message_payload("This bot is configured for a different server."), ephemeral=True)
+        return
+    await interaction.response.send_message(
+        **message_payload(build_server_setup_content(interaction.guild_id), controls=ServerSetupView(interaction.guild_id)),
+         ephemeral=True,
     )
 
 
@@ -1036,11 +1018,11 @@ async def setup(
     await interaction.response.defer(ephemeral=True)
 
     await interaction.edit_original_response(
-        content=build_setup_content(
+        **message_payload(build_setup_content(
             interaction.user.id,
             interaction.user.display_name,
-        ),
-        view=SetupView(interaction.user.id),
+        ), controls=SetupView(interaction.user.id)),
+
     )
 
 
@@ -1051,31 +1033,86 @@ async def setup(
 async def next_match_command(
     interaction: discord.Interaction,
 ):
-    timezone_name = await require_timezone(interaction)
-
-    if timezone_name is None:
-        return
-
+    timezone_name = TOURNAMENT_TIMEZONE
+    now = datetime.now(UTC)
     match = get_next_match(
         worlds,
-        datetime.now(UTC),
+        now,
     )
 
     if match is None:
         await interaction.response.send_message(
-            "There are no upcoming matches " "in the current tournament data."
+            **message_payload("There are no upcoming matches " "in the current tournament data.")
         )
 
         return
 
-    formatted_match = format_match(
+    message = format_next_match(
         match,
         timezone_name,
+        now,
+        timezones=get_registered_timezones() or [TOURNAMENT_TIMEZONE],
     )
 
-    message = "## Next Worlds Match\n\n" f"{formatted_match}"
+    await interaction.response.send_message(**message_payload(message))
 
-    await interaction.response.send_message(message)
+
+@bot.tree.command(name="previous", description="Show the last two completed Worlds matches with spoiler-hidden results.")
+async def previous(interaction: discord.Interaction):
+    now = datetime.now(UTC)
+    matches = get_previous_matches(worlds, now)
+    if not matches:
+        await interaction.response.send_message(**message_payload("## __Previous Worlds Matches__\n\nNo completed Worlds matches yet."))
+        return
+    timezones = get_registered_timezones() or [TOURNAMENT_TIMEZONE]
+    lines = []
+    last_date = None
+    for match in matches:
+        match_date = local_datetime(match.start_time, TOURNAMENT_TIMEZONE).date()
+        if match_date != last_date:
+            lines.append(f"## __{format_local_date(match.start_time, TOURNAMENT_TIMEZONE)}__")
+            last_date = match_date
+        lines.append(format_match(match, TOURNAMENT_TIMEZONE, include_date=False, now=now,
+                                  timezones=timezones, hide_result=True, small_details=False))
+    lines.append("-# Results are hidden. Click a spoiler to reveal the result.")
+    await send_long_message(interaction, "# __Previous Worlds Matches__", lines)
+
+
+async def show_day_schedule(interaction: discord.Interaction, day_offset: int):
+    timezone_name = TOURNAMENT_TIMEZONE
+    now = datetime.now(UTC)
+    target_date = now.astimezone(ZoneInfo(timezone_name)).date() + timedelta(days=day_offset)
+    matches = get_matches_for_local_date(worlds, target_date, timezone_name)
+    timezones = get_registered_timezones() or [timezone_name]
+    label = "Today" if day_offset == 0 else "Tomorrow"
+    title = f"__{worlds.tournament.year} Worlds: {label}__"
+    date_label = f"{target_date.strftime('%a')}, {target_date.day} {target_date.strftime('%b %Y')}"
+    context = f"__{date_label}__\n\n"
+    descriptions = []
+    current = context
+    for match in matches:
+        text = format_match(match, timezone_name, include_date=False, now=now, timezones=timezones)
+        if len(current) + len(text) + 2 > 3800 and current != context:
+            descriptions.append(current)
+            current = context
+        current += text + "\n\n"
+    descriptions.append(current if matches else context + "No Worlds matches scheduled for this day.")
+    for index, description in enumerate(descriptions):
+        embed = discord.Embed(title=title, description=description.rstrip(), colour=PREDICTION_BLUE)
+        if index == 0:
+            await interaction.response.send_message(**embed_card_payload(embed), ephemeral=False, allowed_mentions=discord.AllowedMentions.none())
+        else:
+            await interaction.followup.send(**embed_card_payload(embed), ephemeral=False, allowed_mentions=discord.AllowedMentions.none())
+
+
+@bot.tree.command(name="today", description="Show today's Worlds matches in all setup timezones.")
+async def today(interaction: discord.Interaction):
+    await show_day_schedule(interaction, 0)
+
+
+@bot.tree.command(name="tomorrow", description="Show tomorrow's Worlds matches in all setup timezones.")
+async def tomorrow(interaction: discord.Interaction):
+    await show_day_schedule(interaction, 1)
 
 
 @bot.tree.command(
@@ -1083,58 +1120,70 @@ async def next_match_command(
     description=("Show the Worlds match schedule."),
 )
 @app_commands.describe(
-    stage="Optional tournament stage",
+    view="Choose the next five games or a full tournament stage",
 )
-@app_commands.autocomplete(stage=stage_autocomplete)
+@app_commands.choices(view=[
+    app_commands.Choice(name="Next 5 games", value="next-five"),
+    *[
+        app_commands.Choice(name=display_stage_name(stage.name), value=stage.id)
+        for stage in sorted(worlds.stages, key=lambda stage: stage.order)
+    ],
+])
 async def schedule(
     interaction: discord.Interaction,
-    stage: str | None = None,
+    view: str,
 ):
-    timezone_name = await require_timezone(interaction)
-
-    if timezone_name is None:
-        return
-
-    if stage is None:
-        selected_stage = default_schedule_stage()
-
+    timezone_name = TOURNAMENT_TIMEZONE
+    now = datetime.now(UTC)
+    if view == "next-five":
+        matches = sorted(
+            [match for match in worlds.matches
+             if match.status == MatchStatus.SCHEDULED and match.start_time > now],
+            key=lambda match: match.start_time,
+        )[:5]
+        view_title = "Next 5 games"
     else:
-        selected_stage = worlds.stages_by_id.get(stage)
+        selected_stage = worlds.stages_by_id.get(view)
 
         if selected_stage is None:
             await interaction.response.send_message(
-                "I couldn't find that stage.",
+                **message_payload("I couldn't find that schedule view."),
                 ephemeral=True,
             )
 
             return
 
-    matches = get_matches_for_stage(
-        worlds,
-        selected_stage.id,
-    )
-
-    matches = sorted(
-        matches,
-        key=lambda match: (match.start_time),
-    )
+        matches = sorted(
+            get_matches_for_stage(worlds, selected_stage.id),
+            key=lambda match: match.start_time,
+        )
+        stage_name = display_stage_name(selected_stage.name)
+        view_title = {
+            "Play-ins": "Play-ins Stage",
+            "Swiss Stage": "Swiss Stage",
+            "Quarterfinals": "Quarterfinals Stage",
+            "Semifinals": "Semifinals Stage",
+            "Final": "Finals Stage",
+        }.get(stage_name, stage_name)
 
     if not matches:
         await interaction.response.send_message(
-            f"No matches found for " f"{selected_stage.name}."
+            **message_payload("No upcoming scheduled matches found." if view == "next-five"
+            else f"No matches found for {display_stage_name(selected_stage.name)}.")
         )
 
         return
 
-    header = f"# {worlds.tournament.year} " f"Worlds Schedule"
+    header = f"# __{worlds.tournament.year} Worlds Schedule: {view_title}__"
 
     lines = []
     current_date = None
+    timezones = get_registered_timezones() or [TOURNAMENT_TIMEZONE]
 
     for match in matches:
         local_match_time = local_datetime(
             match.start_time,
-            timezone_name,
+            TOURNAMENT_TIMEZONE,
         )
 
         match_date = local_match_time.date()
@@ -1144,16 +1193,18 @@ async def schedule(
 
             local_date = format_local_date(
                 match.start_time,
-                timezone_name,
+                TOURNAMENT_TIMEZONE,
             )
 
-            lines.append(f"## {local_date}")
+            lines.append(f"## __{local_date}__")
 
         lines.append(
             format_match(
                 match,
                 timezone_name,
                 include_date=False,
+                now=now,
+                timezones=timezones,
             )
         )
 
@@ -1176,16 +1227,12 @@ async def team(
     interaction: discord.Interaction,
     team: str,
 ):
-    timezone_name = await require_timezone(interaction)
-
-    if timezone_name is None:
-        return
-
+    timezone_name = TOURNAMENT_TIMEZONE
     selected_team = worlds.teams_by_id.get(team.upper())
 
     if selected_team is None:
         await interaction.response.send_message(
-            "I couldn't find that team.",
+            **message_payload("I couldn't find that team."),
             ephemeral=True,
         )
 
@@ -1203,13 +1250,15 @@ async def team(
 
     header = f"## {selected_team.name}\n" f"**Region:** " f"{selected_team.region}"
 
-    lines = [
-        format_match(
-            match,
-            timezone_name,
-        )
-        for match in matches
-    ]
+    timezones = get_registered_timezones() or [TOURNAMENT_TIMEZONE]
+    lines = []
+    current_date = None
+    for match in matches:
+        match_date = local_datetime(match.start_time, TOURNAMENT_TIMEZONE).date()
+        if match_date != current_date:
+            lines.append(f"## __{format_local_date(match.start_time, TOURNAMENT_TIMEZONE)}__")
+            current_date = match_date
+        lines.append(format_match(match, timezone_name, include_date=False, timezones=timezones))
 
     await send_long_message(
         interaction,
@@ -1235,7 +1284,7 @@ async def standings(
     )
 
     if not table:
-        await interaction.response.send_message("No standings are available.")
+        await interaction.response.send_message(**message_payload("No standings are available."))
 
         return
 
@@ -1244,18 +1293,137 @@ async def standings(
     for standing in table:
         team = worlds.teams_by_id[standing.team_id]
 
-        rank = standing.rank if standing.rank is not None else "-"
-
         lines.append(
-            f"`{str(rank).rjust(2)}.` "
-            f"**{team.short_name}** "
+            f"**{team.short_name}** · "
             f"{standing.wins}"
             f"-{standing.losses}"
         )
 
-    message = "## Worlds 2025 — " "Swiss Standings\n\n" + "\n".join(lines)
+    message = (
+        f"## Worlds {worlds.tournament.year}: Swiss Standings\n"
+        "-# Series records from match results; no official tiebreak ranking.\n\n"
+        + "\n".join(lines)
+    )
 
-    await interaction.response.send_message(message)
+    await interaction.response.send_message(**message_payload(message))
+
+
+@bot.tree.command(name="pickems", description="goto pickems leaderboard")
+@app_commands.guild_only()
+async def pickems(interaction: discord.Interaction):
+    settings = get_server_settings(interaction.guild_id)
+    if settings.pickems_url:
+        await interaction.response.send_message(
+            **message_payload(f"## __Pick'ems Leaderboard__\n\n[Go to our official Pick'ems leaderboard](<{settings.pickems_url}>)"),
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+    else:
+        await interaction.response.send_message(**message_payload("The Pick'ems link hasn't been set yet. A server admin can add it in `/serversetup`."), ephemeral=True)
+
+
+@bot.tree.command(name="changevote", description="Make or change your match prediction.")
+@app_commands.guild_only()
+async def changevote(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    manager = getattr(interaction.client, "prediction_test_manager", None) or interaction.client.voting_manager
+    try:
+        poll = await manager.personal_vote_target(interaction.user.id)
+    except ValueError as error:
+        await interaction.followup.send(**message_payload(str(error)), ephemeral=True)
+        return
+    if poll is None:
+        await interaction.followup.send(**message_payload("## __Your currently active predictions__\n\nVoting is closed for now. Use `/today` or `/tomorrow` to see the schedule."), ephemeral=True)
+        return
+    match = manager.store.data.matches_by_id[poll.match_id]
+    saved = await asyncio.to_thread(get_user_votes, poll.guild_id, poll.tournament_id, interaction.user.id)
+    selected_team = next((chosen for saved_poll, chosen in saved
+                          if saved_poll.match_id == poll.match_id
+                          and {saved_poll.team1_id, saved_poll.team2_id} == {poll.team1_id, poll.team2_id}), None)
+    timezone_name = await asyncio.to_thread(get_user_timezone, interaction.user.id)
+    time_format = await asyncio.to_thread(get_user_time_format, interaction.user.id)
+    text = change_vote_text(match, now=manager.clock(), selected_team=selected_team,
+                            test_mode=getattr(manager, "test_mode", False), timezone_name=timezone_name, time_format=time_format)
+    payload = message_payload(text,
+                              controls=PersonalVoteView(manager, poll, interaction.user.id, selected_team=selected_team))
+    await interaction.followup.send(**payload,
+                                    ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
+
+@bot.tree.command(name="currentvotes", description="See how everyone voted for upcoming and recent Worlds matches.")
+@app_commands.guild_only()
+async def currentvotes(interaction: discord.Interaction):
+    await interaction.response.defer()
+    now = datetime.now(UTC)
+    data = worlds
+    recent = await asyncio.to_thread(get_recent_completed_match_ids, interaction.guild_id, data.tournament.id, now)
+    matches = get_matches_for_votes(data, now, recent)
+    if not matches:
+        await interaction.followup.send(**message_payload("No upcoming, live, or recently completed matches found."), allowed_mentions=discord.AllowedMentions.none())
+        return
+    cards = []
+    for match in matches:
+        stage = data.stages_by_id.get(match.stage_id)
+        try:
+            rows = await asyncio.to_thread(get_upcoming_match_votes, interaction.guild_id, match.id)
+        except ValueError:
+            voting_closed = match.status != MatchStatus.SCHEDULED or now >= match.start_time - timedelta(minutes=5)
+            no_votes = voting_closed and not await asyncio.to_thread(has_match_votes, interaction.guild_id, match.id)
+            cards.append(hidden_votes_payload(match, now=now, stage_name=stage.name if stage else None, no_votes=no_votes))
+        else:
+            cards.append({"embed": upcoming_votes_embed(match, rows, stage_name=stage.name if stage else None)})
+    for payload in group_voting_messages(cards):
+        await interaction.followup.send(**payload, allowed_mentions=discord.AllowedMentions.none())
+
+
+@bot.tree.command(name="myvotes", description="View your predictions and see which were correct.")
+@app_commands.guild_only()
+async def myvotes(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    data = worlds
+    rows = await asyncio.to_thread(get_user_votes, interaction.guild_id, data.tournament.id, interaction.user.id, include_open=True)
+    timezone_name = await asyncio.to_thread(get_user_timezone, interaction.user.id)
+    time_format = await asyncio.to_thread(get_user_time_format, interaction.user.id)
+    for embed in my_votes_embeds(rows, data, display_name=interaction.user.display_name,
+                                timezone_name=timezone_name, time_format=time_format):
+        await interaction.followup.send(**embed_card_payload(embed), ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
+
+@bot.tree.command(name="leaderboard", description="See Communism's Worlds prediction standings.")
+@app_commands.guild_only()
+async def leaderboard(interaction: discord.Interaction):
+    await interaction.response.defer()
+    rows = await asyncio.to_thread(get_competition_stats, interaction.guild_id, worlds.tournament.id)
+    lines = []
+    rank = 0
+    last_key = None
+    visible_count = 0
+    for row in rows:
+        member = interaction.guild.get_member(row.user_id)
+        if member is None:
+            try:
+                member = await interaction.guild.fetch_member(row.user_id)
+            except discord.NotFound:
+                continue
+        visible_count += 1
+        if row.ranking_key != last_key:
+            rank = visible_count
+        last_key = row.ranking_key
+        name = discord.utils.escape_mentions(discord.utils.escape_markdown(member.display_name))
+        streak = f"🔥 Current streak: {row.current_streak}" if row.current_streak >= 3 else f"Current streak: {row.current_streak}"
+        lines.append(f"`{rank}.` **{name}**: {row.correct} correct\n"
+                     f"-# {row.correct}/{row.submitted} · {float(row.accuracy):.1%} accuracy\n"
+                     f"-# {row.submitted}/{row.eligible} matches predicted · {float(row.participation):.1%} participation\n"
+                     f"-# {streak} · Best streak: {row.longest_streak}")
+    header = "## __Communism Worlds Leaderboard__"
+    if not lines:
+        lines = ["No results yet. The standings update as matches finish."]
+    chunks = [header]
+    for line in lines:
+        if len(chunks[-1]) + len(line) + 1 > 1900:
+            chunks.append(header)
+        chunks[-1] += "\n" + line
+    for chunk in chunks:
+        await interaction.followup.send(**message_payload(chunk), allowed_mentions=discord.AllowedMentions.none())
 
 
 @bot.tree.command(
@@ -1267,15 +1435,22 @@ async def help_command(
 ):
     message = (
         "## LoL Worlds Bot\n\n"
-        "`/next` — Next Worlds match\n"
-        "`/schedule` — Match schedule\n"
-        "`/standings` — Current standings\n"
-        "`/team` — Team matches\n"
-        "`/setup` — Your personal setup\n"
-        "`/ping` — Check bot status"
+        "`/next`: Next Worlds match\n"
+        "`/previous`: Last two matches, with results hidden\n"
+        "`/schedule`: Match schedule\n"
+        "`/today` · `/tomorrow`: Quick daily schedules\n"
+        "`/standings`: Current standings\n"
+        "`/team`: Team matches\n"
+        "`/setup`: Your personal setup\n"
+        "`/pickems`: Official Pick'ems leaderboard\n"
+        "`/leaderboard`: Communism's Worlds prediction standings\n"
+        "`/myvotes`: Your predictions and whether you were correct\n"
+        "`/changevote`: Make or change your prediction\n"
+        "`/currentvotes`: See how everyone voted for current matches\n"
+        "`/ping`: Check bot status"
     )
 
-    await interaction.response.send_message(message)
+    await interaction.response.send_message(**message_payload(message))
 
 
 # --------------------------------------------------
@@ -1293,18 +1468,21 @@ async def on_app_command_error(
         error,
     )
 
-    message = "Something went wrong while " "running that command."
+    if isinstance(error, app_commands.MissingPermissions):
+        message = "You need Manage Server permission to use `/serversetup`."
+    else:
+        message = "Something went wrong while " "running that command."
 
     try:
         if interaction.response.is_done():
             await interaction.followup.send(
-                message,
+                **message_payload(message),
                 ephemeral=True,
             )
 
         else:
             await interaction.response.send_message(
-                message,
+                **message_payload(message),
                 ephemeral=True,
             )
 

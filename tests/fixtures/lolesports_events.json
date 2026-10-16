@@ -1,0 +1,129 @@
+[
+  {
+    "id": "115660588583171786",
+    "blockName": "Play-Ins",
+    "startTime": "2026-10-15T18:00:00Z",
+    "state": "unstarted",
+    "type": "match",
+    "tournament": {
+      "__typename": "Tournament",
+      "id": "115660540725177488",
+      "name": "2026"
+    },
+    "match": {
+      "id": "115660588583171786",
+      "state": "unstarted",
+      "strategy": {
+        "__typename": "MatchStrategy",
+        "count": 5,
+        "type": "bestOf"
+      }
+    },
+    "matchTeams": [
+      {
+        "teamId": "98767991877340524",
+        "code": "C9",
+        "name": "Cloud9 Kia",
+        "image": "http://static.lolesports.com/teams/1736924120254_C9Kia_IconBlue_Transparent_2000x2000.png",
+        "result": {
+          "__typename": "TeamResult",
+          "gameWins": 0,
+          "outcome": null
+        }
+      },
+      {
+        "teamId": "111692118851466302",
+        "code": "KC",
+        "name": "Karmine Corp",
+        "image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+        "result": {
+          "__typename": "TeamResult",
+          "gameWins": 0,
+          "outcome": null
+        }
+      }
+    ]
+  },
+  {
+    "id": "115660588583040710",
+    "blockName": "Play-Ins",
+    "startTime": "2026-10-15T23:00:00Z",
+    "state": "unstarted",
+    "type": "match",
+    "tournament": {
+      "__typename": "Tournament",
+      "id": "115660540725177488",
+      "name": "2026"
+    },
+    "match": {
+      "id": "115660588583040710",
+      "state": "unstarted",
+      "strategy": {
+        "__typename": "MatchStrategy",
+        "count": 5,
+        "type": "bestOf"
+      }
+    },
+    "matchTeams": [
+      {
+        "teamId": "100205576309502431",
+        "code": "FUR",
+        "name": "FURIA",
+        "image": "http://static.lolesports.com/teams/FURIA---black.png",
+        "result": {
+          "__typename": "TeamResult",
+          "gameWins": 0,
+          "outcome": null
+        }
+      },
+      {
+        "teamId": "107251245690956393",
+        "code": "MVK",
+        "name": "MVK Esports",
+        "image": "http://static.lolesports.com/teams/1767089709161_White_Logo.png",
+        "result": {
+          "__typename": "TeamResult",
+          "gameWins": 0,
+          "outcome": null
+        }
+      }
+    ]
+  },
+  {
+    "id": "115660588583171790",
+    "blockName": "Play-Ins",
+    "startTime": "2026-10-16T18:00:00Z",
+    "state": "unstarted",
+    "type": "match",
+    "tournament": {
+      "__typename": "Tournament",
+      "id": "115660540725177488",
+      "name": "2026"
+    },
+    "match": {
+      "id": "115660588583171790",
+      "state": "unstarted",
+      "strategy": {
+        "__typename": "MatchStrategy",
+        "count": 5,
+        "type": "bestOf"
+      }
+    },
+    "matchTeams": [
+      {
+        "teamId": "0",
+        "code": "TBD",
+        "name": "TBD",
+        "image": "https://static.lolesports.com/teams/team-tbd.png",
+        "result": null
+      },
+      {
+        "teamId": "0",
+        "code": "TBD",
+        "name": "TBD",
+        "image": "https://static.lolesports.com/teams/team-tbd.png",
+        "result": null
+      }
+    ]
+  }
+]
