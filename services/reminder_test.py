@@ -11,7 +11,7 @@ from services.server_reminders import ServerReminderDelivery
 from services.reminder_engine import ReminderKey, ReminderType
 
 
-async def run_reminder_test(client, store, guild_id):
+async def run_reminder_test(client, store, guild_id, *, ping_users=False):
     template = next((match for match in store.data.matches
                      if "TBD" not in {match.team1_id, match.team2_id}), None)
     if template is None:
@@ -27,8 +27,10 @@ async def run_reminder_test(client, store, guild_id):
     def sender():
         return ServerReminderDelivery(
             client, test_store, guild_id, clock=lambda: now,
-            load_users=lambda: [],
-            message_prefix="🧪 Delivery test: simulated match, no pings",
+            load_users=None if ping_users else lambda: [],
+            ping_role=ping_users,
+            message_prefix=("🧪 Five-minute reminder test: simulated match, using `/mysetup` ping preferences"
+                            if ping_users else "🧪 Delivery test: simulated match, no pings"),
         )
     delivery = sender()
     if not await delivery.deliver(match.id):
@@ -47,5 +49,6 @@ async def run_reminder_test(client, store, guild_id):
     return (
         f"Test passed: [view the public test message]({link}).\n"
         "SQLite receipt saved; a second attempt from a fresh sender was suppressed.\n"
-        "No users were pinged."
+        + ("The configured Worlds role, if set, and people eligible under their `/mysetup` match ping preferences were pinged."
+           if ping_users else "No users or roles were pinged.")
     )

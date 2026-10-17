@@ -61,39 +61,65 @@ def test_public_message_has_only_team_names_bold_and_explicit_deduplicated_menti
     match_id = store.data.matches[0].id
     assert asyncio.run(delivery.deliver(match_id))
     call = channel.send.call_args
-    assert call.args[0] == "## **C9** vs **KC** starts in 5 minutes!\n\n<@1> <@2>"
+    text = rendered_message(call).description
+    assert not call.args and call.kwargs["content"] is None
+    assert "### __Subscribers:__" in text
+    match = store.data.matches[0]
+    stage = store.data.stages_by_id[match.stage_id]
+    assert f"*Starts in 5 minutes!*\n-# *({stage.name} · Bo{match.best_of})*" in text
+    assert "### __Subscribers:__\n\n<@1> <@2>\n\n-#" in text
     assert call.kwargs["allowed_mentions"].to_dict() == {"users": [1, 2], "parse": []}
     assert not asyncio.run(delivery.deliver(match_id))
     channel.send.assert_awaited_once()
 
 
-def test_results_embed_preserves_only_opted_in_pings_in_message_content():
+def test_results_card_preserves_only_opted_in_pings_and_groups_voters_by_team():
     delivery, store, channel, _, _ = make_delivery()
     delivery.poll_manager = SimpleNamespace(prepare_reminder=AsyncMock(return_value="Voting Results\n**C9**: 100% (1 vote)\n@lua\n**KC**: 0% (0 votes)\n\u200b"))
     assert asyncio.run(delivery.deliver(store.data.matches[0].id))
     call = channel.send.call_args
-    assert call.args[0] == "<@1> <@2>"
-    embed = rendered_message(call)
-    assert embed.title == "C9 vs KC"
-    assert embed.description == "-# Starts in 5 minutes!\n\n__Voting Results__"
-    assert "<@1>" not in embed.description
+    text = rendered_message(call).description
+    assert "*Starts in 5 minutes!*" in text
+    assert "### __Voting Results__" in text
+    assert "### **C9**\n100%\n(1 vote)\n\n@lua" in text
+    assert "### **KC**\n0%\n(0 votes)" in text
+    assert text.index("@lua") < text.index("### **KC**") < text.index("<@1>")
     assert call.kwargs["allowed_mentions"].to_dict() == {"users": [1, 2], "parse": []}
-    assert "@lua" in embed.fields[0].value
-    assert embed.fields[1].value.endswith("\u200b")
 
 
-def test_results_test_label_stays_outside_embed():
+@pytest.mark.parametrize("ping_role", [True, False])
+@pytest.mark.parametrize("with_people", [True, False])
+def test_worlds_role_appears_before_individual_subscribers(ping_role, with_people):
+    delivery, store, channel, settings, users = make_delivery()
+    settings.return_value = replace(settings.return_value, worlds_role_id=444)
+    delivery.ping_role = ping_role
+    if not with_people:
+        users.return_value = []
+    assert asyncio.run(delivery.deliver(store.data.matches[0].id))
+    call = channel.send.call_args
+    text = rendered_message(call).description
+    assert "### __Subscribers:__\n<@&444>" in text
+    if with_people:
+        assert "<@&444>\n\n<@1> <@2>" in text
+    else:
+        assert "<@1>" not in text
+    allowed = call.kwargs["allowed_mentions"].to_dict()
+    assert allowed.get("roles", []) == ([444] if ping_role else [])
+    assert "everyone" not in allowed["parse"]
+    assert allowed.get("users", []) == ([1, 2] if with_people else [])
+
+
+def test_results_test_label_and_footnotes_are_inside_card():
     delivery, store, channel, _, users = make_delivery()
     users.return_value = []
     delivery.message_prefix = "🧪 Prediction test: simulated result, no pings"
     delivery.poll_manager = SimpleNamespace(prepare_reminder=AsyncMock(return_value="Voting Results\n**C9**: 0% (0 votes)\n\u200b\n**KC**: 0% (0 votes)\n\u200b"))
     assert asyncio.run(delivery.deliver(store.data.matches[0].id))
     call = channel.send.call_args
-    assert call.args[0] == delivery.message_prefix
-    embed = rendered_message(call)
-    assert embed.title == "C9 vs KC"
-    assert "test" not in embed.description
-    assert embed.footer.text.startswith("Use /currentvotes")
+    text = rendered_message(call).description
+    assert delivery.message_prefix in text
+    assert "-# • *Use `/currentvotes`" in text
+    assert text.endswith("prediction standings.*")
 
 
 def test_missing_embed_permission_preserves_reminder_and_results():
@@ -101,16 +127,17 @@ def test_missing_embed_permission_preserves_reminder_and_results():
     delivery.poll_manager = SimpleNamespace(prepare_reminder=AsyncMock(return_value="Prediction results\n**C9**: 100% (1 vote)\nLua\n**KC**: 0% (0 votes)\nNo predictions."))
     channel.permissions_for.return_value = SimpleNamespace(view_channel=True, send_messages=True, embed_links=False)
     assert asyncio.run(delivery.deliver(store.data.matches[0].id))
-    assert "Prediction results" in channel.send.call_args.args[0]
+    assert "Voting Results" in rendered_message(channel.send.call_args).description
     assert "embed" not in channel.send.call_args.kwargs
-    assert "<@1> <@2>" in channel.send.call_args.args[0]
+    assert "<@1> <@2>" in rendered_message(channel.send.call_args).description
 
 
 def test_public_message_is_sent_even_without_ping_recipients():
     delivery, store, channel, _, users = make_delivery()
     users.return_value = []
     assert asyncio.run(delivery.deliver(store.data.matches[0].id))
-    assert channel.send.call_args.args[0] == "## **C9** vs **KC** starts in 5 minutes!"
+    assert channel.send.call_args.kwargs["content"] is None
+    assert "Starts in 5 minutes!" in rendered_message(channel.send.call_args).description
 
 
 def test_failed_send_retries_and_only_success_consumes_key():
@@ -219,7 +246,11 @@ def test_server_setup_is_private_and_rechecks_admin_permission(database):
         assert not await view.interaction_check(interaction)
         assert interaction.response.send_message.call_args.kwargs["ephemeral"] is True
         interaction.user.guild_permissions.manage_guild = True
+        assert not await view.interaction_check(interaction)
+        interaction.user.roles = [SimpleNamespace(name="Admin")]
         assert await view.interaction_check(interaction)
+        interaction.user.roles = []
+        assert not await view.interaction_check(interaction)
         view.stop()
     asyncio.run(scenario())
 
@@ -282,6 +313,32 @@ def test_new_sender_after_restart_does_not_repeat_successful_delivery():
     assert not restarted.tracker.has_sent(ReminderKey(match_id, ReminderType.SERVER))
     assert not asyncio.run(restarted.deliver(match_id))
     channel.send.assert_awaited_once()
+
+
+def test_leaderboard_preview_is_private_populated_and_does_not_write_results():
+    with user_settings.get_connection() as connection:
+        before = list(connection.iterdump())
+    async def scenario():
+        view = ServerSetupView(123)
+        assert not view.preview_leaderboard.disabled
+        interaction = SimpleNamespace(
+            guild_id=123, user=SimpleNamespace(id=7, display_name="lua", roles=[SimpleNamespace(name="Admin")]),
+            client=SimpleNamespace(voting_manager=SimpleNamespace(store=SimpleNamespace(data=SimpleNamespace(tournament=SimpleNamespace(id="worlds-2026"))))),
+            response=SimpleNamespace(defer=AsyncMock()), followup=SimpleNamespace(send=AsyncMock()))
+        assert await view.interaction_check(interaction)
+        await view.preview_leaderboard.callback(interaction)
+        interaction.response.defer.assert_awaited_once_with(ephemeral=True)
+        messages = interaction.followup.send.call_args_list
+        text = "\n".join(rendered_message(call).description for call in messages)
+        assert "Sample Player 6" in text and "Sample Player 7" not in text and "18 correct" in text
+        assert "real leaderboard is unchanged" in text
+        for call in messages:
+            assert call.kwargs["ephemeral"] is True
+            assert call.kwargs["allowed_mentions"].to_dict() == {"parse": []}
+        view.stop()
+    asyncio.run(scenario())
+    with user_settings.get_connection() as connection:
+        assert list(connection.iterdump()) == before
 
 
 def test_channel_change_or_reschedule_does_not_repeat_delivered_match():
@@ -387,7 +444,7 @@ def test_restart_catches_up_before_start_with_correct_wording(elapsed, expected)
     delivery, store, channel, _, _ = make_delivery()
     delivery.clock = lambda: NOW + timedelta(seconds=elapsed)
     assert asyncio.run(delivery.deliver(store.data.matches[0].id))
-    assert f"starts in {expected}!" in channel.send.call_args.args[0]
+    assert f"Starts in {expected}!" in rendered_message(channel.send.call_args).description
     assert get_delivery_record(123, store.data.matches[0].id) is not None
 
 
@@ -453,8 +510,8 @@ def test_controlled_delivery_test_posts_once_without_mentions_and_leaves_real_ma
     assert "second attempt" in message
     channel.send.assert_awaited_once()
     call = channel.send.call_args
-    assert "Delivery test" in call.args[0]
-    assert "<@" not in call.args[0]
+    assert "Delivery test" in rendered_message(call).description
+    assert "<@" not in rendered_message(call).description
     assert call.kwargs["allowed_mentions"].to_dict() == {"users": [], "parse": []}
     assert store.data.matches == original
     assert get_delivery_record(123, original[0].id) is None
@@ -468,6 +525,44 @@ def test_controlled_test_respects_disabled_public_reminders():
     delivery, store, channel, _, _ = make_delivery()
     assert "wasn't sent" in asyncio.run(run_reminder_test(delivery.client, store, 123))
     channel.send.assert_not_awaited()
+
+
+def test_five_minute_test_uses_saved_personal_settings_and_never_pings_roles():
+    delivery, store, channel, _, _ = make_delivery()
+    first = store.data.matches[0]
+    set_reminder_channel(123, 456)
+    user_settings.set_followed_team_ids(1, {first.team1_id})
+    user_settings.set_followed_team_ids(2, {first.team2_id})
+    user_settings.set_server_ping(2, False)
+    user_settings.set_followed_team_ids(3, {"T1"})
+    user_settings.set_all_games_server_ping(4, True)
+    result = asyncio.run(run_reminder_test(delivery.client, store, 123, ping_users=True))
+    assert "Test passed" in result and "`/mysetup`" in result
+    channel.send.assert_awaited_once()
+    call = channel.send.call_args
+    text = rendered_message(call).description
+    assert "Starts in 5 minutes!" in text
+    assert "<@1>" in text and "<@4>" in text
+    assert "<@2>" not in text and "<@3>" not in text
+    assert call.kwargs["allowed_mentions"].to_dict() == {"users": [1, 4], "parse": []}
+    assert get_delivery_record(123, first.id) is None
+
+
+def test_five_minute_test_button_enables_real_preference_targeting(monkeypatch):
+    callback = AsyncMock(return_value="Test passed")
+    monkeypatch.setattr("services.server_setup.run_reminder_test", callback)
+    set_reminder_channel(123, 456)
+    async def scenario():
+        view = ServerSetupView(123)
+        interaction = SimpleNamespace(
+            client=SimpleNamespace(background_polling=SimpleNamespace(store=object())),
+            response=SimpleNamespace(defer=AsyncMock()), followup=SimpleNamespace(send=AsyncMock()))
+        assert not view.test_reminder_with_pings.disabled
+        await view.test_reminder_with_pings.callback(interaction)
+        callback.assert_awaited_once_with(interaction.client, interaction.client.background_polling.store, 123, ping_users=True)
+        assert interaction.followup.send.call_args.kwargs["ephemeral"] is True
+        view.stop()
+    asyncio.run(scenario())
 
 
 def test_controlled_test_does_not_retry_from_new_sender_without_receipt(monkeypatch):
@@ -524,6 +619,9 @@ def test_pickems_modal_saves_link_privately_after_admin_check():
         await modal.on_submit(interaction)
         assert get_server_settings(123).pickems_url is None
         interaction.user.guild_permissions.manage_guild = True
+        await modal.on_submit(interaction)
+        assert get_server_settings(123).pickems_url is None
+        interaction.user.roles = [SimpleNamespace(name="Admin")]
         await modal.on_submit(interaction)
         assert get_server_settings(123).pickems_url == modal.link.value
         assert interaction.response.send_message.call_args.kwargs["ephemeral"]

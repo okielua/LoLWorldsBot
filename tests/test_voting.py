@@ -15,7 +15,7 @@ from services import user_settings
 from services.delivery_records import initialize_delivery_records
 from services.polls import get_daily_post, get_leaderboard, get_poll_results, get_polls, initialize_polls
 from services.server_reminders import ServerReminderDelivery
-from services.server_settings import initialize_server_settings, set_reminder_channel
+from services.server_settings import initialize_server_settings, set_reminder_channel, set_worlds_role
 from services.tournament_data import load_tournament_data
 from services.voting import VotingManager
 
@@ -59,19 +59,22 @@ def test_daily_post_opens_early_without_pings_and_survives_restart(context):
         call = channel.send.call_args
         components = call.kwargs["view"].to_components()
         assert "Who wins?" in str(components)
-        assert "C9 vs KC" in str(components)
-        assert "FUR vs MVK" in str(components)
+        assert "**C9** vs **KC**" in str(components)
+        assert "**FUR** vs **MVK**" in str(components)
         card, = call.kwargs["view"].children
         assert isinstance(card, discord.ui.Container)
         assert card.accent_colour.value == 0x5865F2
         assert "Play-ins · Opening Round · Bo5" in str(components)
-        assert "# __Worlds Predictions__" in str(components)
+        assert "# __Worlds 2026 Day 1/" in str(components)
+        assert "· Play-ins__" in str(components)
+        assert "Here are today's matchups. Voting for each matchup closes 5 minutes before match start." in str(components)
         assert "`/currentvotes`" in str(components)
         assert "Communism's Worlds prediction standings" in str(components)
         assert card.children[-1].content == (
-            "-# Use `/changevote` to change your prediction until 5 minutes before a match.\n"
-            "-# Use `/currentvotes` to see how everyone voted once voting closes.\n"
-            "-# Use `/leaderboard` to see Communism's Worlds prediction standings."
+            "\u200b\n\n"
+            "-# • *Use `/changevote` to change your prediction until 5 minutes before a match.*\n"
+            "-# • *Use `/currentvotes` to see how everyone voted once voting closes.*\n"
+            "-# • *Use `/leaderboard` to see Communism's Worlds prediction standings.*"
         )
         assert "1 point" not in str(components)
         assert "stay private" not in str(components)
@@ -85,6 +88,31 @@ def test_daily_post_opens_early_without_pings_and_survives_restart(context):
         await restarted.vote(store.data.matches[0].id, 7, "C9")
         assert get_leaderboard(123, store.data.tournament.id) == []
     asyncio.run(scenario())
+
+
+def test_daily_role_ping_is_only_allowed_on_first_publication(context):
+    manager, store, channel, current, message = context
+    set_worlds_role(123, 987)
+    async def scenario():
+        await manager.tick()
+        first = channel.send.call_args
+        assert "<@&987>" in str(first.kwargs["view"].to_components())
+        assert first.kwargs["allowed_mentions"].to_dict() == {"roles": [987], "parse": []}
+        restarted = VotingManager(manager.client, store, 123, clock=lambda: current[0])
+        await restarted.tick()
+        channel.send.assert_awaited_once()
+        assert message.edit.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
+    asyncio.run(scenario())
+
+
+def test_daily_prediction_test_never_pings_worlds_role(context):
+    manager, _, channel, _, _ = context
+    set_worlds_role(123, 987)
+    manager.test_mode = True
+    asyncio.run(manager.tick())
+    call = channel.send.call_args
+    assert "<@&987>" not in str(call.kwargs["view"].to_components())
+    assert call.kwargs["allowed_mentions"].to_dict()["parse"] == []
 
 
 def test_each_prediction_closes_at_its_five_minute_reminder_and_scores_once(context):
@@ -125,25 +153,18 @@ def test_five_minute_reminder_reveals_results_instead_of_linking_to_an_open_poll
         delivery = ServerReminderDelivery(manager.client, store, 123, clock=lambda: current[0], load_users=lambda: [], poll_manager=manager)
         assert await delivery.deliver(store.data.matches[0].id)
         assert channel.send.await_count == 2
-        embed = rendered_message(channel.send.call_args)
-        content = str(embed.to_dict())
-        assert embed.colour.value == 0x5865F2
-        assert embed.description == "-# Starts in 5 minutes!\n\n__Voting Results__"
-        assert channel.send.call_args.args[0] is None
-        assert embed.title == "C9 vs KC"
-        assert embed.footer.text
-        assert len(embed.fields) == 2
-        assert all(field.inline for field in embed.fields[:2])
-        assert embed.footer.text == (
-            "Use /currentvotes to see how everyone voted once voting closes.\n"
-            "Use /leaderboard to see Communism's Worlds prediction standings."
-        )
-        assert embed.fields[0].name == "**C9**"
-        assert embed.fields[0].value == "67%\n(2 votes)\n\n@Lua, @Jerry"
-        assert "@Lua, @Jerry" in content
-        assert embed.fields[1].name == "**KC**"
-        assert embed.fields[1].value == "33%\n(1 vote)\n\n@Chris"
-        assert "Chris" in content
+        call = channel.send.call_args
+        card = rendered_message(call)
+        content = card.description
+        assert call.kwargs["content"] is None
+        assert call.kwargs["embeds"] == []
+        assert "*Starts in 5 minutes!*" in content
+        assert "### __Voting Results__" in content
+        assert "### **C9**\n67%\n(2 votes)\n\n@Lua, @Jerry" in content
+        assert "### **KC**\n33%\n(1 vote)\n\n@Chris" in content
+        assert "-# • *Use `/currentvotes`" in content
+        assert content.endswith("prediction standings.*")
+        assert "<@" not in content
     asyncio.run(scenario())
 
 
@@ -227,8 +248,8 @@ def test_private_vote_confirmation_and_changed_confirmation(context):
         await buttons[0].callback(interaction)
         date = "Thu, 15 Oct 2026"
         embed = rendered_message(interaction.followup.send.call_args)
-        assert embed.description.startswith(f"Your prediction for **C9** vs **KC** on {date}:\n## C9")
-        assert "-# Use `/changevote` to change your prediction until 5 minutes" in embed.description
+        assert embed.description.startswith(f"Your prediction for **C9** vs **KC** on {date} (Play-ins):\n## C9")
+        assert "-# • *Use `/changevote` to change your prediction until 5 minutes" in embed.description
         assert "Use `/currentvotes`" in embed.description
         assert "Use `/leaderboard`" in embed.description
         assert interaction.followup.send.call_args.kwargs["view"].children[0].accent_colour.value == 0x5865F2
@@ -236,7 +257,7 @@ def test_private_vote_confirmation_and_changed_confirmation(context):
         assert interaction.followup.send.call_args.kwargs["ephemeral"]
         await buttons[1].callback(interaction)
         embed = rendered_message(interaction.followup.send.call_args)
-        assert embed.description.startswith(f"Your prediction for **C9** vs **KC** on {date}:\n## KC")
+        assert embed.description.startswith(f"Your prediction for **C9** vs **KC** on {date} (Play-ins):\n## KC")
         assert interaction.followup.send.call_args.kwargs["ephemeral"]
         assert interaction.followup.send.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
         channel.send.assert_awaited_once()
@@ -257,7 +278,7 @@ def test_daily_post_shows_registered_zones_but_confirmation_keeps_single_date(co
             response=SimpleNamespace(defer=AsyncMock()), followup=SimpleNamespace(send=AsyncMock()))
         await buttons[0].callback(interaction)
         text = rendered_message(interaction.followup.send.call_args).description
-        assert "on Thu, 15 Oct 2026:" in text
+        assert "on Thu, 15 Oct 2026 (Play-ins):" in text
         assert all(city not in text for city in ("London", "Berlin", "Tokyo"))
         assert "19:00" not in text and "20:00" not in text and "3:00" not in text
         user_settings.set_user_timezone(3, "Asia/Seoul")
@@ -304,6 +325,231 @@ def test_vote_shortcut_targets_last_pick_then_next_open_match_and_enforces_cutof
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize("history", [False, True])
+def test_all_open_votes_can_be_changed_independently_and_selections_update(context, history):
+    from services.polls import get_user_votes
+    from services.voting import personal_vote_payloads, my_vote_payloads
+    manager, store, _, current, _ = context
+    first, second = store.data.matches[:2]
+    async def scenario():
+        await manager.tick()
+        for match in (first, second):
+            await manager.vote(match.id, 7, match.team1_id, "Lua")
+        available = await manager.personal_vote_targets(7)
+        assert [poll.match_id for poll in available] == [first.id, second.id]
+        saved = get_user_votes(123, store.data.tournament.id, 7)
+        if history:
+            payload, = my_vote_payloads(manager, saved, available, 7, store.data, now=manager.clock(),
+                                        timezone_name="Europe/Berlin", time_format="12h", display_name="Lua")
+        else:
+            payload, = personal_vote_payloads(manager, available, 7, saved, timezone_name="Europe/Berlin", time_format="12h")
+        view = payload["view"]
+        buttons = [item for item in view.walk_children() if isinstance(item, discord.ui.Button)]
+        assert len(buttons) == 4
+        assert [button.style for button in buttons] == [discord.ButtonStyle.success, discord.ButtonStyle.primary] * 2
+        other = SimpleNamespace(user=SimpleNamespace(id=8), response=SimpleNamespace(send_message=AsyncMock()))
+        assert not await view.interaction_check(other)
+        interaction = SimpleNamespace(guild_id=123, user=SimpleNamespace(id=7, display_name="Lua"),
+            response=SimpleNamespace(defer=AsyncMock()), followup=SimpleNamespace(send=AsyncMock()),
+            message=SimpleNamespace(edit=AsyncMock()))
+        await buttons[1].callback(interaction)
+        interaction.message.edit.assert_awaited_once_with(view=view)
+        assert buttons[0].style == discord.ButtonStyle.primary and buttons[1].style == discord.ButtonStyle.success
+        assert buttons[2].style == discord.ButtonStyle.success  # Other match is untouched.
+        choices = {poll.match_id: team for poll, team in get_user_votes(123, store.data.tournament.id, 7)}
+        assert choices == {first.id: first.team2_id, second.id: second.team1_id}
+        if history:
+            text = rendered_payload(payload).description
+            assert f"Your pick: **{first.team2_id}**" in text
+        current[0] = first.start_time - timedelta(minutes=5)
+        store.fetched_at = current[0]
+        assert [poll.match_id for poll in await manager.personal_vote_targets(7)] == [second.id]
+        await buttons[0].callback(interaction)
+        assert "closed" in rendered_message(interaction.followup.send.call_args).description
+        assert {poll.match_id: team for poll, team in get_user_votes(123, store.data.tournament.id, 7)} == choices
+        if history:
+            payload, = my_vote_payloads(manager, get_user_votes(123, store.data.tournament.id, 7),
+                                        await manager.personal_vote_targets(7), 7, store.data, now=manager.clock())
+            remaining = [item for item in payload["view"].walk_children() if isinstance(item, discord.ui.Button)]
+            assert len(remaining) == 2
+            assert all(button.poll.match_id == second.id for button in remaining)
+    asyncio.run(scenario())
+
+
+def test_many_private_predictions_are_split_without_losing_matches(context):
+    from services.polls import Poll
+    from services.voting import personal_vote_payloads
+    manager, store, _, _, _ = context
+    first = store.data.matches[0]
+    matches = [replace(first, id=f"private-{index}", start_time=first.start_time + timedelta(minutes=index)) for index in range(12)]
+    store.data = replace(store.data, matches=matches)
+    available = [Poll(123, match.id, match.tournament_id, match.team1_id, match.team2_id, match.start_time, False, None)
+                 for match in matches]
+    async def scenario():
+        pages = personal_vote_payloads(manager, available, 7, [(poll, poll.team1_id) for poll in available])
+        assert len(pages) == 2
+        buttons = [item for page in pages for item in page["view"].walk_children() if isinstance(item, discord.ui.Button)]
+        assert len(buttons) == 24
+        assert {button.poll.match_id for button in buttons} == {match.id for match in matches}
+        for page in pages:
+            view = page["view"]
+            assert view.total_children_count <= 40
+            texts = [item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)]
+            assert sum(map(len, texts)) <= 4000
+            assert sum("Your Currently Active Predictions" in text for text in texts) == 1
+    asyncio.run(scenario())
+
+
+def test_myvotes_buttons_preserve_history_and_paginate_within_discord_limits(context):
+    from services.polls import Poll
+    from services.voting import my_vote_payloads
+    manager, store, _, _, _ = context
+    first = store.data.matches[0]
+    matches = [replace(first, id=f"history-{index}", start_time=first.start_time + timedelta(minutes=index)) for index in range(12)]
+    past = replace(first, id="finished-history", status=MatchStatus.COMPLETED,
+                   start_time=manager.clock() - timedelta(days=1), winner_id=first.team1_id,
+                   team1_score=3, team2_score=0)
+    store.data = replace(store.data, matches=matches + [past])
+    available = [Poll(123, match.id, match.tournament_id, match.team1_id, match.team2_id, match.start_time, False, None)
+                 for match in matches]
+    finished = Poll(123, past.id, past.tournament_id, past.team1_id, past.team2_id, past.start_time, True, past.winner_id)
+    rows = [(poll, poll.team1_id) for poll in available] + [(finished, past.team2_id)]
+
+    async def scenario():
+        pages = list(my_vote_payloads(manager, rows, available, 7, store.data, now=manager.clock()))
+        assert len(pages) == 3
+        buttons = [item for page in pages for item in page["view"].walk_children() if isinstance(item, discord.ui.Button)]
+        assert len(buttons) == 24
+        assert {button.poll.match_id for button in buttons} == {match.id for match in matches}
+        history = rendered_payload(pages[0]).description
+        assert "Past Games" in history and "Incorrect" in history
+        assert f"Result: ||**__{past.team1_id}__** **3–0** **{past.team2_id}**||" in history
+        for page in pages:
+            view = page["view"]
+            assert view.total_children_count <= 40
+            assert sum(len(item.content) for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)) <= 4000
+    asyncio.run(scenario())
+
+
+def test_today_lookup_publishes_reusable_polls_and_private_vote_confirmations(context):
+    from test_bot_commands import day_callback
+    from services.polls import get_published_match_ids, get_user_votes
+    from services.voting import ScheduleVoteButton
+    manager, store, channel, current, _ = context
+    current[0] = store.data.matches[0].start_time - timedelta(hours=1)
+    store.fetched_at = current[0]
+    manager.client.voting_manager = manager
+    interaction = SimpleNamespace(guild_id=123, client=manager.client,
+        response=SimpleNamespace(defer=AsyncMock()), followup=SimpleNamespace(send=AsyncMock()))
+    async def scenario():
+        callback = day_callback(store.data, current[0])
+        await callback(interaction, 0)
+        interaction.response.defer.assert_awaited_once_with(ephemeral=False)
+        interaction.followup.send.assert_awaited_once()
+        payload = interaction.followup.send.call_args.kwargs
+        assert payload["ephemeral"] is False and payload["allowed_mentions"].to_dict() == {"parse": []}
+        text = rendered_message(interaction.followup.send.call_args).description
+        assert "Berlin" in text and "London" in text and "Tokyo" in text
+        assert "Use `/changevote`" in text and "Use `/currentvotes`" in text and "Use `/leaderboard`" in text
+        assert "%" not in text and "votes)" not in text
+        view = payload["view"]
+        assert view.is_persistent() and view.total_children_count <= 40
+        buttons = [item for item in view.walk_children() if isinstance(item, ScheduleVoteButton)]
+        assert len(buttons) == 4
+        assert len(get_polls(123, store.data.tournament.id)) == 2
+        assert get_published_match_ids(123, store.data.tournament.id) == {match.id for match in store.data.matches}
+        channel.send.assert_not_awaited()  # No extra board or reminder was posted.
+        vote = SimpleNamespace(guild_id=123, user=SimpleNamespace(id=7, display_name="Lua"),
+            response=SimpleNamespace(defer=AsyncMock()), followup=SimpleNamespace(send=AsyncMock()))
+        await buttons[0].callback(vote)
+        assert vote.followup.send.call_args.kwargs["ephemeral"] is True
+        await callback(interaction, 0)
+        await buttons[1].callback(vote)
+        choices = get_user_votes(123, store.data.tournament.id, 7)
+        assert len(choices) == 1 and choices[0][1] == store.data.matches[0].team2_id
+        assert len(get_polls(123, store.data.tournament.id)) == 2
+    asyncio.run(scenario())
+
+
+def test_today_failed_send_is_not_counted_as_published_opportunity(context):
+    from test_bot_commands import day_callback
+    from services.polls import get_published_match_ids
+    manager, store, _, current, _ = context
+    current[0] = store.data.matches[0].start_time - timedelta(hours=1)
+    store.fetched_at = current[0]
+    manager.client.voting_manager = manager
+    interaction = SimpleNamespace(guild_id=123, client=manager.client,
+        response=SimpleNamespace(defer=AsyncMock()), followup=SimpleNamespace(send=AsyncMock(
+            side_effect=discord.Forbidden(SimpleNamespace(status=403, reason="Forbidden"), "No permissions"))))
+    async def scenario():
+        with pytest.raises(discord.Forbidden):
+            await day_callback(store.data, current[0])(interaction, 0)
+        assert get_published_match_ids(123, store.data.tournament.id) == set()
+    asyncio.run(scenario())
+
+
+def test_today_voting_excludes_ineligible_matches_and_pages_within_discord_limits(context):
+    from services.voting import schedule_vote_payloads, ScheduleVoteButton
+    from services.polls import get_published_match_ids
+    manager, store, _, current, _ = context
+    template = store.data.matches[0]
+    current[0] = template.start_time - timedelta(minutes=6)
+    store.fetched_at = current[0]
+    eligible = [replace(template, id=f"schedule-{index}", start_time=template.start_time + timedelta(minutes=index)) for index in range(12)]
+    excluded = [replace(template, id="live", status=MatchStatus.LIVE),
+                replace(template, id="done", status=MatchStatus.COMPLETED),
+                replace(template, id="postponed", status=MatchStatus.POSTPONED),
+                replace(template, id="unknown", team1_id="TBD", team2_id="TBD"),
+                replace(template, id="late", start_time=current[0] + timedelta(minutes=4))]
+    store.data = replace(store.data, matches=eligible + excluded)
+    async def scenario():
+        prepared = await manager.prepare_schedule_polls(store.data.matches)
+        assert set(prepared) == {match.id for match in eligible}
+        entries = [(match, f"## {match.team1_id} vs {match.team2_id}\n" + "Details " * 40) for match in store.data.matches]
+        pages = schedule_vote_payloads(manager, "__Worlds Today__", "__15 October 2026__", entries, prepared)
+        assert len(pages) > 1
+        all_buttons = [item for page in pages for item in page["view"].walk_children() if isinstance(item, ScheduleVoteButton)]
+        assert len(all_buttons) == 24
+        assert get_published_match_ids(123, store.data.tournament.id) == set()
+        for page in pages:
+            view = page["view"]
+            assert view.total_children_count <= 40
+            assert sum(len(item.content) for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)) <= 4000
+        await manager.acknowledge_schedule_opportunities(pages[0]["view"].matches, prepared)
+        assert get_published_match_ids(123, store.data.tournament.id) == {match.id for match in pages[0]["view"].matches if match.id in prepared}
+        store.last_error = "offline"
+        assert await manager.prepare_schedule_polls(store.data.matches) == {}
+    asyncio.run(scenario())
+
+
+def test_schedule_buttons_restore_after_restart_and_reject_changed_matchup_or_late_click(context):
+    from services.voting import ScheduleVoteButton
+    from services.polls import get_user_votes
+    manager, store, _, current, _ = context
+    first = store.data.matches[0]
+    async def scenario():
+        prepared = await manager.prepare_schedule_polls(store.data.matches)
+        button = ScheduleVoteButton(manager, prepared[first.id], 1)
+        restarted = VotingManager(manager.client, store, 123, clock=manager.clock)
+        manager.client.voting_manager = restarted
+        interaction = SimpleNamespace(guild_id=123, client=manager.client, user=SimpleNamespace(id=7, display_name="Lua"),
+            response=SimpleNamespace(defer=AsyncMock()), followup=SimpleNamespace(send=AsyncMock()))
+        restored = await ScheduleVoteButton.from_custom_id(interaction, button.item, button.template.fullmatch(button.custom_id))
+        await restored.callback(interaction)
+        assert get_user_votes(123, store.data.tournament.id, 7)[0][1] == first.team1_id
+        store.data = replace(store.data, matches=[replace(first, team2_id="FUR"), store.data.matches[1]])
+        await restored.callback(interaction)
+        assert "matchup changed" in rendered_message(interaction.followup.send.call_args).description.lower()
+        current[0] = first.start_time - timedelta(minutes=5)
+        store.fetched_at = current[0]
+        await restored.callback(interaction)
+        assert "closed" in rendered_message(interaction.followup.send.call_args).description
+        other = SimpleNamespace(guild_id=456, response=SimpleNamespace(send_message=AsyncMock()))
+        await restored.callback(other)
+        assert other.response.send_message.call_args.kwargs["ephemeral"] is True
+    asyncio.run(scenario())
+
+
 def test_controlled_prediction_day_completes_without_affecting_real_leaderboard(context, monkeypatch):
     manager, store, channel, current, _ = context
     from services.prediction_test import start_prediction_test
@@ -341,8 +587,10 @@ def test_controlled_prediction_day_completes_without_affecting_real_leaderboard(
         assert "real Worlds leaderboard was not changed" in rendered_message(report).description
         card = rendered_message(preview)
         assert "TEST: @lua's Worlds Predictions" in card.title
-        assert "Result: ||C9 3–0 KC · ✅ Correct||" in card.description
-        assert "Result: ||FUR 3–0 MVK · ❌ Incorrect||" in card.description
+        assert "Your pick: **C9** ||(Correct :KingPeepo:)||" in card.description
+        assert "Your pick: **MVK** ||(Incorrect :peepoSad:)||" in card.description
+        assert "Result: ||**__C9__** **3–0** **KC**||" in card.description
+        assert "Result: ||**__FUR__** **3–0** **MVK**||" in card.description
         assert preview.kwargs["ephemeral"] is True
     asyncio.run(scenario())
 
@@ -480,7 +728,7 @@ def test_locked_poll_never_reopens_when_riot_delays_the_start(context):
     asyncio.run(scenario())
 
 
-def test_future_board_posts_without_recap_then_gains_previous_day_mvp_when_complete(context):
+def test_next_board_waits_for_previous_matchday_and_includes_mvp_on_publication(context):
     from services.polls import cast_vote
     manager, store, channel, current, message = context
     first, second = store.data.matches
@@ -493,20 +741,50 @@ def test_future_board_posts_without_recap_then_gains_previous_day_mvp_when_compl
             await manager.vote(match.id, 8, match.team1_id, "Jerry")
         store.data = replace(store.data, matches=[first, second, future])
         await manager.tick()
-        assert channel.send.await_count == 2
-        assert "Previous match-day MVP" not in str(channel.send.call_args.kwargs["view"].to_components())
+        assert channel.send.await_count == 1
+        assert "Previous Match-Day MVP" not in str(channel.send.call_args.kwargs["view"].to_components())
         current[0] = second.start_time + timedelta(hours=4)
         store.fetched_at = current[0]
         store.data = replace(store.data, matches=[replace(m, status=MatchStatus.COMPLETED, winner_id=m.team1_id)
                                                 if m.id != future.id else m for m in store.data.matches])
         await manager.tick()
-        components = str(message.edit.call_args.kwargs["view"].to_components())
-        assert "Previous match-day MVP" in components
+        components = str(channel.send.call_args.kwargs["view"].to_components())
+        assert "Previous Match-Day MVP" in components
         assert "Lua" in components and "2/2 correct" in components and "100.0% participation" in components
         assert "Jerry" in components
         assert "points" not in components
         assert message.edit.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
         assert channel.send.await_count == 2
+    asyncio.run(scenario())
+
+
+def test_unknown_next_day_blocks_later_day_and_late_matchups_update_same_post(context):
+    manager, store, channel, current, message = context
+    first = store.data.matches[0]
+    completed = replace(first, status=MatchStatus.COMPLETED, winner_id=first.team1_id)
+    next_day = replace(first, id="day2", team1_id="TBD", start_time=first.start_time + timedelta(days=1))
+    later = replace(first, id="day3", start_time=first.start_time + timedelta(days=2))
+    store.data = replace(store.data, matches=[completed, next_day, later])
+    channel.send.side_effect = [SimpleNamespace(id=790), SimpleNamespace(id=791)]
+    async def scenario():
+        await manager.tick()
+        channel.send.assert_not_awaited()
+        confirmed = replace(next_day, team1_id=first.team1_id)
+        store.data = replace(store.data, matches=[completed, confirmed, later])
+        await manager.tick()
+        channel.send.assert_awaited_once()
+        assert not any(p.match_id == later.id for p in get_polls(123, store.data.tournament.id))
+        late_match = replace(confirmed, id="day2-late", start_time=confirmed.start_time + timedelta(hours=1))
+        store.data = replace(store.data, matches=[completed, confirmed, late_match, later])
+        await manager.tick()
+        channel.send.assert_awaited_once()
+        assert "day2-late" in str(message.edit.call_args.kwargs["view"].to_components())
+        assert message.edit.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
+        store.data = replace(store.data, matches=[replace(m, status=MatchStatus.COMPLETED, winner_id=m.team1_id)
+                                                if m.id != later.id else m for m in store.data.matches])
+        await manager.tick()
+        assert channel.send.await_count == 2
+        assert any(p.match_id == later.id for p in get_polls(123, store.data.tournament.id))
     asyncio.run(scenario())
 
 

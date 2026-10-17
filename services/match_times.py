@@ -1,4 +1,4 @@
-"""Explicit match times for every timezone registered through /setup."""
+"""Explicit match times for every timezone registered through /mysetup."""
 
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 

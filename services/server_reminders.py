@@ -7,6 +7,7 @@ from math import ceil
 import sqlite3
 
 import discord
+from services.presentation import message_payload
 
 from models import MatchStatus
 from services.delivery_records import DeliveryRecord, get_delivery_record, record_delivery
@@ -15,7 +16,7 @@ from services.reminder_engine import (
     get_server_ping_user_ids, is_reminder_due,
 )
 from services.server_settings import get_server_settings
-from services.prediction_display import results_embed
+from services.prediction_display import results_embed, format_prediction_results, VOTING_FOOTER
 from services.user_settings import get_all_user_reminder_preferences
 
 
@@ -35,7 +36,7 @@ def validate_reminder_channel(channel, guild_id):
 
 
 class ServerReminderDelivery:
-    def __init__(self, client, store, guild_id, *, clock=None, load_settings=None, load_users=None, message_prefix="", poll_manager=None):
+    def __init__(self, client, store, guild_id, *, clock=None, load_settings=None, load_users=None, message_prefix="", poll_manager=None, ping_role=True):
         self.client = client
         self.store = store
         self.guild_id = guild_id
@@ -44,6 +45,7 @@ class ServerReminderDelivery:
         self.load_users = load_users or get_all_user_reminder_preferences
         self.message_prefix = message_prefix
         self.poll_manager = poll_manager
+        self.ping_role = ping_role
         self.tracker = ReminderTracker()
         self._lock = asyncio.Lock()
         self._pending_records: dict[str, DeliveryRecord] = {}
@@ -130,45 +132,44 @@ class ServerReminderDelivery:
                 data = self.store.data
                 team1 = discord.utils.escape_markdown(data.teams_by_id[match.team1_id].short_name)
                 team2 = discord.utils.escape_markdown(data.teams_by_id[match.team2_id].short_name)
+                if not prediction_results:
+                    prediction_results = format_prediction_results(match, [])
                 recipients = sorted(get_server_ping_user_ids(users, match.team1_id, match.team2_id))
                 remaining = (match.start_time - self.clock()).total_seconds()
                 if remaining <= 0:
                     return False
                 minutes = ceil(remaining / 60)
                 timing = "less than a minute" if remaining < 60 else f"{minutes} minute{'s' if minutes != 1 else ''}"
-                content = f"## **{team1}** vs **{team2}** starts in {timing}!"
+                content = f"## {team1} vs {team2}\n\n*Starts in {timing}!*"
+                stage = data.stages_by_id.get(match.stage_id)
+                stage_name = discord.utils.escape_markdown(stage.name if stage else "Stage to Be Confirmed")
+                content += f"\n-# *({stage_name} · Bo{match.best_of})*"
                 if self.message_prefix:
-                    content = f"{self.message_prefix}\n\n{content}"
-                if recipients:
-                    content += "\n\n" + " ".join(f"<@{user_id}>" for user_id in recipients)
-                presentation_options = {}
-                message_content = content
-                if prediction_results:
-                    if not getattr(channel.permissions_for(channel.guild.me), "embed_links", True):
-                        logger.warning("Embed Links permission is missing; sending plain prediction results.")
-                        content += f"\n\n{prediction_results}"
-                        message_content = content
-                    else:
-                        embed = results_embed(prediction_results)
-                        embed.title = (
-                            f"{data.teams_by_id[match.team1_id].short_name} vs "
-                            f"{data.teams_by_id[match.team2_id].short_name}"
-                        )
-                        empty_note = f"\n{embed.description}" if embed.description else ""
-                        embed.description = f"-# Starts in {timing}!\n\n__Voting Results__{empty_note}"
-                        presentation_options["embed"] = embed
-                        # Discord only sends mention notifications from message content.
-                        outside = [self.message_prefix] if self.message_prefix else []
-                        if recipients:
-                            outside.append(" ".join(f"<@{user_id}>" for user_id in recipients))
-                        message_content = "\n\n".join(outside) or None
-                if len(recipients) > 100 or len(content) > 2000:
+                    content += f"\n\n{self.message_prefix}"
+                results = results_embed(prediction_results, include_help=False)
+                content += "\n\n### __Voting Results__"
+                if results.description:
+                    content += f"\n{results.description}"
+                else:
+                    for field in results.fields:
+                        content += f"\n\n### {field.name}\n{field.value.rstrip(chr(0x200b)).strip()}"
+                role_id = settings.worlds_role_id
+                if role_id or recipients:
+                    content += "\n\n### __Subscribers:__"
+                    if role_id:
+                        content += f"\n<@&{role_id}>"
+                    if recipients:
+                        content += "\n\n" + " ".join(f"<@{user_id}>" for user_id in recipients)
+                content += "\n\n" + VOTING_FOOTER
+                payload = message_payload(content)
+                text_size = sum(len(item.content) for item in payload["view"].walk_children()
+                                if isinstance(item, discord.ui.TextDisplay))
+                if len(recipients) > 100 or text_size > 4000:
                     raise ValueError("Reminder exceeds Discord's single-message mention/content limits.")
                 message = await channel.send(
-                    message_content,
-                    **presentation_options,
+                    **payload,
                     allowed_mentions=discord.AllowedMentions(
-                        everyone=False, roles=False,
+                        everyone=False, roles=[discord.Object(id=role_id)] if role_id and self.ping_role else False,
                         users=[discord.Object(id=user_id) for user_id in recipients],
                         replied_user=False,
                     ),

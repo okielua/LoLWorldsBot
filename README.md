@@ -43,6 +43,12 @@ From `C:\Users\luasd\DiscordStuff\LoLWorldsBot`:
 python bot.py
 ```
 
+For a quick restart, double-click `Restart Bot.cmd` in this folder, or run
+`.\restart-bot.ps1` in PowerShell. It stops this project's existing bot and starts
+the updated code in the background. Each run writes logs in the ignored `.logs/`
+folder. If running manually in a terminal, Ctrl+C, Up Arrow, Enter reruns the
+previous command without using the clipboard.
+
 The ignored `.env` file must contain `DISCORD_TOKEN` and `GUILD_ID`. Never commit
 credentials. Commands synchronize to the configured guild.
 
@@ -83,13 +89,24 @@ for commands. Both background tasks wait for Discord readiness and stop on shutd
 Reminder checks run independently every 15 seconds. They reload SQLite preferences
 each time, skip TBD/non-scheduled matches, and pause
 after a refresh failure or when the last successful fetch is over five minutes old.
-DM reminders are deferred: their controls are hidden from `/setup` and automatic
+DM reminders are deferred: their controls are hidden from `/mysetup` and automatic
 polling does not generate DM events. Existing saved preferences are retained.
 Public delivery is configured in Discord
-through the private `/serversetup` panel, which requires **Manage Server** permission.
+through the private `/serversetup` panel, which requires the **Admin** role. The role is checked again when using its controls or submitting its forms.
+
+In `/serversetup`, an Admin selects an existing Worlds notification role from
+the role dropdown. Role creation is not part of setup. Select a role without
+server permissions, since members can obtain it themselves. Selecting the role
+does not require the bot to have Manage Roles. To let members get or remove it,
+the bot needs **Manage Roles**, with its own role above the selected role. Members can get or remove
+this role using the **Daily Worlds Posts** dropdown in `/mysetup`.
+New automatic daily prediction posts mention this role once. Updates, restarts,
+replacement of a deleted post, and test posts do not ping it. The role is
+required to be mentionable unless the bot has Mention Everyone permission.
+Personal five-minute match reminders remain separate from daily role pings.
 Choose a text channel where the bot has **View Channel** and **Send Messages**.
 The first channel selection enables reminders; the panel also has an on/off toggle.
-These server settings persist in SQLite and leave personal `/setup` unchanged.
+These server settings persist in SQLite and leave personal `/mysetup` unchanged.
 
 One public message is sent per eligible match, even without ping recipients. Only
 opted-in users are mentioned; everyone/role mentions are blocked. Public reminders
@@ -153,13 +170,13 @@ These rules apply to every command, setup panel, component reply, and test repor
   calendar date. Without a saved timezone they use Pacific Time, labelled `11:00h (PT)`.
   `/myvotes` includes the local start time; `/changevote` and test history previews
   use the same rule. Date-only vote confirmations retain just the recipient's date.
-- `/setup` includes a personal time-format dropdown: `1:00h (CEST)` or
+- `/mysetup` includes a personal time-format dropdown: `1:00h (CEST)` or
   `1:00 am (CEST)`. It defaults to 24-hour time, persists across restarts, and
   applies to private messages only. Public city lists always use 24-hour time.
 - Use status emojis consistently: 🕒 UPCOMING, 🔴 LIVE, 🏁 FINISHED, ⚠️ POSTPONED,
   and ⛔ CANCELLED. Scores and explanatory text stay normal-weight.
-- Card help and page notes use small grey `-#` subtext. Voting results alone use
-  the small native footer; its exact font weight is controlled by Discord.
+- Card help and page notes use small grey `-#` subtext. Voting results use a
+  full-width subtext field below the columns, preserving inline-code commands.
 - Voting results keep two inline team columns: bold team names, normal percentage
   and vote counts, plain `@name` text without pings, and blank space if no voters.
 - Private vote confirmations show one date in the recipient's saved timezone
@@ -171,7 +188,11 @@ These rules apply to every command, setup panel, component reply, and test repor
 ### Daily predictions
 
 Presentation preference: use normal-weight cards for new bot messages, with a blue
-accent and approved underlined headings. Interactive voting posts use Components
+accent. Use standard title case for fixed titles and section headings throughout
+the bot, preserving proper names such as PayPal. Keep articles and short
+prepositions lowercase inside titles (for example, Democracy Was a Mistake).
+Preserve user/team names and acronyms exactly; matchup vs remains lowercase.
+Retain approved underlined headings. Interactive voting posts use Components
 V2 colored containers so buttons stay directly below their matchups. Private vote
 confirmations bold both matchup teams and display the selected pick as a `##` heading.
 Instruction footers in Components V2 cards use Discord's small, muted `-#` subtext
@@ -182,7 +203,7 @@ of team buttons directly below each matchup. Discord Components V2 makes the
 interleaved layout possible in one message, including an eight-match Swiss day.
 Blank spacing separates each match block from the preceding match's buttons.
 Dates group by the US tournament matchday (`America/Los_Angeles`). Absolute match
-times list every unique timezone saved through `/setup` as `City: HH:MM`.
+times list every unique timezone saved through `/mysetup` as `City: HH:MM`.
 A date suffix is included only when that city's date differs from the Riot
 matchday in `America/Los_Angeles`. City-labelled lines omit the redundant timezone
 abbreviation; DST conversion still uses the saved IANA zone. This also applies to
@@ -199,17 +220,29 @@ shown for each matching game. Personal setup is not required to run them.
 Matches of every status are
 sorted by start time, with live/final scores where available and no poll results.
 Empty days get a public no-matches response. Long days split across public embeds.
+
+`/today` also provides team prediction buttons beneath eligible known matchups,
+with private confirmations and the same five-minute cutoff. Its three small grey
+help lines link to `/changevote`, `/currentvotes`, and `/leaderboard`. These public
+buttons retain their matchup snapshot across restarts, reject changed pairings
+and late clicks, and reuse existing poll/vote rows. Only acknowledged Discord
+responses count as published opportunities; failed sends do not. Completed, live,
+unknown-team, and closed matches do not get active voting buttons. Long days split
+within Discord's message/component limits. `/tomorrow` remains informational.
+
 `/previous` publicly shows the two most recent completed series, newest first,
 using the same Riot-date and city-time styling. Scores and winner-only results
 are wrapped in Discord spoiler tags; matchups, times and stage labels stay visible.
 Live, scheduled, postponed and cancelled matches are excluded. Fewer than two
 completed matches are handled without inventing results. Recency follows start
 time because the source model does not provide exact match-end timestamps.
-Prediction boards are posted as soon as the source confirms a scheduled matchup
-before its cutoff, with no fixed hour or lead-time gate. The existing daily card
-layout supports an eight-match Swiss day within Discord's 40-component limit.
-The title is Worlds Predictions, so advance boards are clearly dated rather than
-labelled today. TBD pairings are omitted until confirmed. Newly announced pairs
+New prediction boards are limited to the next unfinished tournament matchday:
+every earlier matchday must have all its matches completed or cancelled first.
+An earlier day with unknown opponents, a live game, or a postponed game blocks
+later days. The next day's board appears when fresh data confirms at least one
+scheduled matchup before its voting cutoff. There is no fixed posting hour.
+Existing boards continue updating. The daily card supports an eight-match Swiss
+day within Discord's 40-component limit. TBD pairings are omitted until confirmed. Newly announced pairs
 are added in place, retaining existing polls, votes, and stable component IDs.
 Source refresh immediately wakes the voting loop; independent 15-second checks
 continue to lock polls even between refreshes. Missing/deleted active boards are
@@ -239,21 +272,75 @@ names. Only opted-in reminder recipients are pinged; voter names themselves do n
 create additional pings.
 
 SQLite stores match polls, editable predictions, daily message IDs, and results.
-`/changevote` privately reopens the caller's most recently edited pick if that poll is
-still open; otherwise it offers the earliest available open poll. Its two team
-buttons use the same save/change path and exact five-minute cutoff as daily posts.
-It offers only polls with a confirmed publication record. If no poll is open, it
+`/changevote` privately lists every published, currently open match in chronological
+order, with independent team buttons below each matchup. Saved selections are green
+and checked; changing one immediately updates its buttons without changing other
+predictions. Long lists split into cards within Discord's limits. The buttons use
+the same save/change path and exact five-minute cutoff as daily posts. If no poll is open, it
 links the user to `/today` and `/tomorrow`. Confirmation cards include small grey
 help for `/changevote`, `/currentvotes`, and `/leaderboard`.
 During an active controlled prediction test, `/changevote` targets the isolated test
 manager and labels its reply TEST. When that test finishes or fails, it switches
 back to the live tournament. This never copies test votes into live scoring.
 `/leaderboard` is public and ranks current server members by correct series
-predictions, then accuracy, then submitted count, then stable Discord user ID.
-Equal correct/accuracy/submitted figures share a rank. It shows correct/submitted,
-accuracy, submitted/eligible matches, participation, current streak, and best streak.
-User-facing statistics are called correct predictions, never points. An active
-streak gets a fire marker only at three or more. No extra achievement posts are sent.
+predictions, then accuracy. Equal correct/accuracy figures share a competition
+rank (1, 2, 2, 4); Discord user IDs only stabilize display order within ties.
+The leaderboard uses the normal-weight Components V2 card renderer, with an
+underlined title and third-level player headings containing a shaded inline-code
+rank, name, correct count, and movement. Stats follow on the very next line, with
+one blank line between players. Supporting stats use thin muted subtext, with
+the accuracy percentage and word correct explicitly bold. Current streaks of
+three or more show a fire emoji. Leader-gap and level-on-correct lines are omitted.
+Small grey text is italic without bullets. Only actual footer/help notes have
+bullets; explanatory text is unbolded and command names
+retain inline-code formatting. Larger leaderboards use Previous/Next buttons
+while keeping one card visible. The My stats button stays below the card contents.
+There are no fire markers or participation percentages in this view.
+
+Movement compares current ranks with the rankings before the most recently
+confirmed eligible result was included. SQLite's persisted first-confirmation
+timestamps determine that result (start time and match ID break batch ties).
+The comparison is reconstructed from results, never from leaderboard visits,
+so repeated requests and restarts do not reset movement. A newly ranked player
+shows New; unchanged ranks have no arrow. Unknown legacy comparison data yields
+no movement.
+
+The blue **My Advanced Stats** button and `/myvotestats` use the same private handler and database
+snapshot, scoped to the leaderboard's server and tournament. The button always
+shows the clicking user's data and survives restarts. Personal stats use a first-level
+My Worlds Stats title, My rank/correct predictions, and summary lines for My votes,
+My incorrect/missed predictions, and My streaks. These lines have no bullets.
+Four second-level section headings use the server's PeyzPal, PepeKMS, Copium,
+and Discheesed custom emojis in that order, without an Advanced stats heading.
+Explanations are italic grey subtext; the introductory scope note is also in
+parentheses. A muted scope note states that these stats
+cover completed series from Swiss Stage onward. The leaderboard uses that same
+stage filter for totals, ranks, movement, team insights, and crowd statistics.
+Play-ins and unknown stages are excluded; stored votes are preserved. Missing
+rank/accuracy use the explicitly approved dash, with clear no-data values under
+each section. The sample leaderboard's My Advanced Stats button still
+opens the clicker's actual private statistics; sample scores are never stored.
+
+The four personal advanced sections are **Check Your PayPal** (best-read team),
+**Can’t Read These Frauds** (hardest team), **Hopium Supplier** (most losing backings),
+and **Democracy Was a Mistake** (minority accuracy). Each has a grey explanation
+and its actual value on a separate line. Recent/pending lists, the boldest-call
+section, and trailing help footnotes are omitted from this layout. These stats use
+only validated votes on eligible completed matches, from the same SQLite read
+snapshot as the totals. Team accuracy counts predictions involving that team,
+whether for or against it, and needs at least three scored predictions. Equal
+accuracies prefer the larger sample, then team ID. Hopium Supplier counts completed
+series where the user picked a team to win and that team lost, and shows the team
+with the highest count. Wins, votes against that team, and unscored predictions do
+not increase this count. Ties use team ID. If there are no losing backings, no team
+is selected.
+
+Crowd counts include every valid final vote in this server/tournament, including
+the requester's vote. Strictly less than half is a minority; even splits are
+excluded. The underlying snapshot still computes the optional boldest-call metric,
+but it is not shown in the current personal layout. Pending, cancelled,
+unpublished, late, and changed-pair votes cannot inflate these stats.
+Insufficient data gets an explicit explanation instead of an invented result.
 
 ### Eligibility, corrections, and match-day MVP
 
@@ -286,7 +373,7 @@ An unclosed poll follows the refreshed start time; once locked it never reopens.
 Predictions at/after a revised cutoff do not score. Changing pairings resets the
 publication proof so a newly confirmed matchup needs its own acknowledged display.
 
-Daily cards include a compact Previous match-day MVP recap once the previous Riot
+Daily cards include a compact Previous Match-Day MVP recap once the previous Riot
 match day's non-void matches all have confirmed completed results. Rest days do
 not matter. Most correct wins, accuracy breaks ties, and all joint winners appear.
 The recap includes correct/submitted and submitted/eligible participation. It is
@@ -301,6 +388,11 @@ crash gap described for reminders also applies to creating a daily post.
 
 ### Controlled prediction check
 
+For an immediate populated standings preview, use `/serversetup` and click
+**Preview Leaderboard**. It privately shows six clearly labelled sample players,
+including tied ranks, accuracy, participation, and streaks, using the real leaderboard
+renderer. It works without enabling public reminders and writes no competition data.
+
 In `/serversetup`, click **Test Daily Predictions (No Pings)** with public reminders
 On. It posts an isolated, labelled test day with two matchups. Vote or change picks
 before the cutoffs (about one and two minutes after the click). Two no-ping test
@@ -311,13 +403,28 @@ If the admin running the test votes, the test also sends them a private TEST
 prediction-history preview with simulated series scores and correct/incorrect
 outcomes behind spoiler tags, using the same layout as `/myvotes`.
 
+`/votehistory voter` requires a server member selected from autocomplete, limited
+to members who have voted in the current tournament. It privately displays their
+complete history in pages of five predictions, keeping picks hidden until voting
+closes. The **View Advanced Stats** button opens the same stats display as
+`/myvotestats`, calculated for the selected voter.
+
 `/myvotes` privately shows the caller's current-tournament predictions in this
 server, including correct/incorrect outcomes once a winner is recorded. It has
 no user selector and includes open picks without exposing anyone else's votes.
+Underlined matchups are grouped under Past Games, Ongoing Games when applicable,
+and Upcoming Games. A completed prediction shows its spoilered correct/incorrect
+label beside the user's pick, using the server's KingPeepo or peepoSad emoji when
+available. Each match includes its stage and best-of format. Results remain spoilered;
+the winning team is bold and underlined, while the score and other team are bold.
+Each card ends with the shared three-line prediction help in muted subtext.
+Missing custom emojis retain their
+named shortcode instead of substituting a different emoji.
 Long histories are split across private cards. Voting results on reminders
 use a blue embed with side-by-side bold team names, normal-weight percentages
-and vote counts in the payload, plus a small native two-line `/currentvotes` and
-`/leaderboard` footer. Native embed font weight depends on the Discord client;
+and vote counts in the payload, plus small grey two-line `/currentvotes` and
+`/leaderboard` help in a full-width Markdown field. Native footer text is not used,
+so both commands retain inline-code formatting. Native embed font weight depends on the Discord client;
 these result columns are the approved exception to the normal-weight card rule.
 The matchup reminder stays inside the embed;
 the matchup is the title, timing comes next in small subtext, and an underlined Voting Results

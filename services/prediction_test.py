@@ -99,7 +99,7 @@ async def start_prediction_test(interaction, guild_id):
                 timezone_name = await asyncio.to_thread(get_user_timezone, interaction.user.id)
                 time_format = await asyncio.to_thread(get_user_time_format, interaction.user.id)
                 for embed in my_votes_embeds(history, store.data, display_name=interaction.user.display_name,
-                                            timezone_name=timezone_name, time_format=time_format):
+                                            timezone_name=timezone_name, time_format=time_format, guild=getattr(interaction, "guild", None)):
                     embed.title = "__TEST: " + embed.title.removeprefix("__")
                     await interaction.followup.send(**embed_card_payload(embed), ephemeral=True,
                                                     allowed_mentions=discord.AllowedMentions.none())

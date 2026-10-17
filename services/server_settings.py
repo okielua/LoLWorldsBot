@@ -1,4 +1,4 @@
-"""Server-level settings, kept separate from personal /setup preferences."""
+"""Server-level settings, kept separate from personal /mysetup preferences."""
 
 from dataclasses import dataclass
 from urllib.parse import urlsplit
@@ -12,6 +12,7 @@ class ServerSettings:
     reminder_channel_id: int | None = None
     public_reminders_enabled: bool = False
     pickems_url: str | None = None
+    worlds_role_id: int | None = None
 
 
 def initialize_server_settings():
@@ -26,15 +27,27 @@ def initialize_server_settings():
         columns = {row[1] for row in connection.execute("PRAGMA table_info(server_settings)")}
         if "pickems_url" not in columns:
             connection.execute("ALTER TABLE server_settings ADD COLUMN pickems_url TEXT")
+        if "worlds_role_id" not in columns:
+            connection.execute("ALTER TABLE server_settings ADD COLUMN worlds_role_id INTEGER")
 
 
 def get_server_settings(guild_id: int) -> ServerSettings:
     with get_connection() as connection:
         row = connection.execute(
-            "SELECT reminder_channel_id, public_reminders_enabled, pickems_url FROM server_settings WHERE guild_id = ?",
+            "SELECT reminder_channel_id, public_reminders_enabled, pickems_url, worlds_role_id FROM server_settings WHERE guild_id = ?",
             (guild_id,),
         ).fetchone()
-    return ServerSettings(guild_id, row[0], bool(row[1]), row[2]) if row else ServerSettings(guild_id)
+    return ServerSettings(guild_id, row[0], bool(row[1]), row[2], row[3]) if row else ServerSettings(guild_id)
+
+
+def set_worlds_role(guild_id, role_id):
+    if type(role_id) is not int or role_id <= 0:
+        raise ValueError("Role ID must be a positive integer.")
+    with get_connection() as connection:
+        connection.execute("""
+            INSERT INTO server_settings (guild_id, worlds_role_id) VALUES (?, ?)
+            ON CONFLICT(guild_id) DO UPDATE SET worlds_role_id = excluded.worlds_role_id
+        """, (guild_id, role_id))
 
 
 def set_reminder_channel(guild_id: int, channel_id: int):

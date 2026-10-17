@@ -11,6 +11,14 @@ from services.prediction_display import my_votes_embeds, results_embed
 from services.tournament_data import load_tournament_data
 
 
+def history_values(embed):
+    return [field.value for field in embed.fields if field.name != "\u200b"]
+
+
+def first_history_value(embeds):
+    return history_values(embeds[0])[0]
+
+
 @pytest.fixture(autouse=True)
 def no_registered_zones(monkeypatch):
     monkeypatch.setattr(match_times, "get_registered_timezones", lambda: [])
@@ -24,19 +32,22 @@ def test_history_distinguishes_correct_wrong_pending_and_cancelled():
             (replace(poll, closed=True, winner_id=match.team2_id), match.team1_id),
             (replace(poll, closed=True), match.team1_id), (poll, match.team1_id)]
     embed, = my_votes_embeds(rows, data, now=match.start_time - timedelta(hours=2, minutes=6))
-    assert "Result: ||C9 won · ✅ Correct||" in embed.fields[0].value
-    assert "Result: ||KC won · ❌ Incorrect||" in embed.fields[1].value
-    for index in (0, 1):
-        assert "\n\n🏁 Past prediction\nYour pick:" in embed.fields[index].value
-    assert "\n\n🔒 Voting closed\nYour pick: **C9**\n-# Awaiting result" in embed.fields[2].value
-    assert "\n\n🗳️ Voting open\nYour pick:" in embed.fields[3].value
-    assert embed.fields[3].value.endswith(
-        "Your pick: **C9**\n-# (Voting closes in 2 hours and 1 minute)\n\n-# Use `/changevote` to change your prediction.")
-    assert "🔵" not in embed.fields[3].value
-    assert all(field.name != "\u200b" for field in embed.fields)
+    values = history_values(embed)
+    assert "Result: ||**__C9__** won||\nYour pick: **C9** ||(Correct :KingPeepo:)||" in values[0]
+    assert "Result: ||**__KC__** won||\nYour pick: **C9** ||(Incorrect :peepoSad:)||" in values[1]
+    assert [field.value for field in embed.fields if field.name == "\u200b" and field.value.startswith("## ")] == [
+        "## __🏁 Past Games__", "## __🕒 Upcoming Games__"]
+    assert "\n\n🔒 Voting closed\nYour pick: **C9**\n-# Awaiting result" in values[2]
+    assert "\n\n🗳️ Voting open\nYour pick:" in values[3]
+    assert values[3].endswith(
+        "Your pick: **C9**\n-# (Voting closes in 2 hours and 1 minute)")
+    assert all(value.startswith("Play-ins · Bo5\n") for value in values)
+    assert embed.fields[-1].value == prediction_display.VOTE_CONFIRMATION_HELP
+    assert "🔵" not in values[3]
+    assert all(field.name == "__C9 vs KC__" for field in embed.fields if field.name != "\u200b")
     cancelled = replace(data, matches=[replace(match, status=MatchStatus.CANCELLED)])
-    assert "CANCELLED" in my_votes_embeds([(poll, match.team1_id)], cancelled)[0].fields[0].value
-    assert "no longer valid" in my_votes_embeds([(poll, "OTHER")], data)[0].fields[0].value
+    assert "CANCELLED" in first_history_value(my_votes_embeds([(poll, match.team1_id)], cancelled))
+    assert "no longer valid" in first_history_value(my_votes_embeds([(poll, "OTHER")], data))
 
 
 def test_entire_history_is_paged_within_discord_embed_limits():
@@ -49,18 +60,54 @@ def test_entire_history_is_paged_within_discord_embed_limits():
     assert all(len(e) <= 6000 and len(e.fields) <= 25 for e in embeds)
 
 
+def test_grouped_history_uses_guild_emojis_and_hides_results_for_both_winning_sides():
+    import re
+    import discord
+    from types import SimpleNamespace
+    from services.presentation import embed_card_payload
+    data = load_tournament_data(Path(__file__).resolve().parents[1] / "data" / "worlds_2026.json")
+    template = data.matches[0]
+    now = template.start_time + timedelta(days=2)
+    first = replace(template, id="first", status=MatchStatus.COMPLETED, winner_id=template.team1_id,
+                    team1_score=3, team2_score=0)
+    second = replace(template, id="second", start_time=template.start_time + timedelta(hours=1),
+                     status=MatchStatus.COMPLETED, winner_id=template.team2_id, team1_score=1, team2_score=3)
+    live = replace(template, id="live", start_time=now - timedelta(hours=1), status=MatchStatus.LIVE)
+    future = replace(template, id="future", start_time=now + timedelta(hours=1))
+    data = replace(data, matches=[future, live, second, first])
+    def entry(match):
+        return (Poll(123, match.id, match.tournament_id, match.team1_id, match.team2_id,
+                     match.start_time, match.status != MatchStatus.SCHEDULED, match.winner_id), match.team1_id)
+    guild = SimpleNamespace(emojis=[discord.PartialEmoji(name="KingPeepo", id=111111111111111111),
+                                    discord.PartialEmoji(name="peepoSad", id=222222222222222222, animated=True)])
+    embed, = my_votes_embeds([entry(match) for match in data.matches], data, now=now, guild=guild)
+    values = history_values(embed)
+    assert "Your pick: **C9** ||(Correct <:KingPeepo:111111111111111111>)||" in values[0]
+    assert "Your pick: **C9** ||(Incorrect <a:peepoSad:222222222222222222>)||" in values[1]
+    assert "Result: ||**__C9__** **3–0** **KC**||" in values[0]
+    assert "Result: ||**C9** **1–3** **__KC__**||" in values[1]
+    assert "__3–0__" not in values[0] and "__1–3__" not in values[1]
+    text = embed_card_payload(embed)["view"].children[0].children[0].content
+    assert text.index("## __🏁 Past Games__") < text.index("## __🔴 Ongoing Games__") < text.index("## __🕒 Upcoming Games__")
+    assert text.count("**C9** vs **KC**") == 4
+    visible = re.sub(r"\|\|.*?\|\|", "", text)
+    assert all(secret not in visible for secret in ("Correct", "Incorrect", "KingPeepo", "peepoSad", "3–0", "1–3"))
+    assert "Correct" not in values[2] and "Correct" not in values[3]
+    assert len(text) <= 4000
+
+
 def test_unvoted_match_only_has_remaining_time_and_deadline_is_exact():
     data = load_tournament_data(Path(__file__).resolve().parents[1] / "data" / "worlds_2026.json")
     match = data.matches[0]
     poll = Poll(123, match.id, match.tournament_id, match.team1_id, match.team2_id, match.start_time, False, None)
     cutoff = match.start_time - timedelta(minutes=5)
     embed, = my_votes_embeds([(poll, None)], data, now=cutoff - timedelta(seconds=30))
-    assert embed.fields[0].value == "Thu, 15 Oct 2026\n-# 11:00h (PT)\n\n🗳️ Voting open\n-# (Voting closes in less than a minute)"
-    assert len(embed.fields) == 1
+    assert history_values(embed)[0] == "Play-ins · Bo5\nThu, 15 Oct 2026\n-# 11:00h (PT)\n\n🗳️ Voting open\n-# (Voting closes in less than a minute)"
+    assert len(history_values(embed)) == 1
     closed, = my_votes_embeds([(poll, match.team1_id)], data, now=cutoff)
-    assert "Awaiting result" in closed.fields[0].value
-    assert "/changevote" not in closed.fields[0].value
-    assert "Voting closes in" not in closed.fields[0].value
+    assert "Awaiting result" in history_values(closed)[0]
+    assert "/changevote" not in history_values(closed)[0]
+    assert "Voting closes in" not in history_values(closed)[0]
 
 
 def test_upcoming_votes_only_command_hint_is_small_grey():
@@ -69,11 +116,11 @@ def test_upcoming_votes_only_command_hint_is_small_grey():
     match = data.matches[0]
     payload = hidden_votes_payload(match, now=match.start_time - timedelta(hours=2, minutes=20), stage_name="Play-In")
     text = payload["view"].children[0].children[0].content
-    assert text.startswith("## __Votes: C9 vs KC__\n\nPlay-ins · Bo5\nThu, 15 Oct 2026\n\n")
+    assert text.startswith("## Votes: **C9** vs **KC**\n\nPlay-ins · Bo5\nThu, 15 Oct 2026\n\n")
     assert "\n\n**🗳️ Voting for this match closes in 2 hours and 15 minutes**\n\n" in text
     assert "**UTC:**" not in text
     assert [line for line in text.splitlines() if line.startswith("-# ")] == [
-        "-# Use `/changevote` to make or change your prediction for these games"]
+        "-# • *Use `/changevote` to make or change your prediction for these games*"]
     assert "Votes are private until" not in text
 
 
@@ -92,6 +139,9 @@ def test_votes_match_scores_are_spoilered(status):
     match = replace(data.matches[0], status=status, team1_score=1, team2_score=0)
     embed = upcoming_votes_embed(match, [])
     assert "||1–0||" in embed.fields[2].value
+    if status == MatchStatus.COMPLETED:
+        assert embed.fields[2].value.startswith("🏁 FINISHED")
+        assert "FINAL" not in embed.fields[2].value
 
 
 def test_personal_history_uses_one_zone_and_currentvotes_omits_city_times(monkeypatch):
@@ -101,17 +151,21 @@ def test_personal_history_uses_one_zone_and_currentvotes_omits_city_times(monkey
     data = load_tournament_data(Path(__file__).resolve().parents[1] / "data" / "worlds_2026.json")
     match = data.matches[0]
     poll = Poll(123, match.id, match.tournament_id, match.team1_id, match.team2_id, match.start_time, True, None)
-    history = my_votes_embeds([(poll, match.team1_id)], data, timezone_name="Europe/Berlin")[0].fields[0].value
+    history = first_history_value(my_votes_embeds([(poll, match.team1_id)], data, timezone_name="Europe/Berlin"))
     public_embed = upcoming_votes_embed(match, [], stage_name="Play-In")
-    assert public_embed.description == "Play-ins · Bo5\nThu, 15 Oct 2026\n\nNo votes were made."
+    assert public_embed.title is None
+    assert public_embed.description == "## Votes: **C9** vs **KC**\n\nPlay-ins · Bo5\nThu, 15 Oct 2026\n\nNo votes were made."
     assert all(field.inline for field in public_embed.fields[:2])
     assert public_embed.fields[2].inline is False
     public = public_embed.fields[2].value
     assert public == "🕒 UPCOMING"
-    help_block = upcoming_votes_embed(match, []).footer.text
-    assert all(line.startswith("Use /") for line in help_block.splitlines())
+    help_block = public_embed.fields[-1].value
+    assert all(line.startswith("-# • *Use `/") and line.endswith("*") for line in help_block.splitlines())
+    assert "`/currentvotes`" in help_block and "`/leaderboard`" in help_block
+    assert public_embed.fields[-1].inline is False
+    assert public_embed.footer.text is None
     assert "**" not in help_block
-    assert history.startswith("Thu, 15 Oct 2026\n-# 20:00h (CEST)\n\n🔒 Voting closed\nYour pick:")
+    assert history.startswith("Play-ins · Bo5\nThu, 15 Oct 2026\n-# 20:00h (CEST)\n\n🔒 Voting closed\nYour pick:")
     assert all(city not in history for city in ("London", "Berlin", "Tokyo"))
     assert all(city not in public for city in ("London", "Berlin", "Tokyo"))
 
@@ -127,7 +181,7 @@ def test_private_voting_screens_use_personal_date_and_time(zone, date, time, mon
     match = data.matches[0]
     poll = Poll(123, match.id, match.tournament_id, match.team1_id, match.team2_id, match.start_time, False, None)
     now = match.start_time - timedelta(hours=1)
-    history = my_votes_embeds([(poll, match.team1_id)], data, now=now, timezone_name=zone)[0].fields[0].value
+    history = first_history_value(my_votes_embeds([(poll, match.team1_id)], data, now=now, timezone_name=zone))
     controls = change_vote_text(match, now=now, timezone_name=zone)
     assert f"{date}\n-# {time}\n\n🗳️ Voting open\n-# (Voting closes in 55 minutes)" in controls
     for text in (history, controls):
@@ -142,8 +196,8 @@ def test_private_voting_screens_apply_twelve_hour_preference():
     match = data.matches[0]
     poll = Poll(123, match.id, match.tournament_id, match.team1_id, match.team2_id, match.start_time, False, None)
     now = match.start_time - timedelta(hours=1)
-    history = my_votes_embeds([(poll, match.team1_id)], data, now=now,
-                             timezone_name="Europe/Berlin", time_format="12h")[0].fields[0].value
+    history = first_history_value(my_votes_embeds([(poll, match.team1_id)], data, now=now,
+                             timezone_name="Europe/Berlin", time_format="12h"))
     controls = change_vote_text(match, now=now, timezone_name="Europe/Berlin", time_format="12h")
     for text in (history, controls):
         assert "8:00 pm (CEST)" in text

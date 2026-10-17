@@ -13,7 +13,7 @@ import discord
 ROOT = Path(__file__).resolve().parents[1]
 
 
-@pytest.mark.parametrize("filename", ["bot.py", "services/server_setup.py", "services/prediction_test.py", "services/voting.py"])
+@pytest.mark.parametrize("filename", ["bot.py", "services/server_setup.py", "services/prediction_test.py", "services/voting.py", "services/leaderboard_views.py"])
 def test_every_interaction_reply_uses_shared_embeds_or_explicit_rich_layout(filename):
     """Cover command replies, setup edits, errors and test reports, not just schedules."""
     tree = ast.parse((ROOT / filename).read_text(encoding="utf-8"))
@@ -37,12 +37,12 @@ def test_every_interaction_reply_uses_shared_embeds_or_explicit_rich_layout(file
 
 def test_shared_embed_has_one_underlined_title_and_keeps_times_normal():
     async def scenario():
-        payload = message_payload("# Worlds Schedule\n\n-# **Berlin:** 20:00\n-# Use `/currentvotes` for picks.")
+        payload = message_payload("# Worlds Schedule\n\n-# **Berlin:** 20:00\n-# • Use `/currentvotes` for picks.")
         assert payload["content"] is None
         assert payload["embeds"] == []
         card, = payload["view"].children
         assert card.accent_colour.value == BLUE
-        assert card.children[0].content == "## __Worlds Schedule__\n\n-# **Berlin:** 20:00\n-# Use `/currentvotes` for picks."
+        assert card.children[0].content == "## __Worlds Schedule__\n\n-# *Berlin: 20:00*\n\n-# • *Use `/currentvotes` for picks.*"
     asyncio.run(scenario())
 
 

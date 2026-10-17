@@ -1,6 +1,7 @@
 """Shared visual rules for command replies and editable setup panels."""
 
 import discord
+from services.team_emojis import team_display
 
 BLUE = 0x5865F2
 
@@ -11,11 +12,37 @@ class MessageCard(discord.ui.LayoutView):
         super().__init__(timeout=controls.timeout if controls else 900)
         self.controls = controls
         card = discord.ui.Container(accent_colour=discord.Colour(BLUE))
-        card.add_item(discord.ui.TextDisplay(text))
+        positions = getattr(controls, "control_after_paragraphs", None)
+        if positions:
+            paragraphs = text.split("\n\n")
+            items = {item.custom_id: item for item in controls.children}
+            cursor = 0
+            for row, stop in zip(controls.to_components(), positions, strict=True):
+                if cursor:
+                    card.add_item(discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.large))
+                card.add_item(team_display("\n\n".join(paragraphs[cursor:stop])))
+                card.add_item(discord.ui.ActionRow(*(items[item["custom_id"]] for item in row["components"])))
+                cursor = stop
+            if cursor < len(paragraphs):
+                card.add_item(team_display("\n\n".join(paragraphs[cursor:])))
+            for item in getattr(controls, "trailing_items", ()):
+                card.add_item(item)
+            self.add_item(card)
+            return
+        after_first_row = None
+        split_after = getattr(controls, "first_control_after_paragraph", None)
+        if split_after:
+            paragraphs = text.split("\n\n", split_after)
+            if len(paragraphs) > split_after:
+                text = "\n\n".join(paragraphs[:split_after])
+                after_first_row = paragraphs[split_after]
+        card.add_item(team_display(text))
         if controls:
             items = {item.custom_id: item for item in controls.children}
-            for row in controls.to_components():
+            for index, row in enumerate(controls.to_components()):
                 card.add_item(discord.ui.ActionRow(*(items[item["custom_id"]] for item in row["components"])))
+                if index == 0 and after_first_row:
+                    card.add_item(team_display(after_first_row))
         self.add_item(card)
 
     async def interaction_check(self, interaction):
@@ -28,7 +55,7 @@ class MessageCard(discord.ui.LayoutView):
             await super().on_error(interaction, error, item)
 
 
-def message_payload(text, *, controls=None):
+def message_payload(text, *, controls=None, title_level=2):
     """Use one underlined title, a blue accent, and normal body text."""
     lines = str(text).strip().splitlines()
     title = None
@@ -37,11 +64,11 @@ def message_payload(text, *, controls=None):
         if not (title.startswith("__") and title.endswith("__")):
             title = f"__{title}__"
     description = "\n".join(lines).strip()
-    body = f"## {title}\n\n{description}" if title else description
+    body = f"{'#' * title_level} {title}\n\n{description}" if title else description
     return {"content": None, "embeds": [], "view": MessageCard(body, controls)}
 
 
-def embed_card_payload(embed, *, controls=None):
+def embed_card_payload(embed, *, controls=None, title_level=2):
     """Convert non-column legacy replies to the normal-weight card renderer."""
     parts = []
     if embed.title:
@@ -53,4 +80,4 @@ def embed_card_payload(embed, *, controls=None):
             parts.append(f"### {field.name}\n{field.value}")
         else:
             parts.append(field.value)
-    return message_payload("\n\n".join(parts), controls=controls)
+    return message_payload("\n\n".join(parts), controls=controls, title_level=title_level)
