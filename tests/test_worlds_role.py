@@ -34,7 +34,7 @@ def test_admin_selects_existing_role_without_role_creation_permission():
         select = WorldsPingRoleSelect(123)
         select._values = [role]
         interaction = SimpleNamespace(guild_id=123, guild=guild,
-                                      user=SimpleNamespace(roles=[SimpleNamespace(name="Admin")]),
+                                      user=SimpleNamespace(guild_permissions=discord.Permissions(manage_guild=True)),
                                       response=SimpleNamespace(edit_message=AsyncMock(), send_message=AsyncMock()))
         await select.callback(interaction)
         interaction.response.edit_message.assert_awaited_once()
@@ -48,7 +48,7 @@ def test_admin_cannot_select_a_privileged_role_for_self_assignment():
         select = WorldsPingRoleSelect(123)
         select._values = [role]
         interaction = SimpleNamespace(guild_id=123, guild=SimpleNamespace(get_role=lambda _: role),
-                                      user=SimpleNamespace(roles=[SimpleNamespace(name="Admin")]),
+                                      user=SimpleNamespace(guild_permissions=discord.Permissions(manage_guild=True)),
                                       response=SimpleNamespace(send_message=AsyncMock()))
         await select.callback(interaction)
         interaction.response.send_message.assert_awaited_once()

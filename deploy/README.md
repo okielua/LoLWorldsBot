@@ -93,7 +93,7 @@ The service starts on reboot and restarts after a crash.
 
 ## First Live Setup
 
-Use `/serversetup` with the Admin role to select the intended channel, notification
+Use `/serversetup` with the Manage Server permission to select the intended channel, notification
 role and Pick'ems link. New production settings start with public reminders Off.
 Check `/today`, `/team`, `/mysetup`, and `/help` before turning reminders On.
 Turning reminders On can immediately publish the eligible matchday's voting post.

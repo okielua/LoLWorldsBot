@@ -19,9 +19,10 @@ from services.server_settings import (
 logger = logging.getLogger(__name__)
 
 
-def has_admin_role(interaction, guild_id):
-    return interaction.guild_id == guild_id and any(
-        role.name == "Admin" for role in getattr(interaction.user, "roles", ())
+def can_manage_server(interaction, guild_id):
+    permissions = getattr(interaction.user, "guild_permissions", None)
+    return interaction.guild_id == guild_id and bool(
+        permissions and (permissions.manage_guild or getattr(permissions, "administrator", False))
     )
 
 
@@ -84,8 +85,8 @@ class PickemsLinkModal(discord.ui.Modal, title="Official Pick'ems Leaderboard"):
         self.link.default = get_server_settings(guild_id).pickems_url
 
     async def on_submit(self, interaction):
-        if not has_admin_role(interaction, self.guild_id):
-            await interaction.response.send_message(**message_payload("You need the Admin role."), ephemeral=True)
+        if not can_manage_server(interaction, self.guild_id):
+            await interaction.response.send_message(**message_payload("You need the Manage Server permission."), ephemeral=True)
             return
         try:
             set_pickems_url(self.guild_id, self.link.value.strip())
@@ -101,8 +102,8 @@ class WorldsPingRoleSelect(discord.ui.RoleSelect):
         super().__init__(placeholder="Choose a role to ping for daily Worlds posts...", min_values=1, max_values=1, row=2)
 
     async def callback(self, interaction):
-        if not has_admin_role(interaction, self.guild_id):
-            await interaction.response.send_message(**message_payload("You need the Admin role."), ephemeral=True)
+        if not can_manage_server(interaction, self.guild_id):
+            await interaction.response.send_message(**message_payload("You need the Manage Server permission."), ephemeral=True)
             return
         role = interaction.guild.get_role(self.values[0].id)
         if role is None or role.is_default() or role.managed or role.permissions.value:
@@ -142,8 +143,8 @@ class ServerSetupView(discord.ui.View):
             self.control_after_paragraphs = (2, 3, 4, 5)
 
     async def interaction_check(self, interaction):
-        if not has_admin_role(interaction, self.guild_id):
-            await interaction.response.send_message(**message_payload("You need the Admin role to change these settings."), ephemeral=True)
+        if not can_manage_server(interaction, self.guild_id):
+            await interaction.response.send_message(**message_payload("You need the Manage Server permission to change these settings."), ephemeral=True)
             return False
         return True
 

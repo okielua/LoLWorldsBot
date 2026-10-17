@@ -1062,9 +1062,10 @@ async def simulate_reminder(
     )
 
 
-@bot.tree.command(name="serversetup", description="Configure the daily ping role, reminder channel, and server settings. Requires the Admin role.")
+@bot.tree.command(name="serversetup", description="Configure the daily ping role, reminder channel, and settings. Requires Manage Server.")
 @app_commands.guild_only()
-@app_commands.checks.has_role("Admin")
+@app_commands.default_permissions(manage_guild=True)
+@app_commands.checks.has_permissions(manage_guild=True)
 async def server_setup(interaction: discord.Interaction):
     if interaction.guild_id != GUILD_ID:
         await interaction.response.send_message(**message_payload("This bot is configured for a different server."), ephemeral=True)
@@ -1570,7 +1571,7 @@ async def help_command(
 `/mysetup`
 Choose your timezone, time format, teams, daily Worlds role, and match reminder preferences.
 
-`/serversetup` · **(only for Admins)**
+`/serversetup` · **(requires Manage Server)**
 Configure the server’s daily ping role, reminder channel, and settings.
 
 `/help`
@@ -1648,8 +1649,8 @@ async def on_app_command_error(
         error,
     )
 
-    if isinstance(error, app_commands.MissingRole):
-        message = "You need the Admin role to use `/serversetup`."
+    if isinstance(error, app_commands.MissingPermissions):
+        message = "You need the Manage Server permission to use `/serversetup`."
     else:
         message = "Something went wrong while " "running that command."
 

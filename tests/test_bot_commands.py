@@ -443,12 +443,11 @@ def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeyp
     assert namespace["bot"].tree.get_command("previous") is not None
     assert not namespace["bot"].tree.get_command("myvotes").checks
     assert server_command.guild_only is True
-    assert server_command.default_permissions is None
-    interaction = SimpleNamespace(user=SimpleNamespace(roles=[], guild_permissions=discord.Permissions.all()))
-    with pytest.raises(discord.app_commands.MissingRole):
+    assert server_command.default_permissions.manage_guild
+    interaction = SimpleNamespace(permissions=discord.Permissions.none())
+    with pytest.raises(discord.app_commands.MissingPermissions):
         server_command.checks[0](interaction)
-    interaction.user.roles = [SimpleNamespace(name="Admin")]
-    interaction.user.guild_permissions = discord.Permissions.none()
+    interaction.permissions = discord.Permissions(manage_guild=True)
     assert server_command.checks[0](interaction)
     async def check_help():
         reply = SimpleNamespace(response=SimpleNamespace(send_message=AsyncMock()))

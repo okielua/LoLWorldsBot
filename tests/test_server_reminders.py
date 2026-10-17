@@ -246,10 +246,9 @@ def test_server_setup_is_private_and_rechecks_admin_permission(database):
         assert not await view.interaction_check(interaction)
         assert interaction.response.send_message.call_args.kwargs["ephemeral"] is True
         interaction.user.guild_permissions.manage_guild = True
-        assert not await view.interaction_check(interaction)
-        interaction.user.roles = [SimpleNamespace(name="Admin")]
         assert await view.interaction_check(interaction)
-        interaction.user.roles = []
+        interaction.user.guild_permissions.manage_guild = False
+        interaction.user.roles = [SimpleNamespace(name="Admin")]
         assert not await view.interaction_check(interaction)
         view.stop()
     asyncio.run(scenario())
@@ -322,7 +321,7 @@ def test_leaderboard_preview_is_private_populated_and_does_not_write_results():
         view = ServerSetupView(123)
         assert not view.preview_leaderboard.disabled
         interaction = SimpleNamespace(
-            guild_id=123, user=SimpleNamespace(id=7, display_name="lua", roles=[SimpleNamespace(name="Admin")]),
+            guild_id=123, user=SimpleNamespace(id=7, display_name="lua", guild_permissions=discord.Permissions(manage_guild=True)),
             client=SimpleNamespace(voting_manager=SimpleNamespace(store=SimpleNamespace(data=SimpleNamespace(tournament=SimpleNamespace(id="worlds-2026"))))),
             response=SimpleNamespace(defer=AsyncMock()), followup=SimpleNamespace(send=AsyncMock()))
         assert await view.interaction_check(interaction)
@@ -619,9 +618,6 @@ def test_pickems_modal_saves_link_privately_after_admin_check():
         await modal.on_submit(interaction)
         assert get_server_settings(123).pickems_url is None
         interaction.user.guild_permissions.manage_guild = True
-        await modal.on_submit(interaction)
-        assert get_server_settings(123).pickems_url is None
-        interaction.user.roles = [SimpleNamespace(name="Admin")]
         await modal.on_submit(interaction)
         assert get_server_settings(123).pickems_url == modal.link.value
         assert interaction.response.send_message.call_args.kwargs["ephemeral"]
