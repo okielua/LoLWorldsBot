@@ -19,7 +19,7 @@ from services.lolesports import LoLEsportsClient, QUERY_HASH
 from services.server_reminders import ServerReminderDelivery
 from services.server_settings import initialize_server_settings
 from services.server_setup import ServerSetupView, build_server_setup_content
-from services.worlds_role import WorldsRoleSelect
+from services.worlds_role import configured_worlds_role, worlds_subscription_enabled, toggle_worlds_subscription
 from services.polls import get_user_votes, get_upcoming_match_votes, get_recent_completed_match_ids, has_match_votes, initialize_polls
 from services.prediction_display import PREDICTION_BLUE, VOTE_CONFIRMATION_HELP, group_voting_messages, hidden_votes_payload, my_votes_embeds, upcoming_votes_embed
 from services.match_times import TOURNAMENT_TIMEZONE, format_clock_time, format_timezone_times, private_match_details
@@ -52,14 +52,12 @@ from services.tournament_queries import (
     get_standings,
 )
 from services.user_settings import (
-    get_all_games_server_ping,
     get_all_user_reminder_preferences,
     get_followed_team_ids,
     get_notification_settings,
     get_user_timezone,
     get_user_time_format,
     initialize_database,
-    set_all_games_server_ping,
     set_followed_team_ids,
     set_server_ping,
     set_user_timezone,
@@ -486,6 +484,7 @@ async def on_guild_emojis_update(guild, before, after):
 def build_setup_content(
     user_id: int,
     display_name: str,
+    *, member=None, guild=None, all_games_enabled=None,
 ) -> str:
     safe_display_name = discord.utils.escape_markdown(display_name)
 
@@ -500,7 +499,7 @@ def build_setup_content(
         _,
     ) = get_notification_settings(user_id)
 
-    all_games_server_ping = get_all_games_server_ping(user_id)
+    all_games_server_ping = worlds_subscription_enabled(member, guild) if all_games_enabled is None else all_games_enabled
 
     if timezone_name:
         timezone_text = timezone_name
@@ -524,9 +523,14 @@ def build_setup_content(
         team_text = "None selected"
 
     if all_games_server_ping:
-        all_games_text = "**On** " "*(5 minutes before match start)*"
+        all_games_text = "**On** *(Daily posts and 5-minute match reminders)*"
     else:
         all_games_text = "**Off**"
+    role = configured_worlds_role(guild)
+    if role:
+        all_games_text += f"\nGet or remove {role.mention} to turn all-game pings on or off."
+    else:
+        all_games_text += "\nA server manager must select the Worlds role in `/serversetup` first."
 
     if followed_team_server_ping:
         followed_ping_text = "**On** " "*(5 minutes before match start)*"
@@ -627,10 +631,7 @@ class TimezoneCitySelect(discord.ui.Select):
         )
 
         await interaction.response.edit_message(
-            **message_payload(build_setup_content(
-                interaction.user.id,
-                interaction.user.display_name,
-            ), controls=SetupView(interaction.user.id)),
+            **setup_payload(interaction),
 
         )
 
@@ -697,10 +698,7 @@ class TeamSelect(discord.ui.Select):
         )
 
         await interaction.response.edit_message(
-            **message_payload(build_setup_content(
-                interaction.user.id,
-                interaction.user.display_name,
-            ), controls=SetupView(interaction.user.id)),
+            **setup_payload(interaction),
 
         )
 
@@ -734,9 +732,7 @@ class SetupTimezoneSelect(discord.ui.Select):
             region = value
         elif value != "__region__":
             set_user_timezone(self.user_id, value)
-        await interaction.response.edit_message(**message_payload(
-            build_setup_content(self.user_id, interaction.user.display_name),
-            controls=SetupView(self.user_id, timezone_region=region)))
+        await interaction.response.edit_message(**setup_payload(interaction, timezone_region=region))
 
 
 class TimeFormatSelect(discord.ui.Select):
@@ -753,9 +749,7 @@ class TimeFormatSelect(discord.ui.Select):
             await interaction.response.send_message(**message_payload("Use `/mysetup` to change your own settings."), ephemeral=True)
             return
         set_user_time_format(interaction.user.id, self.values[0])
-        await interaction.response.edit_message(**message_payload(
-            build_setup_content(interaction.user.id, interaction.user.display_name),
-            controls=SetupView(interaction.user.id)))
+        await interaction.response.edit_message(**setup_payload(interaction))
 
 
 class SetupView(discord.ui.View):
@@ -765,15 +759,11 @@ class SetupView(discord.ui.View):
         self,
         user_id: int,
         timezone_region=None,
+        *, member=None, guild=None, all_games_enabled=None,
     ):
         super().__init__(timeout=900)
 
         self.user_id = user_id
-        self.trailing_items = [
-            discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.large),
-            discord.ui.TextDisplay("### 🔔 __Daily Worlds Posts:__\nGet the Worlds 2026 role to be pinged for each daily post, or remove it to opt out."),
-            discord.ui.ActionRow(WorldsRoleSelect(user_id)),
-        ]
         self.add_item(SetupTimezoneSelect(user_id, timezone_region))
         self.add_item(TimeFormatSelect(user_id))
         self.add_item(TeamSelect(user_id))
@@ -784,7 +774,8 @@ class SetupView(discord.ui.View):
             _,
         ) = get_notification_settings(user_id)
 
-        all_games_server_ping = get_all_games_server_ping(user_id)
+        all_games_server_ping = worlds_subscription_enabled(member, guild) if all_games_enabled is None else all_games_enabled
+        self.toggle_all_games_ping.disabled = configured_worlds_role(guild) is None
 
         if all_games_server_ping:
             self.toggle_all_games_ping.label = "Turn Server Pings for All Games OFF (Currently ON)"
@@ -815,20 +806,16 @@ class SetupView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button,
     ):
-        currently_enabled = get_all_games_server_ping(interaction.user.id)
-
-        set_all_games_server_ping(
-            interaction.user.id,
-            not currently_enabled,
-        )
-
-        await interaction.response.edit_message(
-            **message_payload(build_setup_content(
-                interaction.user.id,
-                interaction.user.display_name,
-            ), controls=SetupView(interaction.user.id)),
-
-        )
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message(**message_payload("Use `/mysetup` to change your own settings."), ephemeral=True)
+            return
+        await interaction.response.defer()
+        try:
+            enabled = await toggle_worlds_subscription(interaction)
+        except ValueError as error:
+            await interaction.followup.send(**message_payload(str(error)), ephemeral=True)
+            return
+        await interaction.edit_original_response(**setup_payload(interaction, all_games_enabled=enabled))
 
     @discord.ui.button(
         label="Followed-Team Pings",
@@ -853,16 +840,20 @@ class SetupView(discord.ui.View):
         )
 
         await interaction.response.edit_message(
-            **message_payload(build_setup_content(
-                interaction.user.id,
-                interaction.user.display_name,
-            ), controls=SetupView(interaction.user.id)),
+            **setup_payload(interaction),
 
         )
 
 # --------------------------------------------------
 # User requirements
 # --------------------------------------------------
+
+
+def setup_payload(interaction, *, timezone_region=None, all_games_enabled=None):
+    context = dict(member=interaction.user, guild=getattr(interaction, "guild", None),
+                   all_games_enabled=all_games_enabled)
+    return message_payload(build_setup_content(interaction.user.id, interaction.user.display_name, **context),
+                           controls=SetupView(interaction.user.id, timezone_region=timezone_region, **context))
 
 
 async def require_timezone(
@@ -1062,7 +1053,7 @@ async def simulate_reminder(
     )
 
 
-@bot.tree.command(name="serversetup", description="Configure the daily ping role, reminder channel, and settings. Requires Manage Server.")
+@bot.tree.command(name="serversetup", description="Configure the Worlds ping role, reminder channel, and settings. Requires Manage Server.")
 @app_commands.guild_only()
 @app_commands.default_permissions(manage_guild=True)
 @app_commands.checks.has_permissions(manage_guild=True)
@@ -1078,7 +1069,7 @@ async def server_setup(interaction: discord.Interaction):
 
 @bot.tree.command(
     name="mysetup",
-    description=("Choose your timezone, time format, teams, daily Worlds role, and match reminder preferences."),
+    description=("Choose your timezone, time format, teams, and Worlds role and match reminder preferences."),
 )
 async def setup(
     interaction: discord.Interaction,
@@ -1086,10 +1077,7 @@ async def setup(
     await interaction.response.defer(ephemeral=True)
 
     await interaction.edit_original_response(
-        **message_payload(build_setup_content(
-            interaction.user.id,
-            interaction.user.display_name,
-        ), controls=SetupView(interaction.user.id)),
+        **setup_payload(interaction),
 
     )
 
@@ -1569,10 +1557,10 @@ async def help_command(
 ## __Setup__
 
 `/mysetup`
-Choose your timezone, time format, teams, daily Worlds role, and match reminder preferences.
+Choose your timezone, time format, teams, and Worlds role and match reminder preferences.
 
 `/serversetup` · **(requires Manage Server)**
-Configure the server’s daily ping role, reminder channel, and settings.
+Configure the server’s Worlds ping role, reminder channel, and settings.
 
 `/help`
 See all available commands and what they do.

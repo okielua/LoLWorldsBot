@@ -7,7 +7,7 @@ import pytest
 
 from services import user_settings
 from services.server_settings import initialize_server_settings, get_server_settings, set_worlds_role, set_reminder_channel
-from services.worlds_role import WorldsRoleSelect
+from services.worlds_role import toggle_worlds_subscription, worlds_subscription_enabled
 from services.server_setup import WorldsPingRoleSelect
 
 
@@ -60,25 +60,21 @@ def test_members_can_join_and_leave_only_the_configured_role():
     set_worlds_role(123, 789)
     role = SimpleNamespace(id=789, mention="<@&789>", is_assignable=lambda: True,
                            is_default=lambda: False, managed=False, permissions=discord.Permissions.none())
-    member = SimpleNamespace(id=7, add_roles=AsyncMock(), remove_roles=AsyncMock())
-    guild = SimpleNamespace(get_role=Mock(return_value=role))
+    member = SimpleNamespace(id=7, roles=[], add_roles=AsyncMock(), remove_roles=AsyncMock())
+    guild = SimpleNamespace(id=123, get_role=Mock(return_value=role), fetch_member=AsyncMock(return_value=member))
     interaction = SimpleNamespace(guild_id=123, guild=guild, user=member,
                                   response=SimpleNamespace(defer=AsyncMock(), send_message=AsyncMock()),
                                   followup=SimpleNamespace(send=AsyncMock()))
     async def scenario():
-        select = WorldsRoleSelect(7)
-        select._values = ["join"]
-        await select.callback(interaction)
-        member.add_roles.assert_awaited_once_with(role, reason="Opted into Worlds daily posts")
-        select._values = ["leave"]
-        await select.callback(interaction)
-        member.remove_roles.assert_awaited_once_with(role, reason="Opted out of Worlds daily posts")
-        interaction.user = SimpleNamespace(id=8)
-        await select.callback(interaction)
-        interaction.response.send_message.assert_awaited_once()
+        assert not worlds_subscription_enabled(member, guild)
+        assert await toggle_worlds_subscription(interaction)
+        member.add_roles.assert_awaited_once_with(role, reason="Enabled server pings for all Worlds games")
+        member.roles = [role]
+        assert worlds_subscription_enabled(member, guild)
+        assert not await toggle_worlds_subscription(interaction)
+        member.remove_roles.assert_awaited_once_with(role, reason="Disabled server pings for all Worlds games")
     asyncio.run(scenario())
     assert all(call.args == (789,) for call in guild.get_role.call_args_list)
-    assert interaction.followup.send.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
 
 
 def test_role_dropdown_rechecks_admin_before_saving():
@@ -90,3 +86,17 @@ def test_role_dropdown_rechecks_admin_before_saving():
         assert get_server_settings(123).worlds_role_id is None
         assert interaction.response.send_message.call_args.kwargs["ephemeral"] is True
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("privileged, assignable", [(True, True), (False, False)])
+def test_all_games_toggle_cannot_assign_privileged_or_unmanageable_roles(privileged, assignable):
+    set_worlds_role(123, 789)
+    role = SimpleNamespace(id=789, is_default=lambda: False, managed=False,
+                           permissions=discord.Permissions.all() if privileged else discord.Permissions.none(),
+                           is_assignable=lambda: assignable)
+    member = SimpleNamespace(id=7, roles=[], add_roles=AsyncMock())
+    guild = SimpleNamespace(id=123, get_role=lambda _: role, fetch_member=AsyncMock(return_value=member))
+    interaction = SimpleNamespace(guild=guild, user=member)
+    with pytest.raises(ValueError):
+        asyncio.run(toggle_worlds_subscription(interaction))
+    member.add_roles.assert_not_awaited()

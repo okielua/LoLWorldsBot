@@ -1,40 +1,37 @@
-"""Let members opt into the existing notification role selected by an Admin."""
+"""The configured Worlds role is the single subscription for all-game pings."""
 
 import discord
 
-from services.presentation import message_payload
 from services.server_settings import get_server_settings
 
 
-class WorldsRoleSelect(discord.ui.Select):
-    def __init__(self, user_id):
-        self.user_id = user_id
-        super().__init__(placeholder="Choose whether to receive daily Worlds pings...", options=[
-            discord.SelectOption(label="Get the Worlds 2026 Role", value="join", emoji="🔔"),
-            discord.SelectOption(label="Remove the Worlds 2026 Role", value="leave", emoji="🔕"),
-        ])
+def configured_worlds_role(guild):
+    if guild is None:
+        return None
+    role_id = get_server_settings(guild.id).worlds_role_id
+    return guild.get_role(role_id) if role_id else None
 
-    async def callback(self, interaction):
-        if interaction.user.id != self.user_id or not interaction.guild:
-            await interaction.response.send_message(**message_payload("Use `/mysetup` in the server to change your own role."), ephemeral=True)
-            return
-        await interaction.response.defer(ephemeral=True, thinking=True)
-        role = interaction.guild.get_role(get_server_settings(interaction.guild_id).worlds_role_id)
-        if role is None:
-            text = "The Worlds role hasn't been configured. Ask an Admin to run `/serversetup`."
-        elif role.is_default() or role.managed or role.permissions.value:
-            text = "The selected role isn't a notification-only role. Ask an Admin to select a role without server permissions in `/serversetup`."
-        elif not role.is_assignable():
-            text = "I can't manage the Worlds role. An Admin must give me Manage Roles and place my role above it."
+
+def worlds_subscription_enabled(member, guild):
+    role = configured_worlds_role(guild)
+    return bool(role and any(item.id == role.id for item in getattr(member, "roles", ())))
+
+
+async def toggle_worlds_subscription(interaction):
+    role = configured_worlds_role(interaction.guild)
+    if role is None:
+        raise ValueError("The Worlds role hasn't been configured. Ask a server manager to select it in `/serversetup`.")
+    if role.is_default() or role.managed or role.permissions.value:
+        raise ValueError("Select a notification role without server permissions in `/serversetup`.")
+    if not role.is_assignable():
+        raise ValueError("I need Manage Roles permission, with my role above the Worlds notification role.")
+    try:
+        member = await interaction.guild.fetch_member(interaction.user.id)
+        enabled = not any(item.id == role.id for item in member.roles)
+        if enabled:
+            await member.add_roles(role, reason="Enabled server pings for all Worlds games")
         else:
-            try:
-                if self.values[0] == "join":
-                    await interaction.user.add_roles(role, reason="Opted into Worlds daily posts")
-                    text = f"You now have {role.mention} and will be pinged for daily Worlds posts."
-                else:
-                    await interaction.user.remove_roles(role, reason="Opted out of Worlds daily posts")
-                    text = f"Removed {role.mention}. You won't receive its daily Worlds pings."
-            except discord.HTTPException:
-                text = "I couldn't update your role. Check my Manage Roles permission and role position, then try again."
-        await interaction.followup.send(**message_payload(text), ephemeral=True,
-                                        allowed_mentions=discord.AllowedMentions.none())
+            await member.remove_roles(role, reason="Disabled server pings for all Worlds games")
+    except discord.HTTPException as error:
+        raise ValueError("I couldn't update your Worlds role. Check my Manage Roles permission and role position, then try again.") from error
+    return enabled

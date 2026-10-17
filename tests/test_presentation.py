@@ -30,7 +30,7 @@ def test_every_interaction_reply_uses_shared_embeds_or_explicit_rich_layout(file
             assert "upcoming_votes_embed" in ast.unparse(node), "Only column-based voting results use native embeds"
         assert any(key.arg in {"embed", "view"} or (
             key.arg is None and isinstance(key.value, ast.Call)
-            and isinstance(key.value.func, ast.Name) and key.value.func.id in {"message_payload", "embed_card_payload", "hidden_votes_payload"}
+            and isinstance(key.value.func, ast.Name) and key.value.func.id in {"message_payload", "embed_card_payload", "hidden_votes_payload", "setup_payload"}
         ) or (key.arg is None and isinstance(key.value, ast.Name) and key.value.id == "payload"
         ) for key in node.keywords), f"{filename}:{node.lineno}: missing rich presentation"
 

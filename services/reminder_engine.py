@@ -24,7 +24,7 @@ class UserReminderPreferences:
     user_id: int
     followed_team_ids: frozenset[str]
 
-    all_games_server_ping: bool = False
+    all_games_server_ping: bool = False  # Legacy flag; all-game pings now use the Worlds role.
     followed_team_server_ping: bool = True
 
     dm_enabled: bool = False
@@ -83,10 +83,6 @@ def get_server_ping_user_ids(
     ping_user_ids = set()
 
     for user in users:
-        if user.all_games_server_ping:
-            ping_user_ids.add(user.user_id)
-            continue
-
         if user.followed_team_server_ping and follows_match(
             user,
             team1_id,

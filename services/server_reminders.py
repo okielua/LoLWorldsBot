@@ -154,6 +154,17 @@ class ServerReminderDelivery:
                     for field in results.fields:
                         content += f"\n\n### {field.name}\n{field.value.rstrip(chr(0x200b)).strip()}"
                 role_id = settings.worlds_role_id
+                if role_id and recipients:
+                    # The role mention already notifies role subscribers.
+                    individual_recipients = []
+                    for user_id in recipients:
+                        try:
+                            member = channel.guild.get_member(user_id) or await channel.guild.fetch_member(user_id)
+                        except discord.NotFound:
+                            continue
+                        if not any(role.id == role_id for role in member.roles):
+                            individual_recipients.append(user_id)
+                    recipients = individual_recipients
                 if role_id or recipients:
                     content += "\n\n### __Subscribers:__"
                     if role_id:

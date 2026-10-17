@@ -42,7 +42,7 @@ def make_delivery():
     channel = Mock(spec=discord.TextChannel)
     channel.id = 456
     channel.type = discord.ChannelType.text
-    channel.guild = SimpleNamespace(id=123, me=object())
+    channel.guild = SimpleNamespace(id=123, me=object(), get_member=lambda user_id: SimpleNamespace(roles=[]))
     channel.permissions_for.return_value = SimpleNamespace(view_channel=True, send_messages=True)
     channel.send = AsyncMock(return_value=SimpleNamespace(id=9876))
     client = SimpleNamespace(get_channel=Mock(return_value=channel), fetch_channel=AsyncMock(return_value=channel))
@@ -120,6 +120,18 @@ def test_results_test_label_and_footnotes_are_inside_card():
     assert delivery.message_prefix in text
     assert "-# • *Use `/currentvotes`" in text
     assert text.endswith("prediction standings.*")
+
+
+def test_worlds_role_members_are_not_also_individually_pinged():
+    delivery, store, channel, settings, _ = make_delivery()
+    settings.return_value = replace(settings.return_value, worlds_role_id=444)
+    channel.guild.get_member = lambda user_id: SimpleNamespace(roles=[SimpleNamespace(id=444)] if user_id == 1 else [])
+    assert asyncio.run(delivery.deliver(store.data.matches[0].id))
+    call = channel.send.call_args
+    text = rendered_message(call).description
+    assert "<@&444>\n\n<@2>" in text
+    assert "<@1>" not in text
+    assert call.kwargs["allowed_mentions"].to_dict() == {"roles": [444], "users": [2], "parse": []}
 
 
 def test_missing_embed_permission_preserves_reminder_and_results():
@@ -541,9 +553,9 @@ def test_five_minute_test_uses_saved_personal_settings_and_never_pings_roles():
     call = channel.send.call_args
     text = rendered_message(call).description
     assert "Starts in 5 minutes!" in text
-    assert "<@1>" in text and "<@4>" in text
+    assert "<@1>" in text and "<@4>" not in text
     assert "<@2>" not in text and "<@3>" not in text
-    assert call.kwargs["allowed_mentions"].to_dict() == {"users": [1, 4], "parse": []}
+    assert call.kwargs["allowed_mentions"].to_dict() == {"users": [1], "parse": []}
     assert get_delivery_record(123, first.id) is None
 
 

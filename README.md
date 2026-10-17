@@ -108,17 +108,23 @@ the role dropdown. Role creation is not part of setup. Select a role without
 server permissions, since members can obtain it themselves. Selecting the role
 does not require the bot to have Manage Roles. To let members get or remove it,
 the bot needs **Manage Roles**, with its own role above the selected role. Members can get or remove
-this role using the **Daily Worlds Posts** dropdown in `/mysetup`.
-New automatic daily prediction posts mention this role once. Updates, restarts,
-replacement of a deleted post, and test posts do not ping it. The role is
+this role using **Server Pings for All Games** in `/mysetup`. Actual role
+membership is the subscription state, including manual Discord role changes.
+There is no separate daily-post subscription. The legacy SQLite all-games flag
+is retained for compatibility but no longer targets notifications.
+New automatic daily prediction posts and five-minute match reminders mention
+this role. Updates, restarts and replacement of a deleted daily post do not ping it. The role is
 required to be mentionable unless the bot has Mention Everyone permission.
-Personal five-minute match reminders remain separate from daily role pings.
+Followed-team subscribers outside this role receive individual match pings;
+role members are not also individually mentioned. With no configured role,
+only followed-team subscribers are individually pinged.
 Choose a text channel where the bot has **View Channel** and **Send Messages**.
 The first channel selection enables reminders; the panel also has an on/off toggle.
 These server settings persist in SQLite and leave personal `/mysetup` unchanged.
 
 One public message is sent per eligible match, even without ping recipients. Only
-opted-in users are mentioned; everyone/role mentions are blocked. Public reminders
+the configured Worlds role and opted-in followed-team users are mentioned;
+everyone and unrelated roles are blocked. Public reminders
 become eligible five minutes before scheduled start. Following downtime or a send
 failure, unsent reminders can catch up until (but never at/after) match start, once
 fresh source data is available. Catch-up wording reflects the actual remaining

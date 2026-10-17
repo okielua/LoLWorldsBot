@@ -59,7 +59,7 @@ def test_reminder_not_due_too_early():
     )
 
 
-def test_all_games_user_gets_server_ping():
+def test_legacy_all_games_flag_does_not_create_an_individual_ping():
     user = UserReminderPreferences(
         user_id=1,
         followed_team_ids=frozenset(),
@@ -72,7 +72,7 @@ def test_all_games_user_gets_server_ping():
         "G2",
     )
 
-    assert result == {1}
+    assert result == set()
 
 
 def test_followed_team_user_gets_server_ping():

@@ -38,9 +38,9 @@ def build_server_setup_content(guild_id):
         "Personal ping preferences stay in `/mysetup`.\n\n"
         f"### 📍 __Reminder Channel:__\n{channel}"
         + ("\nChoose a channel to turn public reminders on." if settings.reminder_channel_id is None else "")
-        + f"\n\n### 🔔 __Daily Worlds Post Role:__\n{role}\n"
-        "Choose a notification role without server permissions. Make it mentionable so daily posts can ping it.\n"
-        "Members can get or remove this role in `/mysetup`.\n\n"
+        + f"\n\n### 🔔 __All-Game Worlds Ping Role:__\n{role}\n"
+        "Choose a notification role without server permissions. Make it mentionable for daily posts and 5-minute match reminders.\n"
+        "Members join or leave this role using Server Pings for All Games in `/mysetup`.\n\n"
         + ("### 🧪 __Test Posts:__\nPreview without pings, or send a five-minute test using members' `/mysetup` ping preferences.\n\n"
            if development_enabled() else "")
         + "### 🏆 __Leaderboards:__\nSet the official Pick'ems link"
@@ -99,7 +99,7 @@ class PickemsLinkModal(discord.ui.Modal, title="Official Pick'ems Leaderboard"):
 class WorldsPingRoleSelect(discord.ui.RoleSelect):
     def __init__(self, guild_id):
         self.guild_id = guild_id
-        super().__init__(placeholder="Choose a role to ping for daily Worlds posts...", min_values=1, max_values=1, row=2)
+        super().__init__(placeholder="Choose the role for all Worlds game pings...", min_values=1, max_values=1, row=2)
 
     async def callback(self, interaction):
         if not can_manage_server(interaction, self.guild_id):

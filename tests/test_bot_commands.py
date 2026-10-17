@@ -482,7 +482,23 @@ def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeyp
             assert isinstance(card.children[position + 1].children[0], picker)
             assert f"__{label}__" in card.children[position].content
         spacers = [item for item in card.children if isinstance(item, discord.ui.Separator)]
-        assert len(spacers) == 5
+        assert len(spacers) == 4
+        assert "Daily Worlds Posts" not in str(message_payload(content, controls=view))
+        assert view.toggle_all_games_ping.disabled
+        from services import worlds_role
+        role = SimpleNamespace(id=789, mention="<@&789>")
+        monkeypatch.setattr(worlds_role, "get_server_settings", lambda _: SimpleNamespace(worlds_role_id=789))
+        guild = SimpleNamespace(id=123, get_role=lambda _: role)
+        member = SimpleNamespace(roles=[role])
+        subscribed = namespace["SetupView"](123, member=member, guild=guild)
+        assert not subscribed.toggle_all_games_ping.disabled
+        assert "OFF (Currently ON)" in subscribed.toggle_all_games_ping.label
+        subscribed_text = namespace["build_setup_content"](123, "Test user", member=member, guild=guild)
+        assert "**On** *(Daily posts and 5-minute match reminders)*" in subscribed_text
+        member.roles = []
+        unsubscribed = namespace["SetupView"](123, member=member, guild=guild)
+        assert "ON (Currently OFF)" in unsubscribed.toggle_all_games_ping.label
+        assert "Daily Worlds Posts" not in subscribed_text
         assert all(not item.visible and item.spacing == discord.SeparatorSpacing.large for item in spacers)
         select = next(item for item in card.walk_children() if isinstance(item, namespace["TimeFormatSelect"]))
         assert [option.value for option in select.options] == ["24h", "12h"]

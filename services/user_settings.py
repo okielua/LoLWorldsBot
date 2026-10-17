@@ -230,6 +230,7 @@ def get_notification_settings(
 def get_all_games_server_ping(
     user_id: int,
 ) -> bool:
+    """Read a legacy flag for compatibility; active subscriptions use Discord roles."""
     with get_connection() as connection:
         row = connection.execute(
             """
@@ -250,6 +251,7 @@ def set_all_games_server_ping(
     user_id: int,
     enabled: bool,
 ) -> None:
+    """Preserve legacy data access; this flag no longer enables notifications."""
     with get_connection() as connection:
         connection.execute(
             """
