@@ -455,13 +455,13 @@ def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeyp
         await namespace["bot"].tree.get_command("help").callback(reply)
         call = reply.response.send_message.call_args
         text = rendered_message(call).description
-        registered = sorted(namespace["bot"].tree.get_commands(), key=lambda command: command.name)
-        for item in registered:
-            assert f"**`/{item.name}`**\n{item.description}" in text
+        assert rendered_message(call).title == "__Worlds Bot: List of all Commands__"
+        for category in ("Setup", "Matches and Results", "Voting", "Leaderboards"):
+            assert f"## __{category}__" in text
+        for item in namespace["bot"].tree.get_commands():
+            if not item.name.startswith(("test", "simulate")):
+                assert f"`/{item.name}`" in text
             assert 1 <= len(item.description) <= 100
-        assert [text.index(f"**`/{item.name}`**") for item in registered] == sorted(
-            text.index(f"**`/{item.name}`**") for item in registered
-        )
         assert call.kwargs["ephemeral"] is True
         assert len(text) < 4000
     asyncio.run(check_help())

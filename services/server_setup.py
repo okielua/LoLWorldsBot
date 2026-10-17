@@ -4,6 +4,7 @@ import logging
 
 import discord
 from services.presentation import message_payload
+from services.runtime_config import development_enabled
 
 from services.server_reminders import validate_reminder_channel
 from services.reminder_test import run_reminder_test
@@ -39,8 +40,10 @@ def build_server_setup_content(guild_id):
         + f"\n\n### 🔔 __Daily Worlds Post Role:__\n{role}\n"
         "Choose a notification role without server permissions. Make it mentionable so daily posts can ping it.\n"
         "Members can get or remove this role in `/mysetup`.\n\n"
-        "### 🧪 __Test Posts:__\nPreview without pings, or send a five-minute test using members' `/mysetup` ping preferences.\n\n"
-        "### 🏆 __Leaderboards:__\nSet the official Pick'ems link or preview the bot's prediction leaderboard."
+        + ("### 🧪 __Test Posts:__\nPreview without pings, or send a five-minute test using members' `/mysetup` ping preferences.\n\n"
+           if development_enabled() else "")
+        + "### 🏆 __Leaderboards:__\nSet the official Pick'ems link"
+        + (" or preview the bot's prediction leaderboard." if development_enabled() else ".")
     )
 
 
@@ -133,6 +136,10 @@ class ServerSetupView(discord.ui.View):
         )
         self.test_predictions.disabled = self.test_reminder.disabled
         self.test_reminder_with_pings.disabled = self.test_reminder.disabled
+        if not development_enabled():
+            for item in (self.test_reminder, self.test_reminder_with_pings, self.test_predictions, self.preview_leaderboard):
+                self.remove_item(item)
+            self.control_after_paragraphs = (2, 3, 4, 5)
 
     async def interaction_check(self, interaction):
         if not has_admin_role(interaction, self.guild_id):
@@ -177,6 +184,9 @@ class ServerSetupView(discord.ui.View):
 
     @discord.ui.button(label="Preview Leaderboard", emoji="🏆", row=4)
     async def preview_leaderboard(self, interaction, button):
+        if not development_enabled():
+            await interaction.response.send_message(**message_payload("Sample previews are disabled in production."), ephemeral=True)
+            return
         await interaction.response.defer(ephemeral=True)
         entries = sample_leaderboard_entries(interaction.user.display_name)
         payload = leaderboard_payload(entries, self.guild_id, interaction.client.voting_manager.store.data.tournament.id,

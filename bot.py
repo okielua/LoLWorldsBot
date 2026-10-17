@@ -10,7 +10,6 @@ import discord
 from services.presentation import embed_card_payload, message_payload
 from services.team_emojis import configure_team_emojis, team_emoji
 from discord import app_commands
-from dotenv import load_dotenv
 
 from models import Match, MatchStatus
 from services.delivery_records import initialize_delivery_records
@@ -35,6 +34,7 @@ from services.golgg import GOLGG_FOOTNOTES, team_stats_text
 from services.golgg_players import player_catalog, player_reply, refresh_players_loop
 from services.team_history import TeamHistoryView
 from services.vote_history import voter_autocomplete, show_vote_history
+from services.runtime_config import runtime_config, prepare_seed, remove_development_commands, validate_application
 from services.reminder_scheduler import check_reminders
 from services.reminder_engine import (
     ReminderTracker,
@@ -70,8 +70,6 @@ from services.user_settings import (
 # Configuration
 # --------------------------------------------------
 
-load_dotenv()
-
 TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = os.getenv("GUILD_ID")
 
@@ -104,8 +102,8 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_FILE = BASE_DIR / "data" / "worlds_2026.json"
 
 tournament_store = LiveTournamentStore(
-    load_tournament_data(DATA_FILE),
-    BASE_DIR / "data" / "worlds_2026_cache.json",
+    prepare_seed(load_tournament_data(DATA_FILE)),
+    runtime_config().cache_path,
     LoLEsportsClient(
         client_version=os.getenv("LOLESPORTS_CLIENT_VERSION", "4078aa9"),
         query_hash=os.getenv("LOLESPORTS_QUERY_HASH", QUERY_HASH),
@@ -427,6 +425,7 @@ class WorldsBot(discord.Client):
 
     async def setup_hook(self):
         global worlds
+        validate_application(self.user.id)
         await tournament_store.refresh()
         worlds = tournament_store.data
         if tournament_store.last_error:
@@ -437,6 +436,7 @@ class WorldsBot(discord.Client):
 
         guild = discord.Object(id=GUILD_ID)
 
+        remove_development_commands(self.tree)
         self.tree.copy_global_to(guild=guild)
 
         synced = await self.tree.sync(guild=guild)

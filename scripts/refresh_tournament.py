@@ -10,12 +10,13 @@ sys.path.insert(0, str(ROOT))
 
 from services.live_tournament import LiveTournamentStore
 from services.tournament_data import load_tournament_data
+from services.runtime_config import runtime_config, prepare_seed
 
 
 async def main():
     store = LiveTournamentStore(
-        load_tournament_data(ROOT / "data" / "worlds_2026.json"),
-        ROOT / "data" / "worlds_2026_cache.json",
+        prepare_seed(load_tournament_data(ROOT / "data" / "worlds_2026.json")),
+        runtime_config().cache_path,
     )
     if not await store.refresh():
         raise SystemExit("Refresh failed; previous data retained. See the log above.")

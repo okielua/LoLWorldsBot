@@ -2,6 +2,15 @@
 
 A Discord bot for League of Legends Worlds.
 
+## Development and Production
+
+Set `BOT_MODE=production` in a separate environment file to hide developer
+commands and setup simulations, isolate the live database/cache, and require
+verified schedule data. Existing `.env` defaults to development and retains the
+current database and test features. Use a separate Discord application/token
+for production. See [deployment instructions](deploy/README.md) and the example
+environment files. The VPS service and backup helper are provided in `deploy/`.
+
 ## Current product priority
 
 Communism's members consider pregame voting a central part of enjoying Worlds
@@ -433,7 +442,8 @@ opted-in pings stay in message content so Discord delivers notifications.
 grant the bot **Embed Links** in the reminder channel. Without
 that permission reminders fall back to plain text.
 
-Deployment remains deferred until the new prediction UI is tested in Discord.
+Production deployment files are prepared in `deploy/`. Deployment itself still
+requires the live Discord application's credentials and access to the VPS.
 
 To manually fetch and validate the cache without starting Discord:
 

@@ -17,12 +17,15 @@ from services import polls
 from services.prediction_stats import get_competition_stats
 from services.server_reminders import ServerReminderDelivery
 from services.voting import VotingManager, MATCHDAY_ZONE
+from services.runtime_config import development_enabled
 
 
 logger = logging.getLogger(__name__)
 
 
 async def start_prediction_test(interaction, guild_id):
+    if not development_enabled():
+        return "Prediction simulations are disabled in production."
     background = interaction.client.background_polling
     if background.prediction_test_running:
         return "A prediction test is already running. Wait for its result before starting another."
@@ -43,6 +46,7 @@ async def start_prediction_test(interaction, guild_id):
         interaction.client, store, guild_id, load_users=lambda: [], poll_manager=manager,
         clock=lambda: datetime.now(UTC),
         message_prefix="🧪 Prediction test: simulated result, no pings",
+        ping_role=False,
     )
     background.prediction_test_running = True
     interaction.client.prediction_test_manager = manager

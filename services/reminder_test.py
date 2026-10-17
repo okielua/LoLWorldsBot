@@ -9,9 +9,12 @@ from models import MatchStatus
 from services.delivery_records import get_delivery_record
 from services.server_reminders import ServerReminderDelivery
 from services.reminder_engine import ReminderKey, ReminderType
+from services.runtime_config import development_enabled
 
 
 async def run_reminder_test(client, store, guild_id, *, ping_users=False):
+    if not development_enabled():
+        return "Test reminders are disabled in production."
     template = next((match for match in store.data.matches
                      if "TBD" not in {match.team1_id, match.team2_id}), None)
     if template is None:

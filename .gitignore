@@ -1,9 +1,16 @@
 .env
+.env.*
+!.env.*.example
 .venv/
 .logs/
 __pycache__/
 *.pyc
 .DS_Store
 data/*.db
+data/**/*.db
+data/**/*.db-*
+data/**/*.db.*
 data/*_cache.json
 data/*_cache.json.tmp
+data/**/*_cache.json
+data/**/*_cache.json.tmp

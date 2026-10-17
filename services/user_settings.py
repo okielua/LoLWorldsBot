@@ -3,9 +3,11 @@ from contextlib import closing
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from services.reminder_engine import UserReminderPreferences
+from services.runtime_config import runtime_config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DATABASE_FILE = BASE_DIR / "data" / "worldsbot.db"
+
+DATABASE_FILE = runtime_config().database_path
 
 
 def get_connection():
