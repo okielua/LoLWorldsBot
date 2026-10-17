@@ -267,7 +267,13 @@ New prediction boards are limited to the next unfinished tournament matchday:
 every earlier matchday must have all its matches completed or cancelled first.
 An earlier day with unknown opponents, a live game, or a postponed game blocks
 later days. The next day's board appears when fresh data confirms at least one
-scheduled matchup before its voting cutoff. There is no fixed posting hour.
+scheduled matchup before its voting cutoff, and it is within 24 hours of that
+matchday's first non-cancelled game (including TBD matchups). Aim for at least
+eight hours of actual voting time before the five-minute cutoff by publishing
+as soon as those conditions allow. If earlier games finish late or teams are
+confirmed late, publish immediately rather than skipping the shorter window.
+There is no fixed posting hour. Existing boards are retained after rescheduling;
+any new board for a moved matchday still obeys the 24-hour limit.
 Existing boards continue updating. The daily card supports an eight-match Swiss
 day within Discord's 40-component limit. TBD pairings are omitted until confirmed. Newly announced pairs
 are added in place, retaining existing polls, votes, and stable component IDs.

@@ -27,6 +27,8 @@ from services.worlds_role import individual_subscribers
 
 logger = logging.getLogger(__name__)
 MATCHDAY_ZONE = ZoneInfo(TOURNAMENT_TIMEZONE)
+MAX_DAILY_POST_LEAD = timedelta(hours=24)
+VOTING_WINDOW_TARGET = timedelta(hours=8)
 
 
 class VoteButton(discord.ui.Button):
@@ -496,6 +498,10 @@ class VotingManager:
                 # Unknown opponents and postponed matches still belong to an
                 # unfinished matchday. Never skip ahead to a later day's board.
                 return None
+            if receipt is None:
+                starts = [match.start_time for match in matches if match.status != MatchStatus.CANCELLED]
+                if not starts or self.clock() < min(starts) - MAX_DAILY_POST_LEAD:
+                    return None
             matches = [m for m in matches if "TBD" not in {m.team1_id, m.team2_id}]
             if receipt is None:
                 now = self.clock()
@@ -586,7 +592,12 @@ class VotingManager:
                     signature = hashlib.sha256(json.dumps(view.to_components(), sort_keys=True).encode()).hexdigest()
                     mentions = discord.AllowedMentions(everyone=False, users=[discord.Object(user_id) for user_id in recipients] if recipients else False, replied_user=False,
                                                        roles=[discord.Object(role_id)] if role_id else False)
+                    if not self.fresh() or not any(self.clock() < match.start_time - timedelta(minutes=5) for match in open_matches):
+                        return None
                     message = await channel.send(view=view, allowed_mentions=mentions)
+                    voting_time = min(match.start_time for match in open_matches) - timedelta(minutes=5) - self.clock()
+                    if voting_time < VOTING_WINDOW_TARGET:
+                        logger.info("Published matchday %s immediately with %s voting time; eight-hour target could not be met", day, voting_time)
                     if inline_followers and not self.test_mode:
                         self._notice_pairs.update((match.id, match.team1_id, match.team2_id) for match in open_matches)
                 self._posted[day] = (channel_id, message.id, signature)

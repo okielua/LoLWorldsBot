@@ -51,6 +51,10 @@ def test_daily_post_opens_early_without_pings_and_survives_restart(context):
         current[0] -= timedelta(days=2)
         store.fetched_at = current[0]
         await manager.tick()
+        channel.send.assert_not_awaited()
+        current[0] = store.data.matches[0].start_time - timedelta(hours=24)
+        store.fetched_at = current[0]
+        await manager.tick()
         channel.send.assert_awaited_once()
         current[0] += timedelta(seconds=1)
         await manager.tick()
@@ -87,6 +91,42 @@ def test_daily_post_opens_early_without_pings_and_survives_restart(context):
         assert manager.client.add_view.called
         await restarted.vote(store.data.matches[0].id, 7, "C9")
         assert get_leaderboard(123, store.data.tournament.id) == []
+    asyncio.run(scenario())
+
+
+def test_daily_post_waits_until_exact_24_hour_boundary_even_after_previous_day_ends(context):
+    manager, store, channel, current, _ = context
+    first = store.data.matches[0]
+    previous = replace(first, id="previous-day", start_time=first.start_time - timedelta(days=3),
+                       status=MatchStatus.COMPLETED, winner_id=first.team1_id)
+    store.data = replace(store.data, matches=[previous, first])
+    async def scenario():
+        current[0] = first.start_time - timedelta(hours=24, seconds=1)
+        store.fetched_at = current[0]
+        await manager.tick()
+        channel.send.assert_not_awaited()
+        current[0] += timedelta(seconds=1)
+        store.fetched_at = current[0]
+        await manager.tick()
+        channel.send.assert_awaited_once()
+    asyncio.run(scenario())
+
+
+def test_previous_day_blocks_eight_hour_target_but_late_confirmation_posts_immediately(context):
+    manager, store, channel, current, _ = context
+    first = store.data.matches[0]
+    previous = replace(first, id="previous-day", start_time=first.start_time - timedelta(days=1), status=MatchStatus.LIVE)
+    store.data = replace(store.data, matches=[previous, first])
+    async def scenario():
+        current[0] = first.start_time - timedelta(hours=8, minutes=5)
+        store.fetched_at = current[0]
+        await manager.tick()
+        channel.send.assert_not_awaited()
+        current[0] = first.start_time - timedelta(hours=2)
+        store.fetched_at = current[0]
+        store.data = replace(store.data, matches=[replace(previous, status=MatchStatus.COMPLETED, winner_id=previous.team1_id), first])
+        await manager.tick()
+        channel.send.assert_awaited_once()
     asyncio.run(scenario())
 
 
@@ -775,7 +815,7 @@ def test_next_board_waits_for_previous_matchday_and_includes_mvp_on_publication(
     from services.polls import cast_vote
     manager, store, channel, current, message = context
     first, second = store.data.matches
-    future = replace(first, id="future", start_time=first.start_time + timedelta(days=2))
+    future = replace(first, id="future", start_time=first.start_time + timedelta(days=1))
     channel.send.side_effect = [SimpleNamespace(id=789), SimpleNamespace(id=790)]
     async def scenario():
         await manager.tick()
@@ -810,6 +850,8 @@ def test_unknown_next_day_blocks_later_day_and_late_matchups_update_same_post(co
     store.data = replace(store.data, matches=[completed, next_day, later])
     channel.send.side_effect = [SimpleNamespace(id=790), SimpleNamespace(id=791)]
     async def scenario():
+        current[0] = first.start_time + timedelta(hours=1)
+        store.fetched_at = current[0]
         await manager.tick()
         channel.send.assert_not_awaited()
         confirmed = replace(next_day, team1_id=first.team1_id)
@@ -825,6 +867,8 @@ def test_unknown_next_day_blocks_later_day_and_late_matchups_update_same_post(co
         assert message.edit.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
         store.data = replace(store.data, matches=[replace(m, status=MatchStatus.COMPLETED, winner_id=m.team1_id)
                                                 if m.id != later.id else m for m in store.data.matches])
+        current[0] = later.start_time - timedelta(hours=24)
+        store.fetched_at = current[0]
         await manager.tick()
         assert channel.send.await_count == 2
         assert any(p.match_id == later.id for p in get_polls(123, store.data.tournament.id))
@@ -858,7 +902,7 @@ def test_publication_write_failure_retries_original_ack_time_after_cutoff(contex
 
 
 def test_reschedule_moves_match_between_boards_without_duplicate_poll(context):
-    manager, store, channel, _, message = context
+    manager, store, channel, current, message = context
     first = store.data.matches[0]
     store.data = replace(store.data, matches=[first])
     channel.send.side_effect = [SimpleNamespace(id=789), SimpleNamespace(id=790)]
@@ -866,6 +910,10 @@ def test_reschedule_moves_match_between_boards_without_duplicate_poll(context):
         await manager.tick()
         await manager.vote(first.id, 7, first.team1_id, "Lua")
         store.data = replace(store.data, matches=[replace(first, start_time=first.start_time + timedelta(days=1))])
+        await manager.tick()
+        assert channel.send.await_count == 1
+        current[0] = first.start_time
+        store.fetched_at = current[0]
         await manager.tick()
         assert channel.send.await_count == 2
         old_view = message.edit.call_args.kwargs["view"]
