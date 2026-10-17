@@ -761,7 +761,7 @@ class SetupView(discord.ui.View):
         timezone_region=None,
         *, member=None, guild=None, all_games_enabled=None,
     ):
-        super().__init__(timeout=900)
+        super().__init__(timeout=600)
 
         self.user_id = user_id
         self.add_item(SetupTimezoneSelect(user_id, timezone_region))
@@ -852,8 +852,10 @@ class SetupView(discord.ui.View):
 def setup_payload(interaction, *, timezone_region=None, all_games_enabled=None):
     context = dict(member=interaction.user, guild=getattr(interaction, "guild", None),
                    all_games_enabled=all_games_enabled)
-    return message_payload(build_setup_content(interaction.user.id, interaction.user.display_name, **context),
-                           controls=SetupView(interaction.user.id, timezone_region=timezone_region, **context))
+    payload = message_payload(build_setup_content(interaction.user.id, interaction.user.display_name, **context),
+                              controls=SetupView(interaction.user.id, timezone_region=timezone_region, **context))
+    payload["view"].expire_with(interaction)
+    return payload
 
 
 async def require_timezone(

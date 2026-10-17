@@ -1,9 +1,11 @@
 """Shared visual rules for command replies and editable setup panels."""
 
 import discord
+import logging
 from services.team_emojis import team_display
 
 BLUE = 0x5865F2
+logger = logging.getLogger(__name__)
 
 
 class MessageCard(discord.ui.LayoutView):
@@ -11,6 +13,7 @@ class MessageCard(discord.ui.LayoutView):
     def __init__(self, text, controls=None):
         super().__init__(timeout=controls.timeout if controls else 900)
         self.controls = controls
+        self.expiry_interaction = None
         card = discord.ui.Container(accent_colour=discord.Colour(BLUE))
         positions = getattr(controls, "control_after_paragraphs", None)
         if positions:
@@ -46,7 +49,27 @@ class MessageCard(discord.ui.LayoutView):
         self.add_item(card)
 
     async def interaction_check(self, interaction):
-        return await self.controls.interaction_check(interaction) if self.controls else True
+        allowed = await self.controls.interaction_check(interaction) if self.controls else True
+        if allowed and self.expiry_interaction is not None:
+            self.expiry_interaction = interaction
+            interaction.extras["expiring_message_card"] = self
+        return allowed
+
+    def expire_with(self, interaction):
+        previous = getattr(interaction, "extras", {}).pop("expiring_message_card", None)
+        if previous and previous is not self:
+            previous.expiry_interaction = None
+            previous.stop()
+        self.expiry_interaction = interaction
+
+    async def on_timeout(self):
+        if self.expiry_interaction is not None:
+            try:
+                await self.expiry_interaction.delete_original_response()
+            except discord.NotFound:
+                pass
+            except discord.HTTPException:
+                logger.warning("Could not remove expired setup message", exc_info=True)
 
     async def on_error(self, interaction, error, item):
         if self.controls:

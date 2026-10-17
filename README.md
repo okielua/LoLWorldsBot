@@ -100,6 +100,8 @@ each time, skip TBD/non-scheduled matches, and pause
 after a refresh failure or when the last successful fetch is over five minutes old.
 DM reminders are deferred: their controls are hidden from `/mysetup` and automatic
 polling does not generate DM events. Existing saved preferences are retained.
+The private `/mysetup` card deletes itself after ten minutes without activity.
+Using a control refreshes the timer; open `/mysetup` again to start a new session.
 Public delivery is configured in Discord
 through the private `/serversetup` panel, which requires the **Manage Server** permission, regardless of role names. Permission is checked again when using its controls or submitting its forms.
 

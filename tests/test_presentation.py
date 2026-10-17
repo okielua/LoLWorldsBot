@@ -13,6 +13,50 @@ import discord
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_setup_card_deletes_after_timeout_using_latest_interaction():
+    async def scenario():
+        controls = discord.ui.View(timeout=600)
+        original = SimpleNamespace(extras={}, delete_original_response=AsyncMock())
+        payload = message_payload("## Setup", controls=controls)
+        card = payload["view"]
+        card.expire_with(original)
+        assert card.timeout == 600
+        click = SimpleNamespace(extras={}, delete_original_response=AsyncMock())
+        assert await card.interaction_check(click)
+        await card.on_timeout()
+        click.delete_original_response.assert_awaited_once()
+        original.delete_original_response.assert_not_awaited()
+    asyncio.run(scenario())
+
+
+def test_refresh_stops_previous_setup_expiry_without_deleting_current_card():
+    async def scenario():
+        original = SimpleNamespace(extras={}, delete_original_response=AsyncMock())
+        old = message_payload("## Setup")["view"]
+        old.expire_with(original)
+        click = SimpleNamespace(extras={}, delete_original_response=AsyncMock())
+        await old.interaction_check(click)
+        new = message_payload("## Updated Setup")["view"]
+        new.expire_with(click)
+        assert old.is_finished()
+        await old.on_timeout()
+        click.delete_original_response.assert_not_awaited()
+        await new.on_timeout()
+        click.delete_original_response.assert_awaited_once()
+    asyncio.run(scenario())
+
+
+def test_expired_setup_already_dismissed_is_harmless():
+    async def scenario():
+        interaction = SimpleNamespace(extras={}, delete_original_response=AsyncMock(
+            side_effect=discord.NotFound(SimpleNamespace(status=404, reason="Not Found"), "gone")))
+        card = message_payload("## Setup")["view"]
+        card.expire_with(interaction)
+        await card.on_timeout()
+        await message_payload("## Other Card")["view"].on_timeout()
+    asyncio.run(scenario())
+
+
 @pytest.mark.parametrize("filename", ["bot.py", "services/server_setup.py", "services/prediction_test.py", "services/voting.py", "services/leaderboard_views.py"])
 def test_every_interaction_reply_uses_shared_embeds_or_explicit_rich_layout(filename):
     """Cover command replies, setup edits, errors and test reports, not just schedules."""
