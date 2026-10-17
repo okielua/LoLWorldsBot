@@ -528,7 +528,7 @@ def build_setup_content(
         all_games_text = "**Off**"
     role = configured_worlds_role(guild)
     if role:
-        all_games_text += f"\nGet or remove {role.mention} to turn all-game pings on or off."
+        all_games_text += "\n*(Turn this on to be notified when voting opens.)*"
     else:
         all_games_text += "\nA server manager must select the Worlds role in `/serversetup` first."
 
