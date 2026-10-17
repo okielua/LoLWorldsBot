@@ -787,20 +787,20 @@ class SetupView(discord.ui.View):
         all_games_server_ping = get_all_games_server_ping(user_id)
 
         if all_games_server_ping:
-            self.toggle_all_games_ping.label = "Turn Server Pings for All Games OFF"
+            self.toggle_all_games_ping.label = "Turn Server Pings for All Games OFF (Currently ON)"
 
             self.toggle_all_games_ping.style = discord.ButtonStyle.success
         else:
-            self.toggle_all_games_ping.label = "Turn Server Pings for All Games ON"
+            self.toggle_all_games_ping.label = "Turn Server Pings for All Games ON (Currently OFF)"
 
             self.toggle_all_games_ping.style = discord.ButtonStyle.secondary
 
         if followed_team_server_ping:
-            self.toggle_server_ping.label = "Turn Server Pings for Your Teams OFF"
+            self.toggle_server_ping.label = "Turn Server Pings for Your Teams OFF (Currently ON)"
 
             self.toggle_server_ping.style = discord.ButtonStyle.success
         else:
-            self.toggle_server_ping.label = "Turn Server Pings for Your Teams ON"
+            self.toggle_server_ping.label = "Turn Server Pings for Your Teams ON (Currently OFF)"
 
             self.toggle_server_ping.style = discord.ButtonStyle.secondary
 
