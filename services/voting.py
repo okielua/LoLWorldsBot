@@ -20,7 +20,7 @@ from services.prediction_display import PREDICTION_BLUE, VOTE_CONFIRMATION_HELP,
 from services.server_reminders import validate_reminder_channel
 from services.server_settings import get_server_settings
 from services.prediction_stats import get_previous_day_mvp, get_voter_display_names
-from services.status_labels import VOTING_CLOSED, VOTING_OPEN
+from services.status_labels import VOTING_CLOSED, VOTING_OPEN, VOTING_PENDING
 
 logger = logging.getLogger(__name__)
 MATCHDAY_ZONE = ZoneInfo(TOURNAMENT_TIMEZONE)
@@ -293,7 +293,7 @@ class DailyPredictionsView(discord.ui.LayoutView):
                     match.start_time, True, None,
                 )
             status = (
-                "Teams to be confirmed." if "TBD" in {match.team1_id, match.team2_id}
+                VOTING_PENDING if "TBD" in {match.team1_id, match.team2_id}
                 else VOTING_CLOSED if poll.closed else f"{VOTING_OPEN} · Who wins?"
             )
             stage = manager.store.data.stages_by_id.get(match.stage_id)

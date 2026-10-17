@@ -124,6 +124,27 @@ def test_upcoming_votes_only_command_hint_is_small_grey():
     assert "Votes are private until" not in text
 
 
+@pytest.mark.parametrize("slot", ["team1_id", "team2_id"])
+def test_tbd_match_shows_pending_voting_without_countdown_or_controls(slot):
+    import discord
+    from services.prediction_display import hidden_votes_payload
+    data = load_tournament_data(Path(__file__).resolve().parents[1] / "data/worlds_2026.json")
+    match = replace(data.matches[0], **{slot: "TBD"})
+    async def scenario():
+        controls = discord.ui.View()
+        controls.add_item(discord.ui.Button(label="Vote"))
+        now = match.start_time - timedelta(hours=22)
+        payload = hidden_votes_payload(match, now=now, controls=controls)
+        text = payload["view"].children[0].children[0].content
+        assert "Voting will open once both teams are confirmed." in text
+        assert "closes in" not in text and "/changevote" not in text
+        assert not any(isinstance(item, discord.ui.Button) for item in payload["view"].walk_children())
+        closed = hidden_votes_payload(match, now=match.start_time)
+        assert "Voting closed" in closed["view"].children[0].children[0].content
+    import asyncio
+    asyncio.run(scenario())
+
+
 def test_results_embed_handles_large_voter_list_within_field_limit():
     embed = results_embed("Prediction results\n**C9**: 100% (200 votes)\n" + ", ".join(["@Friend"] * 200) + "\n**KC**: 0% (0 votes)\n\u200b")
     assert len(embed.fields[0].value) <= 1024

@@ -9,7 +9,7 @@ from math import ceil
 from models import MatchStatus
 from services.match_times import format_tournament_date, private_match_details
 from services.presentation import message_payload
-from services.status_labels import (MATCH_STATUS_LABELS, MATCHUP_CHANGED, VOTING_CLOSED, VOTING_OPEN)
+from services.status_labels import (MATCH_STATUS_LABELS, MATCHUP_CHANGED, VOTING_CLOSED, VOTING_OPEN, VOTING_PENDING)
 
 
 PREDICTION_BLUE = 0x5865F2
@@ -115,6 +115,8 @@ def hidden_votes_payload(match, *, now=None, stage_name=None, no_votes=False, co
     matchup = discord.utils.escape_markdown(f"{match.team1_id} vs {match.team2_id}")
     header = f"## __Votes: {matchup}__\n\n{votes_match_details(match, stage_name)}\n\n"
     if match.status == MatchStatus.SCHEDULED and now < deadline:
+        if "TBD" in {match.team1_id, match.team2_id}:
+            return message_payload(header + f"**{VOTING_PENDING}**")
         return message_payload(
             header + f"**🗳️ Voting for this match closes in {voting_time_remaining(deadline, now)}**\n\n"
             "-# • Use `/changevote` to make or change your prediction for these games", controls=controls)

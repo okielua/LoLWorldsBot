@@ -4,6 +4,7 @@ from models import MatchStatus
 
 VOTING_OPEN = "🗳️ Voting open"
 VOTING_CLOSED = "🔒 Voting closed"
+VOTING_PENDING = "⏳ Voting will open once both teams are confirmed."
 PAST_PREDICTION = "🏁 Past prediction"
 CORRECT = "✅ Correct"
 INCORRECT = "❌ Incorrect"
