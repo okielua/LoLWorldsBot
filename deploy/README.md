@@ -3,6 +3,60 @@
 The local development bot remains available. No server has been deployed by
 adding these files. Keep the development and production bots' tokens separate.
 
+## Docker on the VPS
+
+Docker Compose is the preferred route when Docker is already installed. Use
+either Docker or the systemd service below, so only one live bot runs.
+
+After logging in to the VPS with SSH:
+
+```sh
+docker compose version
+apt update
+apt install -y git nano
+systemctl enable --now docker
+git clone https://github.com/okielua/LoLWorldsBot.git /opt/worldsbot
+cd /opt/worldsbot
+cp .env.production.example .env.production
+chmod 600 .env.production
+nano .env.production
+```
+
+Enter the LIVE bot token and your Discord server ID. The live Application ID is
+already filled in. Save with Ctrl+O, Enter; exit with Ctrl+X. The token belongs
+only in this private VPS file, not in Git or chat. For a private repository,
+use a read-only GitHub deploy key; a GitHub account password cannot authenticate
+Git HTTPS cloning. Never put an access token into the clone URL.
+
+Build and start:
+
+```sh
+docker compose up -d --build
+docker compose logs --tail=60 -f bot
+```
+
+Look for a successful live schedule refresh, command sync, and Discord login.
+Ctrl+C exits the log viewer while the bot continues running. New production
+settings keep public reminders Off; complete the live setup below before
+enabling them. No incoming network ports need to be exposed for this bot.
+
+The named `production-data` volume holds the database and schedule cache across
+container rebuilds/restarts. Do not run `docker compose down -v`; it deletes the
+volume and vote history. Docker restarts the bot after crashes and host reboots
+unless you explicitly stop it.
+
+To update later, back up first, then run `git pull --ff-only` and
+`docker compose up -d --build`. A GitHub push does not automatically update the
+VPS. For a database backup inside the persistent volume:
+
+```sh
+docker compose exec -T bot python deploy/backup_database.py /app/data/production/worldsbot.db /app/data/production/backups
+```
+
+The command prints the backup path. Copy it outside the VPS as well, for example
+using `docker compose cp bot:/app/data/production/backups ./backups`, then SCP to
+your PC. Schedule backups daily after the bot has created its database.
+
 ## Discord
 
 Create a second application for the live bot in the Discord Developer Portal.

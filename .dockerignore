@@ -1,0 +1,15 @@
+.git
+.env
+.env.*
+.venv
+.logs
+.pytest_cache
+**/__pycache__
+**/*.pyc
+**/*.db
+**/*.db-*
+**/*.db.*
+**/*_cache.json
+**/*_cache.json.tmp
+data/production
+tests

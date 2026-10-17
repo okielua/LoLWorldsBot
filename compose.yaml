@@ -1,0 +1,21 @@
+name: worldsbot
+
+services:
+  bot:
+    build: .
+    env_file:
+      - .env.production
+    environment:
+      BOT_MODE: production
+    restart: unless-stopped
+    init: true
+    volumes:
+      - production-data:/app/data/production
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  production-data:
