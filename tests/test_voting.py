@@ -34,7 +34,7 @@ def context(tmp_path, monkeypatch):
     channel = Mock(spec=discord.TextChannel)
     channel.id = 456
     channel.type = discord.ChannelType.text
-    channel.guild = SimpleNamespace(id=123, me=object())
+    channel.guild = SimpleNamespace(id=123, me=object(), get_member=lambda user_id: SimpleNamespace(roles=[]))
     channel.permissions_for.return_value = SimpleNamespace(view_channel=True, send_messages=True)
     channel.send = AsyncMock(return_value=SimpleNamespace(id=789))
     message = SimpleNamespace(id=789, edit=AsyncMock())
@@ -113,6 +113,49 @@ def test_daily_prediction_test_never_pings_worlds_role(context):
     call = channel.send.call_args
     assert "<@&987>" not in str(call.kwargs["view"].to_components())
     assert call.kwargs["allowed_mentions"].to_dict()["parse"] == []
+
+
+def test_daily_post_pings_matching_followers_once_and_excludes_role_members(context):
+    manager, store, channel, current, _ = context
+    set_worlds_role(123, 987)
+    team = store.data.matches[0].team1_id
+    for user_id in (1, 3, 4):
+        user_settings.set_followed_team_ids(user_id, {team})
+    user_settings.set_followed_team_ids(2, {"T1"})
+    user_settings.set_server_ping(3, False)
+    channel.guild.get_member = lambda user_id: SimpleNamespace(roles=[SimpleNamespace(id=987)] if user_id == 4 else [])
+    async def scenario():
+        await manager.tick()
+        call = channel.send.call_args
+        assert call.kwargs["allowed_mentions"].to_dict() == {"roles": [987], "users": [1], "parse": []}
+        text = str(call.kwargs["view"].to_components())
+        assert "<@1>" in text and "<@4>" not in text and "<@2>" not in text and "<@3>" not in text
+        restarted = VotingManager(manager.client, store, 123, clock=lambda: current[0])
+        await restarted.tick()
+        channel.send.assert_awaited_once()
+    asyncio.run(scenario())
+
+
+def test_later_confirmed_match_notifies_team_followers_without_duplicate_on_restart(context):
+    manager, store, channel, current, message = context
+    first, second = store.data.matches[:2]
+    user_settings.set_followed_team_ids(5, {second.team1_id})
+    store.data = replace(store.data, matches=[first, replace(second, team1_id="TBD")])
+    async def scenario():
+        await manager.tick()
+        channel.send.assert_awaited_once()
+        store.data = replace(store.data, matches=[first, second])
+        await manager.tick()
+        assert channel.send.await_count == 2
+        call = channel.send.call_args
+        assert call.kwargs["allowed_mentions"].to_dict() == {"users": [5], "parse": []}
+        text = str(call.kwargs["view"].to_components())
+        assert "<@5>" in text and "Voting Is Open for Your Teams" in text
+        assert "https://discord.com/channels/123/456/789" in text
+        restarted = VotingManager(manager.client, store, 123, clock=lambda: current[0])
+        await restarted.tick()
+        assert channel.send.await_count == 2
+    asyncio.run(scenario())
 
 
 def test_each_prediction_closes_at_its_five_minute_reminder_and_scores_once(context):

@@ -21,6 +21,9 @@ from services.server_reminders import validate_reminder_channel
 from services.server_settings import get_server_settings
 from services.prediction_stats import get_previous_day_mvp, get_voter_display_names
 from services.status_labels import VOTING_CLOSED, VOTING_OPEN, VOTING_PENDING
+from services.user_settings import get_all_user_reminder_preferences
+from services.reminder_engine import get_server_ping_user_ids
+from services.worlds_role import individual_subscribers
 
 logger = logging.getLogger(__name__)
 MATCHDAY_ZONE = ZoneInfo(TOURNAMENT_TIMEZONE)
@@ -253,7 +256,7 @@ def personal_vote_payloads(manager, available, user_id, saved, *, timezone_name=
 
 
 class DailyPredictionsView(discord.ui.LayoutView):
-    def __init__(self, manager, day, matches, poll_by_id, recap="", role_id=None):
+    def __init__(self, manager, day, matches, poll_by_id, recap="", role_id=None, user_ids=()):
         super().__init__(timeout=None)
         # Worlds has at most eight matches per day in the verified schedule.
         # Each match consumes four V2 components, plus the card and two text blocks.
@@ -280,6 +283,7 @@ class DailyPredictionsView(discord.ui.LayoutView):
         title = f"Worlds {data.tournament.year} Day {matchdays.index(day) + 1}/{len(matchdays)} · {stage_label}"
         card.add_item(team_display(
             (f"<@&{role_id}>\n" if role_id and not manager.test_mode else "")
+            + ((" ".join(f"<@{user_id}>" for user_id in user_ids) + "\n\n") if user_ids and not manager.test_mode else "")
             + f"# __{'TEST: ' if manager.test_mode else ''}{title}__\n\n"
             "Here are today's matchups. Voting for each matchup closes 5 minutes before match start.\n\n"
             f"## __{date.strftime('%A')}, {date.day} {date.strftime('%B %Y')}__\n"
@@ -333,6 +337,41 @@ class VotingManager:
         self._registered = set()
         self._publication_queue = {}
         self._checked_at = {}
+        self._notice_pairs = set()
+
+    async def _followers(self, channel, matches, role_id=None):
+        users = await asyncio.to_thread(get_all_user_reminder_preferences)
+        recipients = set()
+        for match in matches:
+            recipients.update(get_server_ping_user_ids(users, match.team1_id, match.team2_id))
+        return await individual_subscribers(channel.guild, recipients, role_id)
+
+    async def _notify_new_pairings(self, channel_id, message_id, matches, poll_by_id, enabled, exclude_role_id=None):
+        if self.test_mode or not enabled or not self.fresh():
+            return
+        tournament_id = self.store.data.tournament.id
+        if self._notice_pairs:
+            await asyncio.to_thread(polls.mark_voting_notices, self.guild_id, tournament_id, self._notice_pairs)
+        seen = await asyncio.to_thread(polls.voting_notice_pairs, self.guild_id, tournament_id)
+        pending = [match for match in matches
+                   if match.id in poll_by_id and not poll_by_id[match.id].closed
+                   and self.clock() < match.start_time - timedelta(minutes=5)
+                   and (match.id, match.team1_id, match.team2_id) not in seen | self._notice_pairs]
+        if not pending:
+            return
+        channel = self.client.get_channel(channel_id) or await self.client.fetch_channel(channel_id)
+        validate_reminder_channel(channel, self.guild_id)
+        recipients = await self._followers(channel, pending, exclude_role_id)
+        if recipients:
+            matchups = "\n".join(f"### {match.team1_id} vs {match.team2_id}" for match in pending)
+            link = f"https://discord.com/channels/{self.guild_id}/{channel_id}/{message_id}"
+            for offset in range(0, len(recipients), 90):
+                group = recipients[offset:offset + 90]
+                text = f"## __Voting Is Open for Your Teams__\n\n{matchups}\n\n[Make your predictions]({link})\n\n" + " ".join(f"<@{user_id}>" for user_id in group)
+                await channel.send(**message_payload(text), allowed_mentions=discord.AllowedMentions(
+                    everyone=False, roles=False, users=[discord.Object(user_id) for user_id in group], replied_user=False))
+        self._notice_pairs.update((match.id, match.team1_id, match.team2_id) for match in pending)
+        await asyncio.to_thread(polls.mark_voting_notices, self.guild_id, tournament_id, self._notice_pairs)
 
     def fresh(self):
         return (
@@ -514,6 +553,7 @@ class VotingManager:
                     or self.clock() - self._checked_at[day] >= timedelta(minutes=5)
                 )
                 if receipt and signature == receipt[2] and open_ids <= published and not check_due:
+                    await self._notify_new_pairings(receipt[0], receipt[1], matches, poll_by_id, settings.public_reminders_enabled)
                     return receipt
                 channel = self.client.get_channel(channel_id)
                 if channel is None:
@@ -533,9 +573,22 @@ class VotingManager:
                     latest = await asyncio.to_thread(get_server_settings, self.guild_id)
                     if latest != settings or not self.fresh():
                         return None
-                    mentions = discord.AllowedMentions(everyone=False, users=False, replied_user=False,
+                    open_matches = [match for match in matches if match.id in open_ids]
+                    recipients = await self._followers(channel, open_matches, role_id) if not self.test_mode else []
+                    # Large recipient lists use the bounded follow-up path below.
+                    inline_followers = len(recipients) <= 90
+                    if not inline_followers:
+                        recipients = []
+                    view = DailyPredictionsView(self, day, matches, poll_by_id, recap, role_id=role_id, user_ids=recipients)
+                    if recipients and sum(len(item.content) for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)) > 3900:
+                        recipients, inline_followers = [], False
+                        view = DailyPredictionsView(self, day, matches, poll_by_id, recap, role_id=role_id)
+                    signature = hashlib.sha256(json.dumps(view.to_components(), sort_keys=True).encode()).hexdigest()
+                    mentions = discord.AllowedMentions(everyone=False, users=[discord.Object(user_id) for user_id in recipients] if recipients else False, replied_user=False,
                                                        roles=[discord.Object(role_id)] if role_id else False)
                     message = await channel.send(view=view, allowed_mentions=mentions)
+                    if inline_followers and not self.test_mode:
+                        self._notice_pairs.update((match.id, match.team1_id, match.team2_id) for match in open_matches)
                 self._posted[day] = (channel_id, message.id, signature)
                 self._checked_at[day] = self.clock()
                 self._acknowledge_opportunities(matches, poll_by_id)
@@ -543,6 +596,8 @@ class VotingManager:
                     polls.save_daily_post, self.guild_id, tournament_id, day, channel_id, message.id, signature,
                 )
                 await self._flush_opportunities()
+                await self._notify_new_pairings(channel_id, message.id, matches, poll_by_id, settings.public_reminders_enabled,
+                                               exclude_role_id=role_id if receipt is None else None)
                 return channel_id, message.id, signature
             except (discord.DiscordException, OSError, sqlite3.Error, ValueError):
                 logger.exception("Could not update daily prediction post for %s", day)

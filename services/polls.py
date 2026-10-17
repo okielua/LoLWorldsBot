@@ -79,6 +79,19 @@ def initialize_polls():
                 PRIMARY KEY (guild_id, tournament_id, match_day)
             )
         """)
+        notices_exist = connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='voting_open_notices'").fetchone()
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS voting_open_notices (
+                guild_id INTEGER NOT NULL, tournament_id TEXT NOT NULL, match_id TEXT NOT NULL,
+                team1_id TEXT NOT NULL, team2_id TEXT NOT NULL,
+                PRIMARY KEY (guild_id, tournament_id, match_id, team1_id, team2_id)
+            )
+        """)
+        if not notices_exist:
+            # Upgrades must not replay notifications for already-published polls.
+            connection.execute("""INSERT OR IGNORE INTO voting_open_notices
+                SELECT guild_id, tournament_id, match_id, team1_id, team2_id
+                FROM match_polls WHERE published_at IS NOT NULL""")
         # Existing votes prove an opportunity existed; do not guess publication
         # times for legacy polls that never received a vote.
         if legacy_publication:
@@ -90,6 +103,18 @@ def initialize_polls():
                 SELECT 1 FROM poll_votes WHERE poll_votes.guild_id = match_polls.guild_id AND poll_votes.match_id = match_polls.match_id
             )
             """)
+
+
+def voting_notice_pairs(guild_id, tournament_id):
+    with closing(get_connection()) as connection:
+        return set(connection.execute("SELECT match_id, team1_id, team2_id FROM voting_open_notices WHERE guild_id=? AND tournament_id=?",
+                                      (guild_id, tournament_id)).fetchall())
+
+
+def mark_voting_notices(guild_id, tournament_id, pairs):
+    with closing(get_connection()) as connection, connection:
+        connection.executemany("INSERT OR IGNORE INTO voting_open_notices VALUES (?, ?, ?, ?, ?)",
+                               [(guild_id, tournament_id, *pair) for pair in pairs])
 
 
 def create_poll(guild_id, match):

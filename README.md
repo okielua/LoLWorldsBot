@@ -110,14 +110,24 @@ does not require the bot to have Manage Roles. To let members get or remove it,
 the bot needs **Manage Roles**, with its own role above the selected role. Members can get or remove
 this role using **Server Pings for All Games** in `/mysetup`. Actual role
 membership is the subscription state, including manual Discord role changes.
+The first time a member opens `/mysetup` with a configured and assignable role,
+the bot subscribes them automatically. A persistent per-server onboarding record
+prevents later visits from reversing an opt-out. Missing roles or failed role
+assignment do not mark onboarding complete. Existing members are not bulk-added.
 There is no separate daily-post subscription. The legacy SQLite all-games flag
 is retained for compatibility but no longer targets notifications.
 New automatic daily prediction posts and five-minute match reminders mention
 this role. Updates, restarts and replacement of a deleted daily post do not ping it. The role is
 required to be mentionable unless the bot has Mention Everyone permission.
-Followed-team subscribers outside this role receive individual match pings;
+Followed-team subscribers outside this role receive individual daily voting
+and five-minute match pings for their teams;
 role members are not also individually mentioned. With no configured role,
 only followed-team subscribers are individually pinged.
+Newly confirmed matchups added to an existing board send a short follower
+notification linking back to that board. These later notices target matching
+followers even if they already have the Worlds role, since the role itself is
+not pinged again on edits. Persistent matchup receipts prevent restart replays;
+upgrades baseline already-published matchups instead of sending old notices.
 Choose a text channel where the bot has **View Channel** and **Send Messages**.
 The first channel selection enables reminders; the panel also has an on/off toggle.
 These server settings persist in SQLite and leave personal `/mysetup` unchanged.

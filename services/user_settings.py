@@ -74,6 +74,23 @@ def initialize_database():
                 PRIMARY KEY (user_id, team_id)
             )
             """)
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS worlds_role_onboarding (
+                guild_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+                PRIMARY KEY (guild_id, user_id)
+            )
+        """)
+
+
+def worlds_role_initialized(guild_id, user_id):
+    with closing(get_connection()) as connection:
+        return connection.execute("SELECT 1 FROM worlds_role_onboarding WHERE guild_id = ? AND user_id = ?",
+                                  (guild_id, user_id)).fetchone() is not None
+
+
+def mark_worlds_role_initialized(guild_id, user_id):
+    with closing(get_connection()) as connection, connection:
+        connection.execute("INSERT OR IGNORE INTO worlds_role_onboarding VALUES (?, ?)", (guild_id, user_id))
 
 
 def get_user_time_format(user_id: int) -> str:

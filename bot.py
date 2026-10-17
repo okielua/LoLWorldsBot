@@ -19,7 +19,7 @@ from services.lolesports import LoLEsportsClient, QUERY_HASH
 from services.server_reminders import ServerReminderDelivery
 from services.server_settings import initialize_server_settings
 from services.server_setup import ServerSetupView, build_server_setup_content
-from services.worlds_role import configured_worlds_role, worlds_subscription_enabled, toggle_worlds_subscription
+from services.worlds_role import configured_worlds_role, worlds_subscription_enabled, toggle_worlds_subscription, initialize_worlds_subscription
 from services.polls import get_user_votes, get_upcoming_match_votes, get_recent_completed_match_ids, has_match_votes, initialize_polls
 from services.prediction_display import PREDICTION_BLUE, VOTE_CONFIRMATION_HELP, group_voting_messages, hidden_votes_payload, my_votes_embeds, upcoming_votes_embed
 from services.match_times import TOURNAMENT_TIMEZONE, format_clock_time, format_timezone_times, private_match_details
@@ -533,7 +533,7 @@ def build_setup_content(
         all_games_text += "\nA server manager must select the Worlds role in `/serversetup` first."
 
     if followed_team_server_ping:
-        followed_ping_text = "**On** " "*(5 minutes before match start)*"
+        followed_ping_text = "**On** *(Daily voting posts and 5-minute match reminders)*"
     else:
         followed_ping_text = "**Off**"
 
@@ -1075,9 +1075,13 @@ async def setup(
     interaction: discord.Interaction,
 ):
     await interaction.response.defer(ephemeral=True)
-
+    try:
+        enabled = await initialize_worlds_subscription(interaction)
+    except (ValueError, discord.HTTPException) as error:
+        await interaction.followup.send(**message_payload(str(error)), ephemeral=True)
+        enabled = None
     await interaction.edit_original_response(
-        **setup_payload(interaction),
+        **setup_payload(interaction, all_games_enabled=enabled),
 
     )
 

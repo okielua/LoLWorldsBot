@@ -7,7 +7,7 @@ import pytest
 
 from services import user_settings
 from services.server_settings import initialize_server_settings, get_server_settings, set_worlds_role, set_reminder_channel
-from services.worlds_role import toggle_worlds_subscription, worlds_subscription_enabled
+from services.worlds_role import toggle_worlds_subscription, worlds_subscription_enabled, initialize_worlds_subscription
 from services.server_setup import WorldsPingRoleSelect
 
 
@@ -86,6 +86,43 @@ def test_role_dropdown_rechecks_admin_before_saving():
         assert get_server_settings(123).worlds_role_id is None
         assert interaction.response.send_message.call_args.kwargs["ephemeral"] is True
     asyncio.run(scenario())
+
+
+def test_first_setup_defaults_role_on_once_and_preserves_opt_out():
+    set_worlds_role(123, 789)
+    role = SimpleNamespace(id=789, is_default=lambda: False, managed=False,
+                           permissions=discord.Permissions.none(), is_assignable=lambda: True)
+    member = SimpleNamespace(id=7, roles=[], add_roles=AsyncMock(), remove_roles=AsyncMock())
+    guild = SimpleNamespace(id=123, get_role=lambda _: role, fetch_member=AsyncMock(return_value=member))
+    interaction = SimpleNamespace(guild_id=123, guild=guild, user=member)
+    async def scenario():
+        assert await initialize_worlds_subscription(interaction) is True
+        member.add_roles.assert_awaited_once()
+        assert user_settings.worlds_role_initialized(123, 7)
+        member.roles = [role]
+        assert not await toggle_worlds_subscription(interaction)
+        member.roles = []
+        assert await initialize_worlds_subscription(interaction) is None
+        member.add_roles.assert_awaited_once()
+        user_settings.initialize_database()
+        assert await initialize_worlds_subscription(interaction) is None
+        member.add_roles.assert_awaited_once()
+    asyncio.run(scenario())
+
+
+def test_default_role_is_not_marked_initialized_until_assignment_succeeds():
+    interaction = SimpleNamespace(guild_id=123, guild=SimpleNamespace(id=123), user=SimpleNamespace(id=7))
+    assert asyncio.run(initialize_worlds_subscription(interaction)) is None
+    assert not user_settings.worlds_role_initialized(123, 7)
+    set_worlds_role(123, 789)
+    role = SimpleNamespace(id=789, is_default=lambda: False, managed=False,
+                           permissions=discord.Permissions.none(), is_assignable=lambda: False)
+    member = SimpleNamespace(id=7, roles=[])
+    interaction.guild.get_role = lambda _: role
+    interaction.guild.fetch_member = AsyncMock(return_value=member)
+    with pytest.raises(ValueError, match="Manage Roles"):
+        asyncio.run(initialize_worlds_subscription(interaction))
+    assert not user_settings.worlds_role_initialized(123, 7)
 
 
 @pytest.mark.parametrize("privileged, assignable", [(True, True), (False, False)])
