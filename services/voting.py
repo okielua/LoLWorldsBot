@@ -57,7 +57,9 @@ class VoteButton(discord.ui.Button):
             return
         if not await require_setup(interaction):
             return
-        await interaction.response.defer(ephemeral=True, thinking=True)
+        # A component update keeps the clicked private panel as the interaction's
+        # original response, allowing its ephemeral message to be edited safely.
+        await interaction.response.defer(ephemeral=True, thinking=not isinstance(self.view, PersonalVotesView))
         saved = False
         try:
             await self.manager.vote(
@@ -101,7 +103,7 @@ class VoteButton(discord.ui.Button):
                 self.view.select_team(self.poll.match_id, self.team_id)
                 if getattr(interaction, "message", None) is not None:
                     try:
-                        await interaction.message.edit(view=self.view)
+                        await interaction.edit_original_response(view=self.view, allowed_mentions=discord.AllowedMentions.none())
                     except discord.DiscordException:
                         logger.exception("Prediction saved, but private button selection could not be updated")
         await interaction.followup.send(**embed_card_payload(embed), ephemeral=True, allowed_mentions=discord.AllowedMentions.none())

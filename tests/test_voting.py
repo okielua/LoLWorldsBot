@@ -810,9 +810,13 @@ def test_all_open_votes_can_be_changed_independently_and_selections_update(conte
         assert not await view.interaction_check(other)
         interaction = SimpleNamespace(guild_id=123, user=SimpleNamespace(id=7, display_name="Lua"),
             response=SimpleNamespace(defer=AsyncMock()), followup=SimpleNamespace(send=AsyncMock()),
-            message=SimpleNamespace(edit=AsyncMock()))
+            message=SimpleNamespace(edit=AsyncMock()), edit_original_response=AsyncMock())
         await buttons[1].callback(interaction)
-        interaction.message.edit.assert_awaited_once_with(view=view)
+        interaction.response.defer.assert_awaited_once_with(ephemeral=True, thinking=False)
+        interaction.message.edit.assert_not_awaited()
+        interaction.edit_original_response.assert_awaited_once()
+        assert interaction.edit_original_response.call_args.kwargs["view"] is view
+        assert interaction.edit_original_response.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
         assert buttons[0].style == discord.ButtonStyle.primary and buttons[1].style == discord.ButtonStyle.success
         assert buttons[2].style == discord.ButtonStyle.success  # Other match is untouched.
         choices = {poll.match_id: team for poll, team in get_user_votes(123, store.data.tournament.id, 7)}
