@@ -484,6 +484,12 @@ def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeyp
     interaction.permissions = discord.Permissions(manage_guild=True)
     assert server_command.checks[0](interaction)
     async def check_help():
+        help_command = namespace["bot"].tree.get_command("help")
+        category_option, = help_command.parameters
+        assert category_option.name == "category"
+        assert category_option.required is False
+        categories = ["Setup", "Voting", "Leaderboards", "Match and Player Infos"]
+        assert [choice.name for choice in category_option.choices] == categories
         reply = SimpleNamespace(response=SimpleNamespace(send_message=AsyncMock()))
         await namespace["bot"].tree.get_command("help").callback(reply)
         call = reply.response.send_message.call_args
@@ -504,6 +510,17 @@ def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeyp
             assert 1 <= len(item.description) <= 100
         assert call.kwargs["ephemeral"] is True
         assert len(text) < 4000
+        for index, category in enumerate(categories, 1):
+            reply.response.send_message.reset_mock()
+            await help_command.callback(reply, category=index)
+            section_call = reply.response.send_message.call_args
+            section_text = rendered_message(section_call).description
+            assert [line for line in section_text.splitlines() if line.startswith("## __")] == [
+                f"## __{index}. {category}__",
+            ]
+            expected_section = text.split(f"## __{index}. {category}__", 1)[1].split("\n\n## __", 1)[0]
+            assert expected_section.strip() in section_text
+            assert section_call.kwargs["ephemeral"] is True
     asyncio.run(check_help())
     content = namespace["build_setup_content"](123, "Test user")
     assert "DM" not in content

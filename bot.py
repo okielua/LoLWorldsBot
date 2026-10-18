@@ -1602,8 +1602,16 @@ async def stats(interaction: discord.Interaction):
     name="help",
     description=("List every bot command and explain what it does."),
 )
+@app_commands.describe(category="Choose a help section, or leave blank to see all commands.")
+@app_commands.choices(category=[
+    app_commands.Choice(name="Setup", value=1),
+    app_commands.Choice(name="Voting", value=2),
+    app_commands.Choice(name="Leaderboards", value=3),
+    app_commands.Choice(name="Match and Player Infos", value=4),
+])
 async def help_command(
     interaction: discord.Interaction,
+    category: int | None = None,
 ):
     message = """# Worlds Bot: List of all Commands
 
@@ -1665,6 +1673,9 @@ See a player’s Worlds stats from gol.gg. Start typing to find a player.
 
 `/swiss-standings`
 See all teams’ win–loss records for the Worlds Swiss Stage."""
+    if category is not None:
+        sections = message.split("\n\n## ")
+        message = sections[0] + "\n\n## " + sections[category]
     await interaction.response.send_message(**message_payload(message, title_level=1), ephemeral=True,
                                             allowed_mentions=discord.AllowedMentions.none())
 
