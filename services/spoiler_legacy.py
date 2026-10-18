@@ -6,6 +6,60 @@ import re
 from services.spoilers import aggregate_token, current_policy, result_token, score_token, team_token
 
 
+def navigation_only(text):
+    """Recognize result-free bot pages, never a table merely containing a link."""
+    clean = re.sub(r"⟦/?aggregate(?::[^⟧]*)?⟧", "", text).replace("||", "").replace("\u200b", "")
+    clean = re.sub(r"(?m)^#{1,3}\s*", "", clean).replace("__", "").replace("**", "")
+    first = next((line.strip() for line in clean.splitlines() if line.strip()), "")
+    if first in {"Worlds Bot: List of all Commands", "Server Setup"}:
+        return True
+    lines = [line.strip() for line in clean.splitlines() if line.strip()]
+    if lines and all(re.match(r"^-#\s*(?:•\s*)?\*?Use `/(?:vote|votehistory|leaderboard|changevote|currentvotes|myvotes|dailyvote)`", line)
+                     for line in lines):
+        return True
+    links = re.findall(r"\[([^\]]+)\]\(<?https?://[^)]+\)", clean)
+    remaining = re.sub(r"\[[^\]]+\]\(<?https?://[^)]+\)", "", clean).strip()
+    if remaining.casefold() in {"pick'ems leaderboard", "pick’ems leaderboard", "pickems leaderboard"}:
+        return True
+    return not remaining and any("pick" in label.casefold() and "leaderboard" in label.casefold() for label in links)
+
+
+def repair_navigation_aggregates(draft):
+    """Remove only proven false-positive wrappers from stored navigation cards."""
+    def human_text(value):
+        if isinstance(value, list):
+            return "\n".join(human_text(item) for item in value)
+        if not isinstance(value, dict):
+            return ""
+        return "\n".join(str(item) if isinstance(item, str) else human_text(item)
+                         for key, item in value.items()
+                         if key in {"content", "title", "description", "name", "value", "text", "fields", "embeds", "components"})
+
+    def visit(value, safe=False):
+        if isinstance(value, list):
+            return [visit(item, safe) for item in value]
+        if not isinstance(value, dict):
+            return value
+        safe = safe or navigation_only(human_text(value))
+        result = {}
+        for key, item in value.items():
+            if safe and key in {"content", "title", "description", "name", "value", "text"} and isinstance(item, str):
+                result[key] = re.sub(r"⟦/?aggregate(?::[^⟧]*)?⟧", "", item).replace("||", "")
+            elif key in {"fields", "embeds", "components"}:
+                result[key] = visit(item, safe)
+            else:
+                result[key] = item
+        return result
+    return visit(draft)
+
+
+def aggregate_heading(text):
+    first = next((line.strip(" #*_`|") for line in text.splitlines() if line.strip()), "")
+    if re.search(r"https?://|\]\(|/[a-z]", first, re.I):
+        return False
+    return bool(re.match(r"^(?:TEST:\s*)?(?:(?:Communism|Worlds|Prediction).*Leaderboard|My Worlds Stats|Worlds .*Stats|(?:Worlds \d+: )?Swiss Standings)(?:\b|$)", first, re.I))
+
+
 def matching_fixtures(text):
     policy = current_policy()
     if policy is None:
@@ -74,7 +128,7 @@ def legacy_payload(draft):
         context = fixtures[0] if len(fixtures) == 1 else inherited
         # Full aggregate outputs have no reliably recoverable old input
         # snapshot. Conceal the old table together, including rank order.
-        aggregate = bool(re.search(r"(?:Leaderboard|My Worlds Stats|Swiss Standings|Worlds .*Stats)", summary, re.I))
+        aggregate = aggregate_heading(summary) and not navigation_only(summary)
         for key in ("content", "title", "description", "name", "value"):
             text = value.get(key)
             if not isinstance(text, str) or "label" in value:

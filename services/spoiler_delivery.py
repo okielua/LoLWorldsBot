@@ -28,7 +28,8 @@ MESSAGE_KEYS = {"content", "embeds", "components", "flags", "attachments"}
 def render_payload(draft):
     """Visit human-readable fields only; IDs, links and mentions stay intact."""
     from services.team_emojis import team_text
-    result = deepcopy(draft)
+    from services.spoiler_legacy import repair_navigation_aggregates
+    result = repair_navigation_aggregates(deepcopy(draft))
 
     def walk(value):
         if isinstance(value, list):
@@ -89,6 +90,7 @@ class SpoilerDelivery:
                 channel_id INTEGER, message_id INTEGER, draft TEXT, rendered TEXT,
                 PRIMARY KEY(channel_id, message_id))""")
             db.execute("CREATE TABLE IF NOT EXISTS spoiler_migrations (name TEXT PRIMARY KEY)")
+            db.execute("CREATE TABLE IF NOT EXISTS spoiler_managed_messages (channel_id INTEGER, message_id INTEGER, PRIMARY KEY(channel_id, message_id))")
 
     def remember(self, response, draft, rendered):
         if not isinstance(response, dict) or draft.get("flags", 0) & 64:
@@ -104,11 +106,15 @@ class SpoilerDelivery:
         # or re-uploaded by a release edit.
         raw.pop("attachments", None)
         with closing(self.connect()) as db, db:
+            db.execute("INSERT OR IGNORE INTO spoiler_managed_messages VALUES (?, ?)",
+                       (int(message["channel_id"]), int(message["id"])))
             existing = db.execute("SELECT draft, rendered FROM spoiler_messages WHERE channel_id=? AND message_id=?",
                                   (int(message["channel_id"]), int(message["id"]))).fetchone()
             previous_draft, previous_render = (json.loads(value) for value in existing) if existing else ({}, {})
             raw = {**previous_draft, **raw}
             if "⟦" not in json.dumps(raw, ensure_ascii=False):
+                db.execute("DELETE FROM spoiler_messages WHERE channel_id=? AND message_id=?",
+                           (int(message["channel_id"]), int(message["id"])))
                 return
             rendered = {**previous_render, **rendered}
             db.execute("INSERT OR REPLACE INTO spoiler_messages VALUES (?, ?, ?, ?)",
@@ -183,8 +189,9 @@ class SpoilerDelivery:
                         if message.author.id != self.client.user.id:
                             continue
                         with closing(self.connect()) as db:
-                            if db.execute("SELECT 1 FROM spoiler_messages WHERE channel_id=? AND message_id=?",
-                                          (channel.id, message.id)).fetchone():
+                            if db.execute("SELECT 1 FROM spoiler_messages WHERE channel_id=? AND message_id=? "
+                                          "UNION ALL SELECT 1 FROM spoiler_managed_messages WHERE channel_id=? AND message_id=? LIMIT 1",
+                                          (channel.id, message.id, channel.id, message.id)).fetchone():
                                 continue
                         raw = {"content": message.content or None,
                                "embeds": [embed.to_dict() for embed in message.embeds],

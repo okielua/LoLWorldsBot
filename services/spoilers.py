@@ -191,6 +191,24 @@ class SpoilerLedger:
                     ended = datetime.fromisoformat(row[0]) if match.id not in ends and row and row[0] else now
                     ends[match.id] = ended
                     db.execute("INSERT OR REPLACE INTO spoiler_ends VALUES (?, ?, ?)", (tournament, match.id, ended.isoformat()))
+            # On a late first startup, older completed series must not all look
+            # as if they ended just now. A later series already played by either
+            # participant proves this one had finished by that later start.
+            # This corrects the finish observation; release remains end + 12h.
+            for match in data.matches:
+                ended = ends.get(match.id)
+                if match.status != MatchStatus.COMPLETED or ended is None:
+                    continue
+                teams = {match.team1_id, match.team2_id} - {"TBD"}
+                later_starts = [later.start_time for later in data.matches
+                                if later.status in {MatchStatus.LIVE, MatchStatus.COMPLETED}
+                                and match.start_time < later.start_time <= now
+                                and teams.intersection({later.team1_id, later.team2_id})]
+                if later_starts and min(later_starts) < ended:
+                    ended = min(later_starts)
+                    ends[match.id] = ended
+                    db.execute("UPDATE spoiler_ends SET ended_at=? WHERE tournament=? AND match_id=?",
+                               (ended.isoformat(), tournament, match.id))
             dependencies = {}
             for match in data.matches:
                 for slot, team_id in enumerate((match.team1_id, match.team2_id), 1):

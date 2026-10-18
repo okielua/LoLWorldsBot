@@ -251,6 +251,97 @@ def test_recent_legacy_schedule_keeps_known_team_and_conceals_new_slot(protected
     assert "18 October 2026 · Bo5" in text
 
 
+@pytest.mark.parametrize("text", [
+    "## __Pick'ems Leaderboard__\n\n[Go to our official Pick'ems leaderboard](<https://example.com/pickems>)",
+    "# __Worlds Bot: List of all Commands__\n\n`/leaderboard`\nSee the prediction rankings.",
+    "## Server Setup\n\n### Leaderboards\nSet the official Pick'ems link.",
+    "-# • Use `/votehistory` to review predictions.\n-# • Use `/leaderboard` for rankings.",
+])
+def test_navigation_and_instruction_messages_never_get_result_spoilers(protected, text):
+    from services.spoiler_legacy import legacy_payload
+    raw = {"components": [{"type": 10, "content": text}]}
+    assert "⟦aggregate:" not in str(legacy_payload(raw))
+    assert "||" not in str(render_payload(legacy_payload(raw)))
+    wrongly_tracked = {"components": [{"type": 10, "content": aggregate_token(text)}]}
+    assert "||" not in str(render_payload(wrongly_tracked))
+    assert "⟦" not in str(render_payload(wrongly_tracked))
+
+
+def test_link_classifier_still_protects_actual_prediction_tables(protected):
+    from services.spoiler_legacy import legacy_payload
+    raw = {"content": "## Communism Worlds Leaderboard\n\n### `1.` Lua: 5 correct\n[Help](https://example.com)"}
+    assert "⟦aggregate:" in str(legacy_payload(raw))
+    assert "||" in render_payload(legacy_payload(raw))["content"]
+    # A heading/link next to actual points must not qualify as navigation-only.
+    real_data = {"content": aggregate_token("## Pick'ems Leaderboard\n[Open](https://example.com)\nLua: 12 points")}
+    assert "||" in render_payload(real_data)["content"]
+
+
+def test_wrongly_hidden_link_post_is_repaired_by_silent_edit(protected, database):
+    http = AsyncMock(return_value={})
+    delivery = SpoilerDelivery(SimpleNamespace(http=SimpleNamespace(request=http)), database)
+    text = "## __Pick'ems Leaderboard__\n\n[Go to our official Pick'ems leaderboard](<https://example.com>)"
+    draft = {"content": aggregate_token(text)}
+    delivery.remember({"id": "42", "channel_id": "12"}, draft, {"content": "||wrongly hidden||"})
+    asyncio.run(delivery.release_once())
+    http.assert_awaited_once()
+    assert http.call_args.kwargs["json"]["content"] == text
+    assert http.call_args.kwargs["json"]["allowed_mentions"] == {"parse": [], "replied_user": False}
+    assert http.call_args.args[0].method == "PATCH"
+
+
+def test_modern_result_free_messages_are_excluded_from_legacy_adoption(protected, database):
+    http = AsyncMock(return_value={})
+    message = SimpleNamespace(id=42, author=SimpleNamespace(id=99))
+    async def history(**kwargs):
+        yield message
+    channel = SimpleNamespace(id=12, history=history)
+    client = SimpleNamespace(http=SimpleNamespace(request=http), user=SimpleNamespace(id=99),
+                             guilds=[SimpleNamespace(text_channels=[channel], threads=[])])
+    delivery = SpoilerDelivery(client, database)
+    delivery.remember({"id": "42", "channel_id": "12"}, {"content": "Plain modern message"}, {"content": "Plain modern message"})
+    asyncio.run(delivery.adopt_recent_messages())
+    http.assert_not_awaited()
+    with closing(database()) as db:
+        assert db.execute("SELECT COUNT(*) FROM spoiler_managed_messages").fetchone()[0] == 1
+        assert db.execute("SELECT COUNT(*) FROM spoiler_messages").fetchone()[0] == 0
+
+
+def test_late_bootstrap_keeps_old_known_kc_visible_and_recent_opponent_protected(protected, database):
+    from dataclasses import replace
+    from models import Team
+    from services.team_emojis import team_emoji
+    _, prior, future, now = protected
+    prior = replace(prior, start_time=now - timedelta(days=2), team1_id="KC", team2_id="MVK")
+    later = replace(prior, id="later", start_time=now - timedelta(days=1), team1_id="MVK", team2_id="FUR")
+    future = replace(future, team1_id="KC", team2_id="MVK", start_time=now + timedelta(hours=3))
+    data = spoilers.current_policy().data
+    data.matches = [prior, later, future]
+    data.matches_by_id = {match.id: match for match in data.matches}
+    data.teams.append(Team("FUR", "FUR", "FUR"))
+    data.teams_by_id["FUR"] = data.teams[-1]
+    configure_team_emojis([discord.PartialEmoji(name="KC", id=444), discord.PartialEmoji(name="MVK", id=222),
+                           discord.PartialEmoji(name="beeQuestion", id=333)], data.teams)
+    # Reproduce an old database that first noticed both finishes on startup.
+    ledger = SpoilerLedger(database)
+    with closing(database()) as db, db:
+        for match in (prior, later):
+            db.execute("INSERT INTO spoiler_ends VALUES (?, ?, ?)", (data.tournament.id, match.id, now.isoformat()))
+    policy = ledger.observe(data, now)
+    policy.clock = lambda: now
+    assert policy.release_at(prior) == later.start_time + timedelta(hours=12)
+    assert not policy.participant_protected(future, 1)
+    assert policy.participant_protected(future, 2)
+    raw = {"components": [{"type": 2, "label": team_token("KC", future.id, 1),
+                           "emoji": {"name": "KC", "id": "444"}}]}
+    kc = render_payload(raw)["components"][0]
+    assert kc["label"].strip("\xa0") == "KC"
+    assert kc["emoji"] == {"name": "KC", "id": "444"}
+    assert "||" not in policy.team("KC", match=future, slot=1, emoji=team_emoji("KC"))
+    restarted = ledger.observe(data, now + timedelta(minutes=1))
+    assert restarted.ended_at[prior.id] == later.start_time
+
+
 def test_legacy_live_score_is_removed_even_without_a_fixture_header(protected):
     from services.spoiler_legacy import legacy_payload
 

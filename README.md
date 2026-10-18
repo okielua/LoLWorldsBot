@@ -495,7 +495,11 @@ series finishes. Upcoming matches never shorten or extend this deadline.
 The schedule API has no trustworthy end timestamp or explicit bracket graph.
 `spoiler_ends` therefore persists the first observed completion time, reusing
 existing `result_observed_at` timestamps when available. This intentionally errs
-on the side of keeping results protected longer after downtime. `spoiler_slots`
+on the side of keeping results protected longer after downtime. A later series
+already played by either participant bounds an older series' finish from above;
+late startup observations are corrected to that bound instead of restarting an
+old result's 12-hour clock. Future scheduled matches never shorten the window.
+`spoiler_slots`
 tracks each participant independently. Newly disclosed participants inherit their
 most recent preceding completed series as a prerequisite; slots already known
 before that completion stay independently visible. Unknown prerequisite results
