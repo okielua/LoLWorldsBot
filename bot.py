@@ -1637,7 +1637,7 @@ See your past and upcoming votes, check results, and change votes while voting i
 `/myvotestats`
 See your rank, accuracy, streaks, and advanced personal prediction stats.
 
-`/votehistory <member>` (e.g. `/votehistory lua`)
+`/votehistory <member>` (e.g. `/votehistory @apodso`)
 See a server member’s prediction history and advanced vote stats. Start typing and choose a member from the suggestions.
 
 ## __3. Leaderboards__
