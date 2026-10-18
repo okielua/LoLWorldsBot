@@ -43,6 +43,13 @@ def render_payload(draft):
             value["name"] = "\xa0"
         if "title" in value and "⟦team:" in team_text(value["title"]):
             value["description"] = "## " + value.pop("title") + "\n\n" + value.get("description", "")
+        for metadata, text_key in (("footer", "text"), ("author", "name")):
+            detail = value.get(metadata)
+            if isinstance(detail, dict) and "⟦team:" in team_text(detail.get(text_key, "")):
+                # These native surfaces do not support inline code/custom
+                # emoji. Keep team tags in the Markdown-capable body.
+                value["description"] = (value.get("description", "") + "\n\n" + detail[text_key]).strip()
+                value.pop(metadata)
         original_label = value.get("label", "")
         hidden_label = "⟦team:" in original_label and render_text(original_label, neutral=True).strip("\xa0 ✓") == "?"
         value = {key: item if key in {"emoji", "allowed_mentions", "default_values"} else walk(item)

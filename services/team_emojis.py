@@ -67,10 +67,20 @@ def team_text(text):
         aliases = {alias: team.id for team in policy.data.teams
                    for alias in (team.id, team.short_name, team.name)}
         names = "|".join(re.escape(alias) for alias in sorted(aliases, key=len, reverse=True))
-        pattern = re.compile(r"(?P<skip>⟦[^⟧]*⟧|https?://\S+|`[^`]*`|<@[^>]+>|@\w+)|"
+        pattern = re.compile(r"(?P<skip>⟦[^⟧]*⟧|https?://\S+|<@[^>]+>|@\w+)|"
+                             r"(?P<code>(?:<a?:\w+:\d+>\s*)?`(?P<code_name>[^`\n]+)`)|"
                              r"(?:<a?:\w+:\d+>\s*)?(?:\*\*|__)*(?<![A-Za-z0-9:])"
                              r"(?P<name>" + names + r")(?![A-Za-z0-9:])(?:\*\*|__)*")
-        return pattern.sub(lambda found: found[0] if found["skip"] else team_token(aliases[found["name"]]), text)
+
+        def centered(found):
+            if found["skip"]:
+                return found[0]
+            if found["code"]:
+                name = found["code_name"].strip(" \xa0")
+                return team_token(aliases[name]) if name in aliases else found[0]
+            return team_token(aliases[found["name"]])
+
+        return pattern.sub(centered, text)
     if _pattern is None:
         return text
 
