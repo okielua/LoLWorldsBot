@@ -267,6 +267,37 @@ def test_server_setup_is_private_and_rechecks_admin_permission(database):
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize("delete", [False, True])
+def test_daily_post_admin_buttons_recheck_permissions_and_reply_privately(database, delete):
+    async def scenario():
+        view = ServerSetupView(123)
+        manager = SimpleNamespace(guild_id=123, publish_daily_post=AsyncMock(return_value=("2026-10-15", 456, 789)),
+                                  delete_daily_post=AsyncMock(return_value="2026-10-15"))
+        interaction = SimpleNamespace(guild_id=123,
+            user=SimpleNamespace(id=7, guild_permissions=discord.Permissions.none()),
+            client=SimpleNamespace(voting_manager=manager),
+            response=SimpleNamespace(send_message=AsyncMock(), defer=AsyncMock()),
+            followup=SimpleNamespace(send=AsyncMock()))
+        button = view.delete_daily if delete else view.publish_daily
+        await button.callback(interaction)
+        interaction.response.send_message.assert_awaited_once()
+        manager.publish_daily_post.assert_not_awaited()
+        manager.delete_daily_post.assert_not_awaited()
+        interaction.user.guild_permissions.manage_guild = True
+        await button.callback(interaction)
+        interaction.response.defer.assert_awaited_once_with(ephemeral=True, thinking=True)
+        assert interaction.followup.send.call_args.kwargs["ephemeral"] is True
+        assert interaction.followup.send.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
+        if delete:
+            manager.delete_daily_post.assert_awaited_once()
+            assert "Votes are preserved" in rendered_message(interaction.followup.send.call_args).description
+        else:
+            manager.publish_daily_post.assert_awaited_once()
+            assert "https://discord.com/channels/123/456/789" in rendered_message(interaction.followup.send.call_args).description
+        view.stop()
+    asyncio.run(scenario())
+
+
 def test_server_setup_channel_selection_and_toggle_save_settings(database):
     async def scenario():
         _, _, channel, _, _ = make_delivery()

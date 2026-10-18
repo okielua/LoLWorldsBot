@@ -96,6 +96,116 @@ def test_daily_post_opens_early_without_pings_and_survives_restart(context):
     asyncio.run(scenario())
 
 
+def test_admin_delete_pauses_day_across_restarts_and_preserves_votes(context):
+    from services import polls
+    manager, store, channel, current, message = context
+    message.delete = AsyncMock()
+
+    async def scenario():
+        await manager.tick()
+        match = store.data.matches[0]
+        await manager.vote(match.id, 7, match.team1_id, "Voter")
+        day = await manager.delete_daily_post()
+        message.delete.assert_awaited_once()
+        assert get_daily_post(123, store.data.tournament.id, day) is None
+        assert polls.get_latest_daily_post(123, store.data.tournament.id) is None
+        assert polls.daily_post_suppressed(123, store.data.tournament.id, day)
+        assert polls.get_user_votes(123, store.data.tournament.id, 7)[0][1] == match.team1_id
+        initialize_polls()
+        restarted = VotingManager(manager.client, store, 123, clock=lambda: current[0])
+        await restarted.tick()
+        channel.send.assert_awaited_once()
+        await restarted.publish_daily_post()
+        assert channel.send.await_count == 2
+        assert not polls.daily_post_suppressed(123, store.data.tournament.id, day)
+        await restarted.tick()
+        assert channel.send.await_count == 2
+    asyncio.run(scenario())
+
+
+def test_manual_publish_has_no_role_or_follower_pings_and_reuses_existing_post(context):
+    manager, store, channel, _, _ = context
+    set_worlds_role(123, 444)
+    manager._followers = AsyncMock(return_value=[7])
+
+    async def scenario():
+        first = await manager.publish_daily_post()
+        second = await manager.publish_daily_post()
+        assert first == second
+        channel.send.assert_awaited_once()
+        assert channel.send.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
+        assert "<@" not in str(channel.send.call_args.kwargs["view"].to_components())
+        manager._followers.assert_not_awaited()
+        await manager.tick()
+        channel.send.assert_awaited_once()
+        manager._followers.assert_not_awaited()
+    asyncio.run(scenario())
+
+
+def test_manual_publish_works_with_automatic_reminders_off(context):
+    from services.server_settings import set_public_reminders_enabled
+    manager, _, channel, _, _ = context
+    set_public_reminders_enabled(123, False)
+    asyncio.run(manager.publish_daily_post())
+    channel.send.assert_awaited_once()
+
+
+@pytest.mark.parametrize("blocked", ["too-early", "stale", "cutoff", "unknown-teams"])
+def test_manual_publish_does_not_bypass_schedule_or_voting_safety(context, blocked):
+    manager, store, channel, current, _ = context
+    if blocked == "too-early":
+        current[0] = store.data.matches[0].start_time - timedelta(hours=25)
+        store.fetched_at = current[0]
+    elif blocked == "stale":
+        store.last_error = "offline"
+    elif blocked == "cutoff":
+        store.data = replace(store.data, matches=[store.data.matches[0]])
+        current[0] = store.data.matches[0].start_time - timedelta(minutes=5)
+        store.fetched_at = current[0]
+    else:
+        store.data = replace(store.data, matches=[replace(match, team1_id="TBD") for match in store.data.matches])
+    with pytest.raises(ValueError):
+        asyncio.run(manager.publish_daily_post())
+    channel.send.assert_not_awaited()
+
+
+def test_failed_admin_delete_keeps_existing_post_and_restores_auto_updates(context):
+    from services import polls
+    manager, store, _, _, message = context
+    message.delete = AsyncMock(side_effect=discord.Forbidden(SimpleNamespace(status=403, reason="Forbidden"), "Denied"))
+
+    async def scenario():
+        await manager.tick()
+        before = polls.get_latest_daily_post(123, store.data.tournament.id)
+        with pytest.raises(discord.Forbidden):
+            await manager.delete_daily_post()
+        assert polls.get_latest_daily_post(123, store.data.tournament.id) == before
+        assert not polls.daily_post_suppressed(123, store.data.tournament.id, before[0])
+    asyncio.run(scenario())
+
+
+def test_admin_delete_handles_already_missing_post_and_suppression_is_per_day(context):
+    from services import polls
+    manager, store, _, current, message = context
+    message.delete = AsyncMock(side_effect=discord.NotFound(SimpleNamespace(status=404, reason="Not Found"), "Missing"))
+
+    async def scenario():
+        await manager.tick()
+        deleted_day = await manager.delete_daily_post()
+        assert polls.daily_post_suppressed(123, store.data.tournament.id, deleted_day)
+        assert not polls.daily_post_suppressed(999, store.data.tournament.id, deleted_day)
+        assert not polls.daily_post_suppressed(123, "other-tournament", deleted_day)
+        future = replace(store.data.matches[0], id="later", start_time=current[0] + timedelta(days=2))
+        store.data = replace(store.data, matches=[replace(match, status=MatchStatus.COMPLETED, winner_id=match.team1_id)
+                                                for match in store.data.matches] + [future])
+        current[0] = future.start_time - timedelta(hours=12)
+        store.fetched_at = current[0]
+        await manager.tick()
+        latest = polls.get_latest_daily_post(123, store.data.tournament.id)
+        assert latest is not None and latest[0] != deleted_day
+    asyncio.run(scenario())
+
+
 def test_first_timer_cannot_vote_on_daily_or_restored_buttons_until_mysetup(context):
     from services.voting import ScheduleVoteButton
     from services.polls import get_user_votes

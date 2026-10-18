@@ -81,6 +81,11 @@ def initialize_polls():
         """)
         notices_exist = connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='voting_open_notices'").fetchone()
         connection.execute("""
+            CREATE TABLE IF NOT EXISTS daily_post_suppressions (
+                guild_id INTEGER NOT NULL, tournament_id TEXT NOT NULL, match_day TEXT NOT NULL,
+                PRIMARY KEY (guild_id, tournament_id, match_day))
+        """)
+        connection.execute("""
             CREATE TABLE IF NOT EXISTS voting_open_notices (
                 guild_id INTEGER NOT NULL, tournament_id TEXT NOT NULL, match_id TEXT NOT NULL,
                 team1_id TEXT NOT NULL, team2_id TEXT NOT NULL,
@@ -294,13 +299,39 @@ def get_daily_post(guild_id, tournament_id, day):
         """, (guild_id, tournament_id, day)).fetchone()
 
 
-def get_latest_daily_post(guild_id, tournament_id):
+def get_latest_daily_post(guild_id, tournament_id, include_suppressed=False):
     with closing(get_connection()) as connection:
         return connection.execute("""
             SELECT match_day, channel_id, message_id FROM daily_prediction_posts
             WHERE guild_id = ? AND tournament_id = ?
+            AND (? OR NOT EXISTS (
+                SELECT 1 FROM daily_post_suppressions AS suppressed
+                WHERE suppressed.guild_id = daily_prediction_posts.guild_id
+                AND suppressed.tournament_id = daily_prediction_posts.tournament_id
+                AND suppressed.match_day = daily_prediction_posts.match_day))
             ORDER BY match_day DESC LIMIT 1
-        """, (guild_id, tournament_id)).fetchone()
+        """, (guild_id, tournament_id, include_suppressed)).fetchone()
+
+
+def daily_post_suppressed(guild_id, tournament_id, day):
+    with closing(get_connection()) as connection:
+        return connection.execute("SELECT 1 FROM daily_post_suppressions WHERE guild_id=? AND tournament_id=? AND match_day=?",
+                                  (guild_id, tournament_id, day)).fetchone() is not None
+
+
+def set_daily_post_suppressed(guild_id, tournament_id, day, suppressed):
+    with closing(get_connection()) as connection, connection:
+        if suppressed:
+            connection.execute("INSERT OR IGNORE INTO daily_post_suppressions VALUES (?, ?, ?)", (guild_id, tournament_id, day))
+        else:
+            connection.execute("DELETE FROM daily_post_suppressions WHERE guild_id=? AND tournament_id=? AND match_day=?",
+                               (guild_id, tournament_id, day))
+
+
+def delete_daily_post_receipt(guild_id, tournament_id, day):
+    with closing(get_connection()) as connection, connection:
+        connection.execute("DELETE FROM daily_prediction_posts WHERE guild_id=? AND tournament_id=? AND match_day=?",
+                           (guild_id, tournament_id, day))
 
 
 def get_daily_post_days(guild_id, tournament_id):

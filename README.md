@@ -306,6 +306,15 @@ from the first fresh completed result the bot observes, rather than match start.
 shows its matchday date. It does not create another post or send notifications.
 Before any daily post has been published, it directs members to `/today`.
 
+Members with **Manage Server** can use `/serversetup` → **Publish Daily Post**
+or **Delete Daily Post**. Manual publishing creates or refreshes the earliest
+unfinished matchday's board without pings, even if automatic reminders are off.
+It respects fresh-source checks, the 24-hour lead limit, previous-matchday
+completion, known opponents, and the five-minute voting cutoff. Repeated clicks
+reuse the existing board. Deleting preserves polls/votes and persists a pause for
+that matchday, preventing automatic recreation after restarts. Publishing again
+clears that pause. Future matchdays retain their normal automatic behavior.
+
 The daily post and leaderboard do not list open picks. Each match's database cutoff is
 exactly five minutes before scheduled start. Buttons are disabled on the next
 15-second update, and the reminder path also updates the controls before sending.

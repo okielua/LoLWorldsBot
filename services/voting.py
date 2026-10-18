@@ -505,11 +505,56 @@ class VotingManager:
                 except (sqlite3.Error, OSError):
                     logger.exception("Could not flush daily prediction receipt for %s", day)
 
-    async def _sync_day(self, day, matches):
+    async def publish_daily_post(self):
+        if not self.fresh():
+            raise ValueError("Live data is temporarily unavailable. Please try again shortly.")
+        days = self.match_days()
+        day = next((day for day, matches in days.items() if any(
+            match.status not in {MatchStatus.COMPLETED, MatchStatus.CANCELLED} for match in matches)), None)
+        if day is None:
+            raise ValueError("There is no upcoming matchday to publish.")
+        receipt = await self._sync_day(day, days[day], manual=True)
+        if receipt is None:
+            raise ValueError("The daily post could not be published. Select a reminder channel and check the bot's permissions. "
+                             "The matchday must be within 24 hours, earlier matchdays must be finished, and at least one confirmed matchup must still be open for voting.")
+        return day, receipt[0], receipt[1]
+
+    async def delete_daily_post(self):
         async with self._lock:
-            if self.clock() < self._retry_at.get(day, self.clock()):
+            tournament_id = self.store.data.tournament.id
+            latest = await asyncio.to_thread(polls.get_latest_daily_post, self.guild_id, tournament_id, True)
+            if latest is None:
+                raise ValueError("No daily post has been published in this server.")
+            day, channel_id, message_id = latest
+            channel = self.client.get_channel(channel_id) or await self.client.fetch_channel(channel_id)
+            validate_reminder_channel(channel, self.guild_id)
+            was_suppressed = await asyncio.to_thread(polls.daily_post_suppressed, self.guild_id, tournament_id, day)
+            # Persist before Discord deletion: a crash cannot cause the automatic
+            # recovery path to recreate an intentionally deleted message.
+            await asyncio.to_thread(polls.set_daily_post_suppressed, self.guild_id, tournament_id, day, True)
+            try:
+                await channel.get_partial_message(message_id).delete()
+            except discord.NotFound:
+                pass
+            except discord.HTTPException:
+                await asyncio.to_thread(polls.set_daily_post_suppressed, self.guild_id, tournament_id, day, was_suppressed)
+                raise
+            await asyncio.to_thread(polls.delete_daily_post_receipt, self.guild_id, tournament_id, day)
+            self._posted.pop(day, None)
+            self._checked_at.pop(day, None)
+            self._retry_at.pop(day, None)
+            self._registered.discard(day)
+            return day
+
+    async def _sync_day(self, day, matches, *, manual=False):
+        async with self._lock:
+            if not manual and self.clock() < self._retry_at.get(day, self.clock()):
                 return None
             tournament_id = self.store.data.tournament.id
+            if not manual and await asyncio.to_thread(polls.daily_post_suppressed, self.guild_id, tournament_id, day):
+                return None
+            if manual and not self.fresh():
+                return None
             receipt = await asyncio.to_thread(polls.get_daily_post, self.guild_id, tournament_id, day)
             if day in self._posted and self._posted[day] != receipt:
                 receipt = self._posted[day]
@@ -537,7 +582,7 @@ class VotingManager:
                 ):
                     return None
             settings = await asyncio.to_thread(get_server_settings, self.guild_id)
-            if receipt is None and (not settings.public_reminders_enabled or settings.reminder_channel_id is None):
+            if receipt is None and (settings.reminder_channel_id is None or not manual and not settings.public_reminders_enabled):
                 return None
             # Create a poll as soon as the source confirms a votable matchup.
             if self.fresh():
@@ -569,7 +614,7 @@ class VotingManager:
                 recap += (f"{', '.join(winners)}: {row.correct}/{row.submitted} correct · {float(row.accuracy):.1%} accuracy\n"
                           f"-# {row.submitted}/{row.eligible} matches predicted · {float(row.participation):.1%} participation\n")
                 recap = aggregate_token(recap)
-            role_id = settings.worlds_role_id if not self.test_mode else None
+            role_id = settings.worlds_role_id if not self.test_mode and not manual else None
             view = DailyPredictionsView(self, day, matches, poll_by_id, recap, role_id=role_id)
             signature = hashlib.sha256(json.dumps(view.to_components(), sort_keys=True).encode()).hexdigest()
             channel_id = receipt[0] if receipt else settings.reminder_channel_id
@@ -585,7 +630,7 @@ class VotingManager:
                     day not in self._checked_at
                     or self.clock() - self._checked_at[day] >= timedelta(minutes=5)
                 )
-                if receipt and signature == receipt[2] and open_ids <= published and not check_due:
+                if not manual and receipt and signature == receipt[2] and open_ids <= published and not check_due:
                     await self._notify_new_pairings(receipt[0], receipt[1], matches, poll_by_id, settings.public_reminders_enabled)
                     return receipt
                 channel = self.client.get_channel(channel_id)
@@ -597,7 +642,7 @@ class VotingManager:
                     try:
                         await message.edit(view=view, allowed_mentions=discord.AllowedMentions.none())
                     except discord.NotFound:
-                        if not open_ids or not self.fresh() or not settings.public_reminders_enabled:
+                        if not open_ids or not self.fresh() or not manual and not settings.public_reminders_enabled:
                             logger.warning("Daily prediction post %s is missing; no active poll to restore", day)
                             return None
                         # Preserve poll/vote rows and replace only the deleted Discord post.
@@ -607,7 +652,7 @@ class VotingManager:
                     if latest != settings or not self.fresh():
                         return None
                     open_matches = [match for match in matches if match.id in open_ids]
-                    recipients = await self._followers(channel, open_matches, role_id) if not self.test_mode else []
+                    recipients = await self._followers(channel, open_matches, role_id) if not self.test_mode and not manual else []
                     # Large recipient lists use the bounded follow-up path below.
                     inline_followers = len(recipients) <= 90
                     if not inline_followers:
@@ -634,8 +679,14 @@ class VotingManager:
                     polls.save_daily_post, self.guild_id, tournament_id, day, channel_id, message.id, signature,
                 )
                 await self._flush_opportunities()
-                await self._notify_new_pairings(channel_id, message.id, matches, poll_by_id, settings.public_reminders_enabled,
-                                               exclude_role_id=role_id if receipt is None else None)
+                if manual:
+                    self._notice_pairs.update((match.id, match.team1_id, match.team2_id) for match in matches if match.id in open_ids)
+                    await asyncio.to_thread(polls.mark_voting_notices, self.guild_id, tournament_id, self._notice_pairs)
+                    await asyncio.to_thread(polls.set_daily_post_suppressed, self.guild_id, tournament_id, day, False)
+                    self._retry_at.pop(day, None)
+                else:
+                    await self._notify_new_pairings(channel_id, message.id, matches, poll_by_id, settings.public_reminders_enabled,
+                                                   exclude_role_id=role_id if receipt is None else None)
                 return channel_id, message.id, signature
             except (discord.DiscordException, OSError, sqlite3.Error, ValueError):
                 logger.exception("Could not update daily prediction post for %s", day)

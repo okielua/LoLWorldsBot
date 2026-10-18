@@ -1613,7 +1613,7 @@ async def help_command(
 Choose your timezone, time format, teams, and Worlds role and match reminder preferences.
 
 `/serversetup` · **(requires Manage Server)**
-Configure the server’s Worlds ping role, reminder channel, and settings.
+Configure the server’s Worlds ping role, reminder channel, and settings. Publish or delete daily voting posts.
 
 `/help`
 See all available commands and what they do.

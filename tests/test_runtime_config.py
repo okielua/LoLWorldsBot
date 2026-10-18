@@ -78,7 +78,8 @@ def test_production_setup_has_no_sample_controls_and_simulation_entrypoints_are_
         assert all("test" not in (item.custom_id + (getattr(item, "label", "") or "")).lower()
                    and "preview" not in (getattr(item, "label", "") or "").lower() for item in view.children)
         rendered = message_payload(text, controls=view)["view"]
-        assert sum(isinstance(item, discord.ui.ActionRow) for item in rendered.walk_children()) == 4
+        assert sum(isinstance(item, discord.ui.ActionRow) for item in rendered.walk_children()) == 5
+        assert view.publish_daily in view.children and view.delete_daily in view.children
         assert "disabled" in await run_reminder_test(None, None, 123)
         assert "disabled" in await start_prediction_test(None, 123)
     asyncio.run(scenario())

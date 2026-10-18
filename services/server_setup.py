@@ -42,8 +42,12 @@ def build_server_setup_content(guild_id):
         + f"\n\n### 🔔 __All-Game Worlds Ping Role:__\n{role}\n"
         "Choose a notification role without server permissions. Make it mentionable for daily posts and 5-minute match reminders.\n"
         "Members join or leave this role using Server Pings for All Games in `/mysetup`.\n\n"
+        + "### 📅 __Daily Voting Post:__\nPublish the eligible matchday without pings, or delete the latest daily post.\n"
+        "Deleting pauses automatic recreation for that matchday and preserves all votes. Publish again to resume.\n"
+        "Publishing respects the 24-hour limit, earlier-matchday rule, and voting cutoff.\n"
         + ("### 🧪 __Test Posts:__\nPreview without pings, or send a five-minute test using members' `/mysetup` ping preferences.\n\n"
            if development_enabled() else "")
+        + ("" if development_enabled() else "\n")
         + "### 🏆 __Leaderboards:__\nSet the official Pick'ems link"
         + (" or preview the bot's prediction leaderboard." if development_enabled() else ".")
     )
@@ -138,10 +142,10 @@ class ServerSetupView(SetupRequiredView):
         )
         self.test_predictions.disabled = self.test_reminder.disabled
         self.test_reminder_with_pings.disabled = self.test_reminder.disabled
+        self.publish_daily.disabled = settings.reminder_channel_id is None
         if not development_enabled():
             for item in (self.test_reminder, self.test_reminder_with_pings, self.test_predictions, self.preview_leaderboard):
                 self.remove_item(item)
-            self.control_after_paragraphs = (2, 3, 4, 5)
 
     async def interaction_check(self, interaction):
         if not await super().interaction_check(interaction):
@@ -166,6 +170,39 @@ class ServerSetupView(SetupRequiredView):
             interaction.client, interaction.client.background_polling.store, self.guild_id,
         )
         await interaction.followup.send(**message_payload(message), ephemeral=True)
+
+    async def manage_daily_post(self, interaction, *, delete=False):
+        if not can_manage_server(interaction, self.guild_id):
+            await interaction.response.send_message(**message_payload("You need the Manage Server permission."), ephemeral=True)
+            return
+        manager = interaction.client.voting_manager
+        if manager.guild_id != self.guild_id:
+            await interaction.response.send_message(**message_payload("Daily posting is not configured for this server."), ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            if delete:
+                day = await manager.delete_daily_post()
+                text = (f"Daily post for **{day}** deleted. It will stay deleted through restarts.\n\n"
+                        "Votes are preserved. Use **Publish Daily Post** to restore it while voting is still open. Future matchdays are unaffected.")
+            else:
+                day, channel_id, message_id = await manager.publish_daily_post()
+                link = f"https://discord.com/channels/{self.guild_id}/{channel_id}/{message_id}"
+                text = f"[Open the daily post for {day}]({link})\n\nPublished or refreshed without pings. Automatic updates are enabled for this matchday."
+        except ValueError as error:
+            text = str(error)
+        except discord.HTTPException:
+            logger.warning("Admin daily-post action failed", exc_info=True)
+            text = "I couldn't change the daily post. Check the bot's access to the reminder channel and try again."
+        await interaction.followup.send(**message_payload(text), ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
+    @discord.ui.button(label="Publish Daily Post", emoji="📅", row=3)
+    async def publish_daily(self, interaction, button):
+        await self.manage_daily_post(interaction)
+
+    @discord.ui.button(label="Delete Daily Post", emoji="🗑️", style=discord.ButtonStyle.danger, row=3)
+    async def delete_daily(self, interaction, button):
+        await self.manage_daily_post(interaction, delete=True)
 
     @discord.ui.button(label="Test 5-Min Reminder (With Pings)", emoji="🔔", row=3)
     async def test_reminder_with_pings(self, interaction, button):
