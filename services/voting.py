@@ -358,7 +358,7 @@ class DailyPredictionsView(SetupRequiredLayoutView):
             times = "\n".join(f"-# {line}" for line in registered_match_times(match.start_time, timezones).splitlines())
             card.add_item(team_display(
                 f"{gap}## {matchup(match)}\n{stage_label}\n"
-                f"{times}\n{status}"
+                f"{times}\n\n{status}"
             ))
             card.add_item(discord.ui.ActionRow(VoteButton(manager, poll, 1), VoteButton(manager, poll, 2)))
         card.add_item(team_display(
