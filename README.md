@@ -124,8 +124,8 @@ prevents later visits from reversing an opt-out. Missing roles or failed role
 assignment do not mark onboarding complete. Existing members are not bulk-added.
 There is no separate daily-post subscription. The legacy SQLite all-games flag
 is retained for compatibility but no longer targets notifications.
-New automatic daily prediction posts and five-minute match reminders mention
-this role. Updates, restarts and replacement of a deleted daily post do not ping it. The role is
+New daily prediction posts (including manual publications and replacements of deleted posts) and five-minute match reminders mention
+this role. Edits and restarts do not ping it. The role is
 required to be mentionable unless the bot has Mention Everyone permission.
 Followed-team subscribers outside this role receive individual daily voting
 and five-minute match pings for their teams;
@@ -308,7 +308,8 @@ Before any daily post has been published, it directs members to `/today`.
 
 Members with **Manage Server** can use `/serversetup` → **Publish Daily Post**
 or **Delete Daily Post**. Manual publishing creates or refreshes the earliest
-unfinished matchday's board without pings, even if automatic reminders are off.
+unfinished matchday's board, even if automatic reminders are off. New posts ping
+the configured role; refreshing an existing board does not send another ping.
 It respects fresh-source checks, the 24-hour lead limit, previous-matchday
 completion, known opponents, and the five-minute voting cutoff. Repeated clicks
 reuse the existing board. Deleting preserves polls/votes and persists a pause for

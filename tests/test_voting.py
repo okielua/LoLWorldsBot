@@ -123,7 +123,7 @@ def test_admin_delete_pauses_day_across_restarts_and_preserves_votes(context):
     asyncio.run(scenario())
 
 
-def test_manual_publish_has_no_role_or_follower_pings_and_reuses_existing_post(context):
+def test_manual_publish_pings_configured_role_once_and_reuses_existing_post(context):
     manager, store, channel, _, _ = context
     set_worlds_role(123, 444)
     manager._followers = AsyncMock(return_value=[7])
@@ -133,8 +133,9 @@ def test_manual_publish_has_no_role_or_follower_pings_and_reuses_existing_post(c
         second = await manager.publish_daily_post()
         assert first == second
         channel.send.assert_awaited_once()
-        assert channel.send.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
-        assert "<@" not in str(channel.send.call_args.kwargs["view"].to_components())
+        assert channel.send.call_args.kwargs["allowed_mentions"].to_dict() == {"roles": [444], "parse": []}
+        assert "<@&444>" in str(channel.send.call_args.kwargs["view"].to_components())
+        assert channel.get_partial_message.return_value.edit.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
         manager._followers.assert_not_awaited()
         await manager.tick()
         channel.send.assert_awaited_once()
@@ -943,6 +944,7 @@ def test_failed_discord_send_never_counts_as_a_published_opportunity(context):
 def test_deleted_daily_board_is_replaced_without_losing_votes(context, restart):
     from services.polls import get_user_votes
     manager, store, channel, current, message = context
+    set_worlds_role(123, 987)
     async def scenario():
         await manager.tick()
         await manager.vote(store.data.matches[0].id, 7, "C9", "Lua")
@@ -956,6 +958,8 @@ def test_deleted_daily_board_is_replaced_without_losing_votes(context, restart):
             active = manager
         await active.tick()
         assert channel.send.await_count == 2
+        assert "<@&987>" in str(channel.send.call_args.kwargs["view"].to_components())
+        assert channel.send.call_args.kwargs["allowed_mentions"].to_dict() == {"roles": [987], "parse": []}
         assert get_daily_post(123, store.data.tournament.id, "2026-10-15")[1] == 790
         assert get_user_votes(123, store.data.tournament.id, 7)[0][1] == "C9"
         message.edit.side_effect = None  # The replacement message exists.

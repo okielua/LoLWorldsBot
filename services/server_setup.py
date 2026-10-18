@@ -42,7 +42,7 @@ def build_server_setup_content(guild_id):
         + f"\n\n### 🔔 __All-Game Worlds Ping Role:__\n{role}\n"
         "Choose a notification role without server permissions. Make it mentionable for daily posts and 5-minute match reminders.\n"
         "Members join or leave this role using Server Pings for All Games in `/mysetup`.\n\n"
-        + "### 📅 __Daily Voting Post:__\nPublish the eligible matchday without pings, or delete the latest daily post.\n"
+        + "### 📅 __Daily Voting Post:__\nPublish the eligible matchday and ping the configured role, or delete the latest daily post. Existing posts refresh silently.\n"
         "Deleting pauses automatic recreation for that matchday and preserves all votes. Publish again to resume.\n"
         "Publishing respects the 24-hour limit, earlier-matchday rule, and voting cutoff.\n"
         + ("### 🧪 __Test Posts:__\nPreview without pings, or send a five-minute test using members' `/mysetup` ping preferences.\n\n"
@@ -188,7 +188,7 @@ class ServerSetupView(SetupRequiredView):
             else:
                 day, channel_id, message_id = await manager.publish_daily_post()
                 link = f"https://discord.com/channels/{self.guild_id}/{channel_id}/{message_id}"
-                text = f"[Open the daily post for {day}]({link})\n\nPublished or refreshed without pings. Automatic updates are enabled for this matchday."
+                text = f"[Open the daily post for {day}]({link})\n\nNew posts mention the configured ping role; existing posts refresh silently. Automatic updates are enabled for this matchday."
         except ValueError as error:
             text = str(error)
         except discord.HTTPException:

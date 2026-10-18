@@ -616,7 +616,7 @@ class VotingManager:
                 recap += (f"{', '.join(winners)}: {row.correct}/{row.submitted} correct · {float(row.accuracy):.1%} accuracy\n"
                           f"-# {row.submitted}/{row.eligible} matches predicted · {float(row.participation):.1%} participation\n")
                 recap = aggregate_token(recap)
-            role_id = settings.worlds_role_id if not self.test_mode and not manual else None
+            role_id = settings.worlds_role_id if not self.test_mode else None
             view = DailyPredictionsView(self, day, matches, poll_by_id, recap, role_id=role_id)
             signature = hashlib.sha256(json.dumps(view.to_components(), sort_keys=True).encode()).hexdigest()
             channel_id = receipt[0] if receipt else settings.reminder_channel_id
@@ -648,7 +648,10 @@ class VotingManager:
                             logger.warning("Daily prediction post %s is missing; no active poll to restore", day)
                             return None
                         # Preserve poll/vote rows and replace only the deleted Discord post.
-                        message = await channel.send(view=view, allowed_mentions=discord.AllowedMentions.none())
+                        message = await channel.send(view=view, allowed_mentions=discord.AllowedMentions(
+                            everyone=False, users=False, replied_user=False,
+                            roles=[discord.Object(role_id)] if role_id else False,
+                        ))
                 else:
                     latest = await asyncio.to_thread(get_server_settings, self.guild_id)
                     if latest != settings or not self.fresh():
