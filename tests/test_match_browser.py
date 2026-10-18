@@ -64,7 +64,42 @@ def test_clamps_to_available_matches_and_pages_in_correct_order(browser, upcomin
                 await controls.turn(click, -1)
             assert controls.page == 0 and controls.previous.disabled
         else:
-            assert controls.children == []
+            assert controls.children == [controls.more]
+            assert controls.more.label == f"See 3 More {'Next' if upcoming else 'Previous'} Matches"
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("upcoming", [False, True])
+@pytest.mark.parametrize("available,initial", [(8, 3), (105, 99)])
+def test_see_more_extends_three_at_a_time_updates_title_and_stops(browser, upcoming, available, initial):
+    data, now, interaction = browser
+    matches = [replace(data.matches[0], id=f"fixture-{i}",
+                       status=MatchStatus.SCHEDULED if upcoming else MatchStatus.COMPLETED,
+                       start_time=now + timedelta(hours=i + 1) * (1 if upcoming else -1)) for i in range(available)]
+    data = replace(data, matches=matches)
+
+    async def scenario():
+        await show_match_games(interaction, data, lambda match, *a, **kw: f"Match {match.id}",
+                               count=initial, upcoming=upcoming, now=now)
+        controls = interaction.response.send_message.call_args.kwargs["view"].controls
+        shown = initial
+        click = SimpleNamespace(response=SimpleNamespace(edit_message=AsyncMock()))
+        while controls.has_more:
+            await controls.more.callback(click)
+            first_new_page = shown // 3
+            shown = min(shown + 3, available, 100)
+            assert controls.page == first_new_page
+            assert controls.pages[0].startswith(f"# {'Next' if upcoming else 'Previous'} {shown} Matches\n")
+            text = "\n".join(controls.pages)
+            assert text.count("Match fixture-") == shown
+            assert len(controls.pages) == (shown + 2) // 3
+            assert click.response.edit_message.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
+        assert shown == min(available, 100)
+        assert controls.more not in controls.children
+        assert controls.next_page.disabled
+        assert "fixture-0" in controls.pages[0]
+        await controls.turn(click, -1)
+        assert controls.page == len(controls.pages) - 2
     asyncio.run(scenario())
 
 
