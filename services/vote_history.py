@@ -79,16 +79,16 @@ class VoteHistoryView(SetupRequiredView):
                                   target_user=self.target)
 
 
-async def show_vote_history(interaction, voter=None):
+async def show_vote_history(interaction, voter):
     await interaction.response.defer(ephemeral=True)
     manager = interaction.client.voting_manager
     data, now = manager.store.data, datetime.now(UTC)
     names = await asyncio.to_thread(get_voter_display_names, interaction.guild_id, data.tournament.id)
     try:
-        user_id = int(voter) if voter is not None else interaction.user.id
-        if voter is not None and user_id not in names:
+        user_id = int(voter)
+        if user_id not in names:
             raise ValueError
-        target = interaction.user if voter is None else interaction.guild.get_member(user_id) or await interaction.guild.fetch_member(user_id)
+        target = interaction.guild.get_member(user_id) or await interaction.guild.fetch_member(user_id)
     except (ValueError, discord.NotFound):
         await interaction.followup.send(**message_payload("Choose a server member from the voter suggestions."), ephemeral=True)
         return

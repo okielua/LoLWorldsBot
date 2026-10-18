@@ -67,15 +67,17 @@ def test_history_rejects_arbitrary_nonvoter_ids(monkeypatch):
     assert "Choose a server member" in interaction.followup.send.call_args.kwargs["view"].children[0].children[0].content
 
 
-def test_history_defaults_to_caller_even_without_votes_and_offers_my_stats(monkeypatch):
+def test_history_can_explicitly_select_caller_and_offers_my_stats(monkeypatch):
     interaction, data, _ = context(monkeypatch)
     interaction.user.display_name = "Lua"
+    interaction.guild.get_member = lambda user_id: interaction.user if user_id == 7 else None
+    monkeypatch.setattr(history, "get_voter_display_names", lambda *args: {7: "Lua"})
     monkeypatch.setattr(history, "get_user_votes", lambda *args: [])
     stats = AsyncMock()
     monkeypatch.setattr(history, "show_personal_stats", stats)
 
     async def scenario():
-        await history.show_vote_history(interaction)
+        await history.show_vote_history(interaction, "7")
         payload = interaction.followup.send.call_args.kwargs
         assert payload["ephemeral"]
         controls = payload["view"].controls

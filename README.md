@@ -289,7 +289,7 @@ replaced without deleting prediction rows; the new message receipt is persisted.
 Active boards are checked on restart and every five minutes, even when their
 content has not changed, so deletion does not leave voting unavailable indefinitely.
 
-Voting uses three commands: `/vote`, `/votehistory [member]`, and `/leaderboard`.
+Voting uses three commands: `/vote`, `/votehistory <name>`, and `/leaderboard`.
 `/vote` is the private panel for making/changing current predictions, with green
 checked buttons for the caller's saved picks. The public daily post has a
 **Vote / Change My Vote** button opening that same panel; its shared quick-vote
@@ -467,9 +467,9 @@ If the admin running the test votes, the test also sends them a private TEST
 prediction-history preview with simulated series scores and correct/incorrect
 outcomes behind spoiler tags, using the same layout as `/votehistory`.
 
-`/votehistory [member]` defaults to the caller's own past predictions and a
-**My Stats** button, including when that person has not voted yet. The optional
-member is selected from autocomplete, limited to current server voters.
+`/votehistory <name>` requires a member selected from autocomplete, limited to
+current server voters. Selecting yourself opens your own past predictions and
+a **My Stats** button.
 Other members' open picks remain hidden until voting closes. History is private,
 uses five predictions per page, and includes the shared advanced statistics for
 the selected member. Completed results, correctness, and affected stats retain

@@ -1509,10 +1509,10 @@ async def currentvotes(interaction: discord.Interaction):
 
 @bot.tree.command(name="votehistory", description="View a server member's prediction history and advanced vote stats.")
 @app_commands.guild_only()
-@app_commands.describe(voter="Choose a server member who has voted before.")
-@app_commands.autocomplete(voter=voter_autocomplete)
-async def votehistory(interaction: discord.Interaction, voter: str | None = None):
-    await show_vote_history(interaction, voter)
+@app_commands.describe(name="Choose a server member who has voted before.")
+@app_commands.autocomplete(name=voter_autocomplete)
+async def votehistory(interaction: discord.Interaction, name: str):
+    await show_vote_history(interaction, name)
 
 
 @bot.tree.command(name="myvotes", description="View your past and upcoming predictions, check results, and change open picks.")
@@ -1591,8 +1591,8 @@ Choose your timezone, time format, teams, and Worlds role and match reminder pre
 Open your private voting panel. Vote or change a pick; your selected team is marked green with ✓.
 Voter names appear publicly under each daily matchup, without pings. Picks stay private until voting closes.
 
-`/votehistory [member]` (e.g. `/votehistory @apodso`)
-Leave the member blank for your own past predictions and the My Stats button, or choose a member to view their history and stats.
+`/votehistory <name>` (e.g. `/votehistory @apodso`)
+Choose a server member from the suggestions to view their past predictions and stats. Choose yourself for your own history and the My Stats button.
 
 ## __3. Leaderboards__
 
