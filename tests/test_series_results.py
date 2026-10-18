@@ -119,9 +119,16 @@ def test_series_scoped_spoilers_and_large_results(context, monkeypatch):
         assert "@Voter" in hidden and "||@Voter" not in hidden and "⟦" not in hidden
         assert "Final score:** ||3–1||" in hidden
         without_score = "\n".join(line for line in hidden.splitlines() if "Final score:" not in line)
-        assert "||" not in without_score
+        assert "||" not in without_score.replace("||✅||", "✅").replace("||❌||", "❌")
+        voter_lines = [line for line in hidden.splitlines() if "@Voter" in line]
+        assert all(line.startswith(("||✅|| @Voter", "||❌|| @Voter")) for line in voter_lines)
     now[0] += timedelta(hours=12)
-    assert all("||" not in render_payload({"content": page})["content"] for page in pages)
+    released = [render_payload({"content": page})["content"] for page in pages]
+    assert all("||" not in page for page in released)
+    voters = [line for page in released for line in page.splitlines() if "@Voter" in line]
+    assert len(voters) == 300
+    assert sum(line.startswith("✅ @Voter") for line in voters) == 150
+    assert sum(line.startswith("❌ @Voter") for line in voters) == 150
 
 
 def test_latest_stays_until_next_series_result_is_published(context):

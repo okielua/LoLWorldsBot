@@ -16,7 +16,7 @@ from services.presentation import message_payload
 from services.reminder_engine import get_server_ping_user_ids
 from services.server_settings import get_server_settings
 from services.server_reminders import validate_reminder_channel
-from services.spoilers import score_token, team_token
+from services.spoilers import score_token, team_token, result_token
 from services.team_history import HistoryPages
 from services.user_settings import get_all_user_reminder_preferences, get_connection
 from services.worlds_role import individual_subscribers
@@ -48,7 +48,7 @@ def latest_result(guild_id, tournament_id):
 
 
 def result_pages(match, votes, *, test_mode=False):
-    """Show picks by team openly; only the final score reveals the outcome."""
+    """Show stacked picks openly; protect the score and correctness icons."""
     pair = f"{team_token(match.team1_id)} vs {team_token(match.team2_id)}"
     heading = f"## {'TEST: ' if test_mode else ''}Series Voting Results\n\n## {pair}\n({format_tournament_date(match.start_time)})"
     score = (f"{match.team1_score}–{match.team2_score}" if test_mode else
@@ -62,7 +62,9 @@ def result_pages(match, votes, *, test_mode=False):
             for uid, team, name in valid if team == team_id), key=str.casefold)
         count = len(names)
         label = f"{team_token(team_id)} · {count} vote{'s' if count != 1 else ''} ({count / len(valid):.0%})"
-        lines.append((label, names or ["No votes"]))
+        icon = "✅" if team_id == match.winner_id else "❌"
+        marker = f"||{icon}||" if test_mode else result_token(match, icon)
+        lines.append((label, [f"{marker} {name}" for name in names] or ["No votes"]))
     total = f"**{len(valid)} vote{'s' if len(valid) != 1 else ''} cast**"
     pages, body = [], heading + "\n\n" + (total if valid else "No votes were cast for this series.")
     for label, names in lines:
