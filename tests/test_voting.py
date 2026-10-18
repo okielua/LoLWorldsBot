@@ -605,16 +605,24 @@ def test_announcement_failure_does_not_undo_vote_or_private_confirmation(context
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize("skip", ["simulation", "no_channel"])
-def test_announcement_skips_simulations_and_unconfigured_channels(context, skip):
+def test_announcement_skips_unconfigured_channels(context):
     manager, store, channel, _, _ = context
-    if skip == "simulation":
-        manager.test_mode = True
-    else:
-        with user_settings.get_connection() as connection:
-            connection.execute("DELETE FROM server_settings WHERE guild_id = 123")
+    with user_settings.get_connection() as connection:
+        connection.execute("DELETE FROM server_settings WHERE guild_id = 123")
     asyncio.run(manager.announce_vote(store.data.matches[0].id, "Lua"))
     channel.send.assert_not_awaited()
+
+
+def test_simulated_vote_announcements_are_labelled_and_never_ping(context):
+    manager, store, channel, _, _ = context
+    manager.test_mode = True
+    asyncio.run(manager.announce_vote(store.data.matches[0].id, "Lua"))
+    channel.send.assert_awaited_once()
+    sent = channel.send.call_args
+    assert sent.kwargs["allowed_mentions"].to_dict() == {"parse": []}
+    text = rendered_message(sent).description
+    assert "TEST" in text and "@Lua" in text and "voted on the upcoming match" in text
+    assert "C9" in text and "KC" in text
 
 
 def test_failed_vote_does_not_send_participation_message(context):

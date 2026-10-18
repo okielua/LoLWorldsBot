@@ -451,8 +451,6 @@ class VotingManager:
 
     async def announce_vote(self, match_id, display_name):
         """Celebrate participation without identifying the selected team."""
-        if self.test_mode:
-            return
         try:
             match = self.store.data.matches_by_id.get(match_id)
             if match is None:
@@ -465,7 +463,9 @@ class VotingManager:
                 channel = await self.client.fetch_channel(settings.reminder_channel_id)
             validate_reminder_channel(channel, self.guild_id)
             name = discord.utils.escape_mentions(discord.utils.escape_markdown(" ".join(display_name.split())))
-            text = f"🗳️ **@{name}** voted on the upcoming match {matchup(match)}!"
+            pairing = (f"{team_token(match.team1_id)} vs {team_token(match.team2_id)}"
+                       if self.test_mode else matchup(match))
+            text = f"{'🧪 TEST · ' if self.test_mode else ''}🗳️ **@{name}** voted on the upcoming match {pairing}!"
             await channel.send(**message_payload(text), allowed_mentions=discord.AllowedMentions.none())
         except (discord.DiscordException, OSError, sqlite3.Error, ValueError):
             logger.warning("Vote saved, but participation announcement could not be sent", exc_info=True)

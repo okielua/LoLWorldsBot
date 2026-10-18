@@ -310,7 +310,7 @@ Successful vote-button interactions also send a short participation message in
 the `/serversetup` reminder channel: `🗳️ @name voted on the upcoming match …!`
 The selected team stays private, participant spoiler protection still applies,
 and all user/role/everyone pings are disabled. Controlled prediction simulations
-do not send these announcements. Missing channels or failed announcements never
+send the same announcements with a clear TEST label. Missing channels or failed announcements never
 undo a saved vote or prevent its private confirmation.
 
 Members with **Manage Server** can use `/serversetup` → **Publish Daily Post**
