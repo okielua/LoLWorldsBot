@@ -58,12 +58,14 @@ def leaderboard_embeds(entries, *, previous=None, preview=False):
     if preview:
         title = "TEST: " + title
     pages, body = [], prefix
+    # An empty status contains no scored predictions to protect.
+    protect = aggregate_token if entries else str
     for block in blocks or ["No results yet. The standings update as matches finish."]:
         if len(body) + len(block) + len(LEADERBOARD_HELP) + 4 > 3700:
-            pages.append(discord.Embed(title=title, description=aggregate_token(body.rstrip()) + "\n\n" + LEADERBOARD_HELP, colour=ACCENT))
+            pages.append(discord.Embed(title=title, description=protect(body.rstrip()) + "\n\n" + LEADERBOARD_HELP, colour=ACCENT))
             body = prefix
         body += format_footnotes(block) + "\n\n"
-    pages.append(discord.Embed(title=title, description=aggregate_token(body.rstrip()) + "\n\n" + LEADERBOARD_HELP, colour=ACCENT))
+    pages.append(discord.Embed(title=title, description=protect(body.rstrip()) + "\n\n" + LEADERBOARD_HELP, colour=ACCENT))
     return pages
 
 

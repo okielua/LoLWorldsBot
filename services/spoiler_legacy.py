@@ -14,6 +14,10 @@ def navigation_only(text):
     if first in {"Worlds Bot: List of all Commands", "Server Setup"}:
         return True
     lines = [line.strip() for line in clean.splitlines() if line.strip()]
+    status_lines = [line for line in lines if not line.startswith("-#")
+                    and line not in {"Communism Worlds Leaderboard", "TEST: Communism Worlds Leaderboard"}]
+    if status_lines == ["No results yet. The standings update as matches finish."]:
+        return True
     if lines and all(re.match(r"^-#\s*(?:•\s*)?\*?Use `/(?:vote|votehistory|leaderboard|changevote|currentvotes|myvotes|dailyvote)`", line)
                      for line in lines):
         return True

@@ -256,6 +256,8 @@ def test_recent_legacy_schedule_keeps_known_team_and_conceals_new_slot(protected
     "# __Worlds Bot: List of all Commands__\n\n`/leaderboard`\nSee the prediction rankings.",
     "## Server Setup\n\n### Leaderboards\nSet the official Pick'ems link.",
     "-# • Use `/votehistory` to review predictions.\n-# • Use `/leaderboard` for rankings.",
+    "No results yet. The standings update as matches finish.",
+    "## __Communism Worlds Leaderboard__\n\nNo results yet. The standings update as matches finish.\n\n-# • Ranked by correct predictions, then accuracy.",
 ])
 def test_navigation_and_instruction_messages_never_get_result_spoilers(protected, text):
     from services.spoiler_legacy import legacy_payload
@@ -275,6 +277,15 @@ def test_link_classifier_still_protects_actual_prediction_tables(protected):
     # A heading/link next to actual points must not qualify as navigation-only.
     real_data = {"content": aggregate_token("## Pick'ems Leaderboard\n[Open](https://example.com)\nLua: 12 points")}
     assert "||" in render_payload(real_data)["content"]
+
+
+def test_empty_leaderboard_is_visible_during_result_protection(protected):
+    from services.leaderboard_display import leaderboard_embeds
+    embed, = leaderboard_embeds([])
+    assert "⟦aggregate:" not in embed.description
+    result = render_payload({"embeds": [embed.to_dict()]})
+    assert "No results yet." in result["embeds"][0]["description"]
+    assert "||" not in result["embeds"][0]["description"]
 
 
 def test_wrongly_hidden_link_post_is_repaired_by_silent_edit(protected, database):
