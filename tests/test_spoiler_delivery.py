@@ -53,7 +53,7 @@ def test_wire_payload_protects_only_dependent_team_and_button_uses_bee_question(
     first, second = result["components"][0]["components"]
     assert first["label"] == "\xa0\xa0T1\xa0\xa0"
     assert first["emoji"]["id"] == "111"
-    assert second["label"] == "Vote (see spoiler above)"
+    assert second["label"] == "[see spoiler]"
     assert second["emoji"]["id"] == "333"
     assert second["custom_id"] == "second"
     assert draft == original

@@ -66,7 +66,7 @@ def render_payload(draft):
             from services.team_emojis import custom_emoji
             placeholder = custom_emoji("beeQuestion")
             if value.get("type") == 2:
-                value["label"] = "Vote (see spoiler above)" + (" ✓" if original_label.endswith(" ✓") else "")
+                value["label"] = "[see spoiler]" + (" ✓" if original_label.endswith(" ✓") else "")
             value["emoji"] = ({"id": str(placeholder.id), "name": placeholder.name,
                                "animated": getattr(placeholder, "animated", False)} if placeholder else {"name": "❓"})
         return value
