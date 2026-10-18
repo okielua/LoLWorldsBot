@@ -58,6 +58,27 @@ def serialize(payload):
     return render_payload(raw)
 
 
+@pytest.mark.parametrize("surface", ["content", "description", "title", "component", "shared_card"])
+def test_matchups_are_never_underlined_on_any_surface(context, surface):
+    from services.spoilers import matchup
+    for pairing in (matchup(context.future), "__T1__ vs __MVK__"):
+        text = f"__Votes: {pairing}__"
+        if surface == "shared_card":
+            wire = serialize(message_payload("# " + text + "\n\n### __Voting Results__"))
+        elif surface == "component":
+            wire = render_payload({"components": [{"type": 10, "content": text}]})
+        elif surface in {"description", "title"}:
+            wire = render_payload({"embeds": [{surface: text}]})
+        else:
+            wire = render_payload({"content": text})
+        assert "__Votes:" not in str(wire)
+        assert "__`" not in str(wire) and "`__" not in str(wire)
+        if "⟦team:" in pairing:
+            assert "||" in str(wire)
+        if surface == "shared_card":
+            assert "__Voting Results__" in str(wire)
+
+
 def strings(value):
     if isinstance(value, str):
         yield value

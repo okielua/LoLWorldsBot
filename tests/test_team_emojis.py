@@ -90,10 +90,10 @@ def test_matchup_layout_has_outer_logos_and_no_whole_line_underline(logos, text)
 
 
 @pytest.mark.parametrize("winner", ["C9", "FUR"])
-def test_only_winning_team_is_underlined_inside_result_spoilers(logos, winner):
+def test_even_winning_team_is_not_underlined_in_a_matchup(logos, winner):
     left = "**__C9__**" if winner == "C9" else "**C9**"
     right = "**__FUR__**" if winner == "FUR" else "**FUR**"
-    expected = f"||{logos['CLOUD9']} {left} vs {right} {logos['FURIA']}||"
+    expected = f"||{logos['CLOUD9']} **C9** vs **FUR** {logos['FURIA']}||"
     assert team_emojis.team_text(f"||{left} vs {right}||") == expected
     assert team_emojis.team_text(expected) == expected
 

@@ -61,6 +61,13 @@ def custom_emoji(name):
 
 def team_text(text):
     """Decorate visible team names without changing IDs, URLs, or spoilers."""
+    # Matchups are never underlined, including tokenized headings and inline
+    # pairings. Run before either rendering branch so shared title formatting
+    # cannot reintroduce an underline around padded tags or their emojis.
+    def remove_matchup_underline(line):
+        return re.sub(r"https?://\S+|<[^>]+>|`[^`]*`|__",
+                      lambda part: "" if part[0] == "__" else part[0], line[0])
+    text = re.sub(r"(?m)^.*\bvs\b.*$", remove_matchup_underline, text)
     from services.spoilers import current_policy, team_token
     policy = current_policy()
     if policy is not None:
