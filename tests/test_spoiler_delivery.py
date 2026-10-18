@@ -49,11 +49,11 @@ def test_wire_payload_protects_only_dependent_team_and_button_uses_bee_question(
             {"type": 2, "style": 1, "label": team_token("MVK", future.id, 2), "emoji": {"id": "222", "name": "MVK"}, "custom_id": "second"}]}]}
     original = deepcopy(draft)
     result = render_payload(draft)
-    assert result["content"] == "<:t1:111> `\xa0T1\xa0` vs ||<:MVK:222> `MVK\xa0`||\n||3–1||"
+    assert result["content"] == "<:t1:111> `\xa0\xa0T1\xa0\xa0` vs ||<:MVK:222> `\xa0MVK\xa0\xa0`||\n||3–1||"
     first, second = result["components"][0]["components"]
-    assert first["label"] == "\xa0T1\xa0"
+    assert first["label"] == "\xa0\xa0T1\xa0\xa0"
     assert first["emoji"]["id"] == "111"
-    assert second["label"] == "\xa0?\xa0\xa0"
+    assert second["label"] == "\xa0\xa0?\xa0\xa0\xa0"
     assert second["emoji"]["id"] == "333"
     assert second["custom_id"] == "second"
     assert draft == original
@@ -178,7 +178,7 @@ def test_native_field_name_moves_into_spoiler_capable_body(protected):
         {"name": team_token("MVK", future.id, 2), "value": "50%\n(2 votes)", "inline": True}]}]}
     field = render_payload(draft)["embeds"][0]["fields"][0]
     assert field["name"] == "\xa0"
-    assert field["value"].startswith("||<:MVK:222> `MVK\xa0`||")
+    assert field["value"].startswith("||<:MVK:222> `\xa0MVK\xa0\xa0`||")
     assert field["inline"] is True
 
 
@@ -205,8 +205,8 @@ def test_recent_legacy_schedule_keeps_known_team_and_conceals_new_slot(protected
         "content": "## T1 vs MVK\n18 October 2026 · Bo5"}]}]}
     draft = legacy_payload(raw)
     text = render_payload(draft)["components"][0]["components"][0]["content"]
-    assert "<:t1:111> `\xa0T1\xa0`" in text
-    assert "||<:MVK:222> `MVK\xa0`||" in text
+    assert "<:t1:111> `\xa0\xa0T1\xa0\xa0`" in text
+    assert "||<:MVK:222> `\xa0MVK\xa0\xa0`||" in text
     assert "18 October 2026 · Bo5" in text
 
 

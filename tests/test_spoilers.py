@@ -25,6 +25,18 @@ def test_centering_uses_nbsp_and_extra_space_on_right():
     assert padded_name("LONGER", 4) == "LONGER"
 
 
+def test_shared_field_keeps_both_margins_even_for_longest_tag():
+    _, _, data = scenario()
+    data.teams.append(Team("TLAW", "Team Liquid", "TLAW"))
+    policy = SpoilerPolicy(data)
+    assert policy.width == 6
+    for name in ("KC", "MVK", "TLAW", "TBD"):
+        field = padded_name(name, policy.width)
+        assert len(field) == policy.width
+        assert field.startswith("\xa0") and field.endswith("\xa0")
+    assert padded_name("MVK", policy.width) == "\xa0MVK\xa0\xa0"
+
+
 def test_full_series_score_releases_at_exact_fourteen_hour_boundary():
     end, earlier, data = scenario()
     policy = SpoilerPolicy(data, ended_at={earlier.id: end})
@@ -49,8 +61,8 @@ def test_dependency_connects_unknown_fixture_and_slots_are_independent():
     assert policy.release_at(earlier) == end + timedelta(hours=7)
     assert not policy.participant_protected(future, 1, end)
     assert policy.participant_protected(future, 2, end)
-    assert policy.team("T1", match=future, slot=1, emoji=":t1:", now=end) == ":t1: `\xa0T1\xa0`"
-    assert policy.team("MVK", match=future, slot=2, emoji=":mvk:", now=end) == "||:mvk: `MVK\xa0`||"
+    assert policy.team("T1", match=future, slot=1, emoji=":t1:", now=end) == ":t1: `\xa0\xa0T1\xa0\xa0`"
+    assert policy.team("MVK", match=future, slot=2, emoji=":mvk:", now=end) == "||:mvk: `\xa0MVK\xa0\xa0`||"
     assert not policy.participant_protected(future, 2, end + timedelta(hours=7))
 
 

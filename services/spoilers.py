@@ -211,7 +211,9 @@ class SpoilerPolicy:
         # slot separately: an opponent being unknown never conceals its peer.
         self.dependencies = dependencies or {}
         self.clock = clock or (lambda: datetime.now(UTC))
-        self.width = max([4, *(len(team.short_name) for team in data.teams)])
+        # Reserve a space on each side even for the longest abbreviation.
+        # Otherwise a 3-character name in a 4-character field is flush left.
+        self.width = max([4, *(len(team.short_name) for team in data.teams)]) + 2
 
     def release_at(self, match):
         if match.status != MatchStatus.COMPLETED:

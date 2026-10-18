@@ -483,7 +483,8 @@ fail closed. A newly announced connected fixture can shorten the release deadlin
 
 Team displays use existing custom emoji before centered, fixed-width inline-code
 abbreviations. Centering uses NBSP and places an odd extra space on the right.
-The field width is at least four characters and grows for longer abbreviations.
+The field width is the longest abbreviation (at least four characters) plus two
+spaces, so even the longest tag has a margin on both sides.
 Each protected participant's emoji and padded name share a single spoiler.
 Controls that cannot render spoilers use a centered `?` with the server's
 `beeQuestion` emoji (Unicode question mark fallback if unavailable), preserving
