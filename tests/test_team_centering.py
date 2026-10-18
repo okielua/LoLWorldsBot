@@ -166,7 +166,7 @@ def test_team_selection_menu_and_selected_vote_buttons_keep_same_width(context):
     view = voting.PersonalVoteView(c.manager, c.poll, 7, selected_team="T1")
     buttons = serialize({"view": view})["components"][0]["components"]
     assert buttons[0]["label"] == padded_name("T1", c.policy.width) + " ✓"
-    assert buttons[1]["label"] == padded_name("?", c.policy.width)
+    assert buttons[1]["label"] == "Vote (see spoiler above)"
     assert buttons[1]["emoji"]["name"] == "beeQuestion"
 
 

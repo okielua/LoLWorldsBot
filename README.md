@@ -495,7 +495,7 @@ abbreviations. Centering uses NBSP and places an odd extra space on the right.
 The field width is the longest abbreviation (at least four characters) plus two
 spaces, so even the longest tag has a margin on both sides.
 Each protected participant's emoji and padded name share a single spoiler.
-Controls that cannot render spoilers use a centered `?` with the server's
+Protected vote buttons say **Vote (see spoiler above)** with the server's
 `beeQuestion` emoji (Unicode question mark fallback if unavailable), preserving
 the original vote IDs. Left/right button order matches left/right fixture order.
 Successful private vote confirmations reveal the actual matchup and selected
