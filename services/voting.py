@@ -149,7 +149,7 @@ class ScheduleVoteButton(discord.ui.DynamicItem[discord.ui.Button],
 
 
 class ScheduleVotesView(SetupRequiredLayoutView):
-    def __init__(self, manager, title, context, entries, poll_by_id):
+    def __init__(self, manager, title, context, entries, poll_by_id, *, personal_panel=False):
         super().__init__(timeout=None)
         self.matches = [match for match, _ in entries]
         card = SpacedContainer(accent_colour=discord.Colour(PREDICTION_BLUE))
@@ -158,8 +158,10 @@ class ScheduleVotesView(SetupRequiredLayoutView):
         for index, (match, text) in enumerate(entries):
             card.add_item(team_display((MATCH_GAP if index else "") + text))
             poll = poll_by_id.get(match.id)
-            if poll:
+            if poll and not personal_panel:
                 card.add_item(discord.ui.ActionRow(ScheduleVoteButton(manager, poll, 1), ScheduleVoteButton(manager, poll, 2)))
+        if personal_panel and any(match.id in poll_by_id for match in self.matches):
+            card.add_item(discord.ui.ActionRow(OpenVotePanel(manager.guild_id, manager.store.data.tournament.id)))
         card.add_item(team_display(VOTE_CONFIRMATION_HELP))
 
 
@@ -172,7 +174,7 @@ def current_votes_controls(manager, poll):
     return controls
 
 
-def schedule_vote_payloads(manager, title, context, entries, poll_by_id):
+def schedule_vote_payloads(manager, title, context, entries, poll_by_id, *, personal_panel=False):
     pages, page = [], []
     base_size = len(title) + len(context) + len(VOTE_CONFIRMATION_HELP) + 16
     size = base_size
@@ -180,12 +182,12 @@ def schedule_vote_payloads(manager, title, context, entries, poll_by_id):
         entry = (match, team_text(text))
         length = len(entry[1]) + 4
         if page and (len(page) >= 7 or size + length > 3800):
-            pages.append({"view": ScheduleVotesView(manager, title, context, page, poll_by_id)})
+            pages.append({"view": ScheduleVotesView(manager, title, context, page, poll_by_id, personal_panel=personal_panel)})
             page, size = [], base_size
         page.append(entry)
         size += length
     if page:
-        pages.append({"view": ScheduleVotesView(manager, title, context, page, poll_by_id)})
+        pages.append({"view": ScheduleVotesView(manager, title, context, page, poll_by_id, personal_panel=personal_panel)})
     return pages
 
 
@@ -324,7 +326,6 @@ class DailyPredictionsView(SetupRequiredLayoutView):
             + f"# __{'TEST: ' if manager.test_mode else ''}{title}__\n\n"
             "Here are today's matchups. Voting for each matchup closes 5 minutes before match start.\n\n"
             "First time here? Run `/mysetup` before voting.\n\n"
-            + ("A question-mark button hides a team to avoid spoilers. The left button selects the left team; the right button selects the right team.\n\n" if current_policy() else "")
             + f"## __{date.strftime('%A')}, {date.day} {date.strftime('%B %Y')}__\n"
             + recap
         ))

@@ -1,5 +1,7 @@
 import asyncio
 from dataclasses import replace
+from datetime import timedelta
+from zoneinfo import ZoneInfo
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -9,7 +11,46 @@ import pytest
 from services import polls
 from services.vote_panel import OpenVotePanel, PublicVotersButton
 from services.voting import DailyPredictionsView, personal_vote_payloads
+from services.match_times import TOURNAMENT_TIMEZONE
+from presentation_assertions import rendered_message
 from test_voting import context
+
+
+@pytest.mark.parametrize("receipt", ["today", "other_day", "other_guild", "other_tournament", "suppressed", None])
+def test_today_links_only_its_daily_post_and_never_publishes_or_pings(context, receipt):
+    from test_bot_commands import day_callback
+    from services.vote_panel import OpenVotePanel
+    manager, store, channel, now, _ = context
+    now[0] = store.data.matches[0].start_time - timedelta(hours=1)
+    store.fetched_at = now[0]
+    manager.client.voting_manager = manager
+    day = now[0].astimezone(ZoneInfo(TOURNAMENT_TIMEZONE)).date().isoformat()
+    if receipt:
+        polls.save_daily_post(999 if receipt == "other_guild" else 123,
+                              "other" if receipt == "other_tournament" else store.data.tournament.id,
+                              "2020-01-01" if receipt == "other_day" else day, 456, 987, "unchanged")
+        if receipt == "suppressed":
+            polls.set_daily_post_suppressed(123, store.data.tournament.id, day, True)
+    interaction = SimpleNamespace(guild_id=123, client=manager.client,
+        response=SimpleNamespace(defer=AsyncMock()), followup=SimpleNamespace(send=AsyncMock()))
+
+    async def scenario():
+        await day_callback(store.data, now[0])(interaction, 0)
+        call = interaction.followup.send.call_args
+        text = rendered_message(call).description
+        if receipt == "today":
+            assert "Open today's daily voting post" in text
+            assert "https://discord.com/channels/123/456/987" in text
+        else:
+            assert "No daily voting post has been published for today yet." in text
+            assert "https://discord.com/channels/" not in text
+        assert call.kwargs["ephemeral"] is False
+        assert call.kwargs["allowed_mentions"].to_dict() == {"parse": []}
+        assert any(isinstance(item, OpenVotePanel) for item in call.kwargs["view"].walk_children())
+        channel.send.assert_not_awaited()
+        if receipt == "today":
+            assert polls.get_daily_post(123, store.data.tournament.id, day) == (456, 987, "unchanged")
+    asyncio.run(scenario())
 
 
 def test_public_names_are_sorted_unique_and_never_include_choices(context):

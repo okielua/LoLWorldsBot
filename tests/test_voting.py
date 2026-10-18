@@ -834,7 +834,8 @@ def test_myvotes_buttons_preserve_history_and_paginate_within_discord_limits(con
 def test_today_lookup_publishes_reusable_polls_and_private_vote_confirmations(context):
     from test_bot_commands import day_callback
     from services.polls import get_published_match_ids, get_user_votes
-    from services.voting import ScheduleVoteButton
+    from services.voting import VoteButton, personal_vote_payloads
+    from services.vote_panel import OpenVotePanel
     manager, store, channel, current, _ = context
     current[0] = store.data.matches[0].start_time - timedelta(hours=1)
     store.fetched_at = current[0]
@@ -854,7 +855,10 @@ def test_today_lookup_publishes_reusable_polls_and_private_vote_confirmations(co
         assert "%" not in text and "votes)" not in text
         view = payload["view"]
         assert view.is_persistent() and view.total_children_count <= 40
-        buttons = [item for item in view.walk_children() if isinstance(item, ScheduleVoteButton)]
+        assert sum(isinstance(item, OpenVotePanel) for item in view.walk_children()) == 1
+        available = await manager.personal_vote_targets(7)
+        private = personal_vote_payloads(manager, available, 7, [])
+        buttons = [item for item in private[0]["view"].walk_children() if isinstance(item, VoteButton)]
         assert len(buttons) == 4
         assert len(get_polls(123, store.data.tournament.id)) == 2
         assert get_published_match_ids(123, store.data.tournament.id) == {match.id for match in store.data.matches}

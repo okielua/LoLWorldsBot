@@ -26,6 +26,16 @@ def voter_lines(rows):
     return sorted(names, key=str.casefold)
 
 
+async def daily_post_reference(guild_id, tournament, day):
+    if await asyncio.to_thread(polls.daily_post_suppressed, guild_id, tournament, day):
+        return "No daily voting post has been published for today yet."
+    receipt = await asyncio.to_thread(polls.get_daily_post, guild_id, tournament, day)
+    if receipt is None:
+        return "No daily voting post has been published for today yet."
+    channel_id, message_id, _ = receipt
+    return f"[Open today's daily voting post](https://discord.com/channels/{guild_id}/{channel_id}/{message_id})"
+
+
 class OpenVotePanel(discord.ui.DynamicItem[discord.ui.Button],
                     template=r"worldsvotepanel:(?P<guild>\d+):(?P<tournament>.+)"):
     def __init__(self, guild_id, tournament):

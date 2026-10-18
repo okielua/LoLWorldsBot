@@ -35,7 +35,7 @@ from services.golgg_players import player_catalog, player_reply, refresh_players
 from services.team_history import TeamHistoryView
 from services.match_browser import show_match_games
 from services.vote_history import voter_autocomplete, show_vote_history
-from services.vote_panel import OpenVotePanel, PublicVotersButton
+from services.vote_panel import OpenVotePanel, PublicVotersButton, daily_post_reference
 from services.runtime_config import runtime_config, prepare_seed, remove_development_commands, validate_application
 from services.setup_gate import SetupCommandTree
 from services.spoilers import SpoilerLedger, current_policy, matchup, score_token
@@ -1147,12 +1147,16 @@ async def show_day_schedule(interaction: discord.Interaction, day_offset: int):
     date_label = f"{target_date.strftime('%a')}, {target_date.day} {target_date.strftime('%b %Y')}"
     context = f"__{date_label}__\n\n"
     manager = getattr(getattr(interaction, "client", None), "voting_manager", None)
-    if day_offset == 0 and matches and manager and getattr(interaction, "guild_id", None) == manager.guild_id:
+    deferred = False
+    if day_offset == 0 and manager and getattr(interaction, "guild_id", None) == manager.guild_id:
         await interaction.response.defer(ephemeral=False)
+        deferred = True
+        context += await daily_post_reference(interaction.guild_id, worlds.tournament.id, target_date.isoformat()) + "\n\n"
+    if day_offset == 0 and matches and manager and getattr(interaction, "guild_id", None) == manager.guild_id:
         poll_by_id = await manager.prepare_schedule_polls(matches)
         entries = [(match, format_match(match, timezone_name, include_date=False, now=now, timezones=timezones))
                    for match in matches]
-        for payload in schedule_vote_payloads(manager, title, context, entries, poll_by_id):
+        for payload in schedule_vote_payloads(manager, title, context, entries, poll_by_id, personal_panel=True):
             await interaction.followup.send(**payload, ephemeral=False, allowed_mentions=discord.AllowedMentions.none())
             await manager.acknowledge_schedule_opportunities(payload["view"].matches, poll_by_id)
         return
@@ -1170,13 +1174,13 @@ async def show_day_schedule(interaction: discord.Interaction, day_offset: int):
         if day_offset == 0 and matches:
             description = description.rstrip() + "\n\n" + VOTE_CONFIRMATION_HELP
         embed = discord.Embed(title=title, description=description.rstrip(), colour=PREDICTION_BLUE)
-        if index == 0:
+        if index == 0 and not deferred:
             await interaction.response.send_message(**embed_card_payload(embed), ephemeral=False, allowed_mentions=discord.AllowedMentions.none())
         else:
             await interaction.followup.send(**embed_card_payload(embed), ephemeral=False, allowed_mentions=discord.AllowedMentions.none())
 
 
-@bot.tree.command(name="today", description="Show today's Worlds matches and vote on matchups that are still open.")
+@bot.tree.command(name="today", description="Show today's matches, link the daily voting post, and open your private voting panel.")
 async def today(interaction: discord.Interaction):
     await show_day_schedule(interaction, 0)
 
@@ -1605,7 +1609,7 @@ Open the server’s leaderboard for Riot’s official Pick’ems.
 ## __4. Match and Player Infos__
 
 `/today`
-See today’s matches and vote on matchups while voting is open.
+See today’s matches and a link to today’s daily voting post. Open your private panel to vote or change a pick.
 
 `/tomorrow`
 See tomorrow’s matches in the server’s registered timezones.

@@ -254,11 +254,13 @@ Matches of every status are
 sorted by start time, with live/final scores where available and no poll results.
 Empty days get a public no-matches response. Long days split across public embeds.
 
-`/today` also provides team prediction buttons beneath eligible known matchups,
-with private confirmations and the same five-minute cutoff. Its three small grey
-help lines link to `/vote`, `/votehistory`, and `/leaderboard`. These public
-buttons retain their matchup snapshot across restarts, reject changed pairings
-and late clicks, and reuse existing poll/vote rows. Only acknowledged Discord
+`/today` links to the existing daily voting post for that exact server, tournament,
+and Los Angeles calendar day. Suppressed or absent posts show a clear no-post
+notice; tomorrow's or another server's post is never substituted. The command
+does not publish or ping. It shows a **Vote / Change My Vote** button while
+today's voting is open, opening the private `/vote` panel with green checked
+selections. Its footnotes link to `/vote`, `/votehistory`, and `/leaderboard`.
+It reuses existing poll/vote rows. Only acknowledged Discord
 responses count as published opportunities; failed sends do not. Completed, live,
 unknown-team, and closed matches do not get active voting buttons. Long days split
 within Discord's message/component limits. `/tomorrow` remains informational.

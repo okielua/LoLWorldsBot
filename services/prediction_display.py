@@ -108,15 +108,11 @@ def change_vote_text(match, *, now, selected_team=None, test_mode=False, timezon
     pairing = matchup(match) if current_policy() else discord.utils.escape_markdown(f"{match.team1_id} vs {match.team2_id}")
     remaining = voting_time_remaining(match.start_time - timedelta(minutes=5), now)
     date, time = private_match_details(match.start_time, timezone_name, time_format=time_format)
-    prompt = "Change your vote here." if selected_team else "Select the team you think will win."
-    policy = current_policy()
-    if policy and any(policy.participant_protected(match, slot) for slot in (1, 2)):
-        prompt += " A question-mark button hides a team to avoid spoilers. Left button = left team; right button = right team."
     return (f"## __{title}__\n\n### {pairing}\n"
             f"{date}\n"
             f"-# {time}\n\n"
             f"{VOTING_OPEN}\n"
-            f"-# (Voting closes in {remaining})\n\n{prompt}")
+            f"-# (Voting closes in {remaining})")
 
 
 def hidden_votes_payload(match, *, now=None, stage_name=None, no_votes=False, controls=None):

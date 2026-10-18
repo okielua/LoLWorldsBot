@@ -27,6 +27,7 @@ from services.voting import personal_vote_payloads, schedule_vote_payloads, my_v
 from services.leaderboard_views import leaderboard_payload, leaderboard_context, show_personal_stats
 from services.spoilers import current_policy, matchup, score_token
 from services.match_browser import show_match_games
+from services.vote_panel import daily_post_reference
 from discord import app_commands
 
 
@@ -45,6 +46,7 @@ def load_command(name, worlds, **dependencies):
         "discord": SimpleNamespace(Interaction=object),
         "app_commands": app_commands,
         "show_match_games": show_match_games,
+        "daily_post_reference": daily_post_reference,
         "worlds": worlds,
         "MatchStatus": MatchStatus,
         "timedelta": timedelta,
@@ -987,8 +989,8 @@ def test_vote_command_is_private_and_uses_existing_vote_controls(open_poll, alre
         assert "-# *(Voting closes in 2 hours and 15 minutes)*" in rendered_message(call).description
         assert "UPCOMING" not in rendered_message(call).description
         if already_voted:
-            assert "Change your vote here." in rendered_message(call).description
-            assert "-# Change your vote here." not in rendered_message(call).description
+            assert "Change your vote here." not in rendered_message(call).description
+            assert "question-mark button" not in rendered_message(call).description
             assert "-# 🗳️ Voting open" not in rendered_message(call).description
             assert buttons[0].style == discord.ButtonStyle.success
             assert buttons[1].style == discord.ButtonStyle.primary
