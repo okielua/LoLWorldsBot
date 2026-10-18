@@ -38,9 +38,17 @@ class VoteButton(discord.ui.Button):
         self.manager, self.poll = manager, poll
         self.team_id = poll.team1_id if index == 1 else poll.team2_id
         super().__init__(
-            label=team_token(self.team_id, poll.match_id, index), emoji=team_emoji(self.team_id), style=discord.ButtonStyle.primary, disabled=poll.closed,
+            label=self.team_label(), emoji=team_emoji(self.team_id), style=discord.ButtonStyle.primary, disabled=poll.closed,
             custom_id=f"worldsvote:{poll.guild_id}:{poll.match_id}:{index}",
         )
+
+    def team_label(self):
+        # Simulated fixtures are separate from the live spoiler ledger. Their
+        # announced participants are visible, so their controls must agree.
+        if getattr(self.manager, "test_mode", False):
+            return team_token(self.team_id)
+        slot = 1 if self.team_id == self.poll.team1_id else 2
+        return team_token(self.team_id, self.poll.match_id, slot)
 
     async def callback(self, interaction):
         if interaction.guild_id != self.poll.guild_id or self.poll.guild_id != self.manager.guild_id:
@@ -103,8 +111,7 @@ class PersonalVoteView(SetupRequiredView):
         self.add_item(VoteButton(manager, poll, 2))
         for button in self.children:
             if button.team_id == selected_team:
-                slot = 1 if button.team_id == button.poll.team1_id else 2
-                button.label = f"{team_token(button.team_id, button.poll.match_id, slot)} ✓"
+                button.label = f"{button.team_label()} ✓"
                 button.style = discord.ButtonStyle.success
 
     async def interaction_check(self, interaction):
@@ -197,8 +204,7 @@ class PersonalVotesView(SetupRequiredLayoutView):
         for item in self.walk_children():
             if isinstance(item, VoteButton) and item.poll.match_id == match_id:
                 selected = item.team_id == team_id
-                slot = 1 if item.team_id == item.poll.team1_id else 2
-                item.label = team_token(item.team_id, item.poll.match_id, slot) + (" ✓" if selected else "")
+                item.label = item.team_label() + (" ✓" if selected else "")
                 item.style = discord.ButtonStyle.success if selected else discord.ButtonStyle.primary
 
     async def interaction_check(self, interaction):

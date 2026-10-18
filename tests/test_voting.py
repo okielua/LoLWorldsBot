@@ -297,6 +297,38 @@ def test_daily_prediction_test_never_pings_worlds_role(context):
     assert call.kwargs["allowed_mentions"].to_dict()["parse"] == []
 
 
+def test_simulated_daily_buttons_show_the_visible_team_names(context, monkeypatch):
+    from services import spoilers
+    from services.spoiler_delivery import render_payload
+    from services.spoilers import SpoilerPolicy
+    from services.voting import PersonalVoteView
+    manager, store, channel, current, _ = context
+    live_data = store.data
+    monkeypatch.setattr(spoilers, "_current", SpoilerPolicy(live_data, clock=lambda: current[0]))
+    store.data = replace(live_data, matches=[
+        replace(match, id=f"prediction-test:example:{index}")
+        for index, match in enumerate(live_data.matches[:2])
+    ])
+    manager.test_mode = True
+
+    async def scenario():
+        await manager.tick()
+        view = channel.send.call_args.kwargs["view"]
+        result = render_payload({"components": view.to_components()})
+        assert "[see spoiler]" not in str(result)
+        assert "⟦" not in str(result)
+        buttons = [child for child in view.walk_children() if isinstance(child, discord.ui.Button)]
+        for button in buttons:
+            rendered = render_payload({"components": [button.to_component_dict()]})["components"][0]
+            assert rendered["label"].strip("\xa0") == button.team_id
+        poll = get_polls(123, store.data.tournament.id)[0]
+        selected = PersonalVoteView(manager, poll, 7, selected_team=poll.team1_id)
+        result = render_payload({"components": selected.to_components()})
+        assert "[see spoiler]" not in str(result)
+        assert "✓" in str(result)
+    asyncio.run(scenario())
+
+
 def test_daily_post_pings_matching_followers_once_and_excludes_role_members(context):
     manager, store, channel, current, _ = context
     set_worlds_role(123, 987)
