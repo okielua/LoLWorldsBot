@@ -140,7 +140,9 @@ class ServerReminderDelivery:
                     return False
                 minutes = ceil(remaining / 60)
                 timing = "less than a minute" if remaining < 60 else f"{minutes} minute{'s' if minutes != 1 else ''}"
-                content = f"## {team1} vs {team2}\n\n*Starts in {timing}!*"
+                from services.spoilers import current_policy, matchup
+                pairing = matchup(match) if current_policy() else f"{team1} vs {team2}"
+                content = f"## {pairing}\n\n*Starts in {timing}!*"
                 stage = data.stages_by_id.get(match.stage_id)
                 stage_name = discord.utils.escape_markdown(stage.name if stage else "Stage to Be Confirmed")
                 content += f"\n-# *({stage_name} · Bo{match.best_of})*"

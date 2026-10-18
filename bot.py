@@ -36,6 +36,9 @@ from services.team_history import TeamHistoryView
 from services.vote_history import voter_autocomplete, show_vote_history
 from services.runtime_config import runtime_config, prepare_seed, remove_development_commands, validate_application
 from services.setup_gate import SetupCommandTree
+from services.spoilers import SpoilerLedger, current_policy, matchup, score_token
+from services.spoiler_delivery import SpoilerDelivery
+from services.user_settings import get_connection
 from services.user_settings import mark_setup_completed
 from services.reminder_scheduler import check_reminders
 from services.reminder_engine import (
@@ -246,9 +249,13 @@ def format_match(
         times = "\n".join(f"-# {line}" for line in times.splitlines())
     countdown = f"-# {relative_time.strip()}\n" if relative_time else ""
     date_detail = f"-# {local_date} · Bo{match.best_of}\n" if include_date and not date_as_heading else ""
-    parts.append(f"## {team1.short_name} vs {team2.short_name}\n{date_detail}{countdown}{times}")
+    pairing = matchup(match) if current_policy() else f"{team1.short_name} vs {team2.short_name}"
+    parts.append(f"## {pairing}\n{date_detail}{countdown}{times}")
 
     if match.status == MatchStatus.COMPLETED:
+        if current_policy():
+            parts.append(f"{MATCH_STATUS_LABELS[match.status]}\n### Result: {score_token(match)}")
+            return "\n".join(parts)
         if match.team1_score is not None and match.team2_score is not None:
             first = f"**__{team1.short_name}__**" if match.winner_id == match.team1_id else f"**{team1.short_name}**"
             second = f"**__{team2.short_name}__**" if match.winner_id == match.team2_id else f"**{team2.short_name}**"
@@ -262,6 +269,9 @@ def format_match(
         parts.append(f"{MATCH_STATUS_LABELS[match.status]}\n### Result: {result}")
 
     elif match.status.value == "live":
+        if current_policy():
+            parts.append(MATCH_STATUS_LABELS[match.status] + " · Scores hidden until the series finishes")
+            return "\n".join(parts)
         if match.team1_score is not None and match.team2_score is not None:
             result = (
                 f"{team1.short_name} "
@@ -329,7 +339,7 @@ def format_next_match(match, timezone_name: str, now: datetime, timezones=None) 
     return (
         f"# __Next Worlds Match:__\n"
         f"-# {stage_details} (Bo{match.best_of})\n"
-        f"## {team1.short_name} vs {team2.short_name}\n\n"
+        f"## {matchup(match) if current_policy() else f'{team1.short_name} vs {team2.short_name}'}\n\n"
         f"{date_time_label}"
     )
 
@@ -419,6 +429,8 @@ class WorldsBot(discord.Client):
     def publish_tournament_data(self, data):
         global worlds
         worlds = data
+        if getattr(self, "spoiler_ledger", None):
+            self.spoiler_ledger.observe(data)
         guild = self.get_guild(GUILD_ID)
         if guild:
             configure_team_emojis(guild.emojis, data.teams)
@@ -428,6 +440,11 @@ class WorldsBot(discord.Client):
         validate_application(self.user.id)
         await tournament_store.refresh()
         worlds = tournament_store.data
+        self.spoiler_ledger = SpoilerLedger(get_connection)
+        self.spoiler_ledger.observe(worlds)
+        self.spoiler_delivery = SpoilerDelivery(self, get_connection)
+        self.spoiler_delivery.install()
+        self.spoiler_task = asyncio.create_task(self.spoiler_delivery.run(), name="spoiler-release")
         if tournament_store.last_error:
             logger.warning(
                 "Using %s tournament data (last successful fetch: %s)",
@@ -450,6 +467,12 @@ class WorldsBot(discord.Client):
         self.player_refresh_task = asyncio.create_task(refresh_players_loop(worlds.tournament.year), name="golgg-players")
 
     async def close(self):
+        spoiler_task = getattr(self, "spoiler_task", None)
+        if spoiler_task:
+            spoiler_task.cancel()
+            await asyncio.gather(spoiler_task, return_exceptions=True)
+        if getattr(self, "spoiler_delivery", None):
+            self.spoiler_delivery.uninstall()
         task = getattr(self, "player_refresh_task", None)
         if task:
             task.cancel()
@@ -892,6 +915,7 @@ async def team_autocomplete(
     interaction: discord.Interaction,
     current: str,
 ):
+    from services.spoilers import padded_name, current_policy
     current = current.lower()
 
     matches = [
@@ -903,7 +927,8 @@ async def team_autocomplete(
 
     return [
         app_commands.Choice(
-            name=(f"{team.name} " f"({team.short_name})"),
+            name=(padded_name(team.short_name, current_policy().width) if current_policy()
+                  else f"{team.name} ({team.short_name})"),
             value=team.id,
         )
         for team in matches[:25]
@@ -1126,7 +1151,7 @@ async def next_match_command(
     await interaction.response.send_message(**message_payload(message))
 
 
-@bot.tree.command(name="previous", description="Show the last two completed Worlds matches with spoiler-hidden results.")
+@bot.tree.command(name="previous", description="Show the last two completed Worlds matches with timed spoiler protection.")
 async def previous(interaction: discord.Interaction):
     now = datetime.now(UTC)
     matches = get_previous_matches(worlds, now)
@@ -1143,7 +1168,7 @@ async def previous(interaction: discord.Interaction):
             last_date = match_date
         lines.append(format_match(match, TOURNAMENT_TIMEZONE, include_date=False, now=now,
                                   timezones=timezones, hide_result=True, small_details=False))
-    lines.append("-# • Results are hidden. Click a spoiler to reveal the result.")
+    lines.append("-# • Recent results use timed spoiler protection. Click a spoiler to reveal it early.")
     await send_long_message(interaction, "# __Previous Worlds Matches__", lines)
 
 
@@ -1608,7 +1633,7 @@ See tomorrow’s matches in the server’s registered timezones.
 See the next Worlds match.
 
 `/previous`
-See the last two completed matches, with results hidden behind spoilers.
+See the last two completed matches, with timed spoiler protection for recent results.
 
 `/schedule`
 Browse the next five matches or view the schedule for a tournament stage.

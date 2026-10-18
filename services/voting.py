@@ -25,6 +25,7 @@ from services.user_settings import get_all_user_reminder_preferences
 from services.reminder_engine import get_server_ping_user_ids
 from services.worlds_role import individual_subscribers
 from services.setup_gate import require_setup, SetupRequiredView, SetupRequiredLayoutView
+from services.spoilers import current_policy, matchup, team_token, aggregate_token
 
 logger = logging.getLogger(__name__)
 MATCHDAY_ZONE = ZoneInfo(TOURNAMENT_TIMEZONE)
@@ -37,7 +38,7 @@ class VoteButton(discord.ui.Button):
         self.manager, self.poll = manager, poll
         self.team_id = poll.team1_id if index == 1 else poll.team2_id
         super().__init__(
-            label=self.team_id, emoji=team_emoji(self.team_id), style=discord.ButtonStyle.primary, disabled=poll.closed,
+            label=team_token(self.team_id, poll.match_id, index), emoji=team_emoji(self.team_id), style=discord.ButtonStyle.primary, disabled=poll.closed,
             custom_id=f"worldsvote:{poll.guild_id}:{poll.match_id}:{index}",
         )
 
@@ -69,6 +70,10 @@ class VoteButton(discord.ui.Button):
                 f"Your prediction for **{team1}** vs **{team2}** on {date} ({stage_name}):\n"
                 f"## {team}"
             )
+            if current_policy():
+                slot = 1 if self.team_id == self.poll.team1_id else 2
+                text = (f"Your prediction for {matchup(match)} on {date} ({stage_name}):\n"
+                        f"## {team_token(self.team_id, self.poll.match_id, slot, neutral=True)}")
             saved = True
         except ValueError as error:
             text = str(error)
@@ -96,7 +101,8 @@ class PersonalVoteView(SetupRequiredView):
         self.add_item(VoteButton(manager, poll, 2))
         for button in self.children:
             if button.team_id == selected_team:
-                button.label = f"{button.team_id} ✓"
+                slot = 1 if button.team_id == button.poll.team1_id else 2
+                button.label = f"{team_token(button.team_id, button.poll.match_id, slot)} ✓"
                 button.style = discord.ButtonStyle.success
 
     async def interaction_check(self, interaction):
@@ -189,7 +195,8 @@ class PersonalVotesView(SetupRequiredLayoutView):
         for item in self.walk_children():
             if isinstance(item, VoteButton) and item.poll.match_id == match_id:
                 selected = item.team_id == team_id
-                item.label = item.team_id + (" ✓" if selected else "")
+                slot = 1 if item.team_id == item.poll.team1_id else 2
+                item.label = team_token(item.team_id, item.poll.match_id, slot) + (" ✓" if selected else "")
                 item.style = discord.ButtonStyle.success if selected else discord.ButtonStyle.primary
 
     async def interaction_check(self, interaction):
@@ -232,7 +239,11 @@ class MyVotesView(PersonalVotesView):
             text = self.pick_texts[match_id]
             lines = [line for line in text.content.splitlines() if not line.startswith("Your pick:")]
             position = next((i for i, line in enumerate(lines) if line.startswith("-#") and "(Voting closes" in line), len(lines))
-            lines.insert(position, f"Your pick: **{discord.utils.escape_markdown(team_id)}**")
+            policy = current_policy()
+            match = policy.data.matches_by_id.get(match_id) if policy else None
+            slot = 1 if match and team_id == match.team1_id else 2
+            label = team_token(team_id, match_id, slot) if policy else discord.utils.escape_markdown(team_id)
+            lines.insert(position, f"Your pick: **{label}**")
             text.content = team_text("\n".join(lines))
 
 
@@ -299,7 +310,8 @@ class DailyPredictionsView(SetupRequiredLayoutView):
             + f"# __{'TEST: ' if manager.test_mode else ''}{title}__\n\n"
             "Here are today's matchups. Voting for each matchup closes 5 minutes before match start.\n\n"
             "First time here? Run `/mysetup` before voting.\n\n"
-            f"## __{date.strftime('%A')}, {date.day} {date.strftime('%B %Y')}__\n"
+            + ("A question-mark button hides a team to avoid spoilers. The left button selects the left team; the right button selects the right team.\n\n" if current_policy() else "")
+            + f"## __{date.strftime('%A')}, {date.day} {date.strftime('%B %Y')}__\n"
             + recap
         ))
         for match_index, match in enumerate(matches):
@@ -327,10 +339,10 @@ class DailyPredictionsView(SetupRequiredLayoutView):
             stage_label = discord.utils.escape_markdown(" · ".join(details))
             # An invisible line preserves whitespace without adding components:
             # eight-match days must still fit Discord's 40-component limit.
-            gap = "\u200b\n\n" if match_index else ""
+            gap = (("" if current_policy() else "\u200b") + "\n\n") if match_index else ""
             times = "\n".join(f"-# {line}" for line in registered_match_times(match.start_time, timezones).splitlines())
             card.add_item(team_display(
-                f"{gap}{stage_label}\n## {match.team1_id} vs {match.team2_id}\n"
+                f"{gap}{stage_label}\n## {matchup(match)}\n"
                 f"{times}\n{status}"
             ))
             card.add_item(discord.ui.ActionRow(VoteButton(manager, poll, 1), VoteButton(manager, poll, 2)))
@@ -356,7 +368,10 @@ class VotingManager:
         users = await asyncio.to_thread(get_all_user_reminder_preferences)
         recipients = set()
         for match in matches:
-            recipients.update(get_server_ping_user_ids(users, match.team1_id, match.team2_id))
+            policy = current_policy()
+            first = match.team1_id if not policy or not policy.participant_protected(match, 1) else "TBD"
+            second = match.team2_id if not policy or not policy.participant_protected(match, 2) else "TBD"
+            recipients.update(get_server_ping_user_ids(users, first, second))
         return await individual_subscribers(channel.guild, recipients, role_id)
 
     async def _notify_new_pairings(self, channel_id, message_id, matches, poll_by_id, enabled, exclude_role_id=None):
@@ -376,7 +391,7 @@ class VotingManager:
         validate_reminder_channel(channel, self.guild_id)
         recipients = await self._followers(channel, pending, exclude_role_id)
         if recipients:
-            matchups = "\n".join(f"### {match.team1_id} vs {match.team2_id}" for match in pending)
+            matchups = "\n".join(f"### {matchup(match)}" for match in pending)
             link = f"https://discord.com/channels/{self.guild_id}/{channel_id}/{message_id}"
             for offset in range(0, len(recipients), 90):
                 group = recipients[offset:offset + 90]
@@ -553,6 +568,7 @@ class VotingManager:
                 row = mvps[0]  # Joint winners have the same correct/submitted ratio.
                 recap += (f"{', '.join(winners)}: {row.correct}/{row.submitted} correct · {float(row.accuracy):.1%} accuracy\n"
                           f"-# {row.submitted}/{row.eligible} matches predicted · {float(row.participation):.1%} participation\n")
+                recap = aggregate_token(recap)
             role_id = settings.worlds_role_id if not self.test_mode else None
             view = DailyPredictionsView(self, day, matches, poll_by_id, recap, role_id=role_id)
             signature = hashlib.sha256(json.dumps(view.to_components(), sort_keys=True).encode()).hexdigest()

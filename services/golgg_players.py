@@ -21,13 +21,17 @@ def player_catalog(year, query=""):
 
 
 async def refresh_players(year):
+    from services.spoilers import current_policy
     names = [f"Worlds {year} Main Event", f"Worlds {year} Play-In"]
     tables = await asyncio.gather(*(fetch_table(name, year, kind="players") for name in names))
     catalog = _catalogs.setdefault(year, {})
     for rows in tables:
         for values, url in rows or []:
             player_id = re.search(r"/player-stats/(\d+)/", url)
-            if player_id:
+            policy = current_policy()
+            safe_catalog_update = policy is None or not any(policy.protected(match) for match in policy.data.matches
+                                                            if match.status.value in {"live", "completed"})
+            if player_id and (player_id.group(1) in catalog or safe_catalog_update):
                 catalog[player_id.group(1)] = values["Player"]
     return list(zip(names, tables))
 
@@ -39,6 +43,7 @@ async def refresh_players_loop(year):
 
 
 async def player_reply(query, year):
+    from services.spoilers import aggregate_token
     if not query or not query.strip():
         return "Choose a player using the required name option."
     tables = await refresh_players(year)
@@ -72,4 +77,4 @@ async def player_reply(query, year):
         url = (f"https://gol.gg/players/player-stats/{player_id}/season-ALL/split-ALL/"
                f"tournament-{quote(f'Worlds {year} Main Event', safe='')}/")
         blocks.append(f"{message}\n[View This Player’s Worlds Stats on gol.gg](<{url}>)")
-    return "\n\n".join(blocks) + "\n\n" + GOLGG_FOOTNOTES
+    return blocks[0] + "\n\n" + aggregate_token("\n\n".join(blocks[1:])) + "\n\n" + GOLGG_FOOTNOTES

@@ -11,6 +11,7 @@ from services.match_times import format_tournament_date, private_match_details
 from services.presentation import message_payload
 from services.status_labels import (MATCH_STATUS_LABELS, MATCHUP_CHANGED, VOTING_CLOSED, VOTING_OPEN, VOTING_PENDING)
 from services.setup_gate import SetupRequiredLayoutView
+from services.spoilers import current_policy, matchup, score_token, team_token, result_token
 
 
 PREDICTION_BLUE = 0x5865F2
@@ -57,7 +58,8 @@ def format_prediction_results(match, votes):
         voters = [(uid, name) for uid, selected, name in votes if selected == team_id]
         percentage = first_percentage if index == 0 else (100 - first_percentage if total else 0)
         names = [discord.utils.escape_mentions("@" + discord.utils.escape_markdown(" ".join((name or f"User {uid}").split()))) for uid, name in voters]
-        lines.append(f"**{team_id}**: {percentage}% ({len(voters)} vote{'s' if len(voters) != 1 else ''})")
+        label = team_token(team_id, getattr(match, "id", None), index + 1) if current_policy() else team_id
+        lines.append(f"**{label}**: {percentage}% ({len(voters)} vote{'s' if len(voters) != 1 else ''})")
         lines.append(", ".join(names) if names else "\u200b")
     return "\n".join(lines)
 
@@ -73,11 +75,15 @@ def upcoming_votes_embed(match, votes, *, stage_name=None):
     embed = results_embed(format_prediction_results(match, votes), include_help=False)
     details = votes_match_details(match, stage_name)
     embed.description = details + (f"\n\n{embed.description}" if embed.description else "")
-    matchup = discord.utils.escape_markdown(f"{match.team1_id} vs {match.team2_id}")
-    embed.title = team_text(f"__Votes: {matchup}__")
+    pairing = matchup(match) if current_policy() else discord.utils.escape_markdown(f"{match.team1_id} vs {match.team2_id}")
+    embed.title = team_text(f"__Votes: {pairing}__")
     status = MATCH_STATUS_LABELS[match.status]
     if match.status in {MatchStatus.LIVE, MatchStatus.COMPLETED} and match.team1_score is not None and match.team2_score is not None:
-        status += f" · ||{match.team1_score}–{match.team2_score}||"
+        if current_policy():
+            if match.status == MatchStatus.COMPLETED:
+                status += f" · {score_token(match)}"
+        else:
+            status += f" · ||{match.team1_score}–{match.team2_score}||"
     embed.add_field(name="\u200b", inline=False,
                     value=status)
     embed.add_field(name="\u200b", value=VOTING_FOOTER, inline=False)
@@ -99,11 +105,14 @@ def change_vote_text(match, *, now, selected_team=None, test_mode=False, timezon
     title = "Your Currently Active Predictions"
     if test_mode:
         title = "TEST: " + title
-    matchup = discord.utils.escape_markdown(f"{match.team1_id} vs {match.team2_id}")
+    pairing = matchup(match) if current_policy() else discord.utils.escape_markdown(f"{match.team1_id} vs {match.team2_id}")
     remaining = voting_time_remaining(match.start_time - timedelta(minutes=5), now)
     date, time = private_match_details(match.start_time, timezone_name, time_format=time_format)
     prompt = "Change your vote here." if selected_team else "Select the team you think will win."
-    return (f"## __{title}__\n\n### {matchup}\n"
+    policy = current_policy()
+    if policy and any(policy.participant_protected(match, slot) for slot in (1, 2)):
+        prompt += " A question-mark button hides a team to avoid spoilers. Left button = left team; right button = right team."
+    return (f"## __{title}__\n\n### {pairing}\n"
             f"{date}\n"
             f"-# {time}\n\n"
             f"{VOTING_OPEN}\n"
@@ -113,8 +122,8 @@ def change_vote_text(match, *, now, selected_team=None, test_mode=False, timezon
 def hidden_votes_payload(match, *, now=None, stage_name=None, no_votes=False, controls=None):
     now = now or datetime.now(UTC)
     deadline = match.start_time - timedelta(minutes=5)
-    matchup = discord.utils.escape_markdown(f"{match.team1_id} vs {match.team2_id}")
-    header = f"## __Votes: {matchup}__\n\n{votes_match_details(match, stage_name)}\n\n"
+    pairing = matchup(match) if current_policy() else discord.utils.escape_markdown(f"{match.team1_id} vs {match.team2_id}")
+    header = f"## __Votes: {pairing}__\n\n{votes_match_details(match, stage_name)}\n\n"
     if match.status == MatchStatus.SCHEDULED and now < deadline:
         if "TBD" in {match.team1_id, match.team2_id}:
             return message_payload(header + f"**{VOTING_PENDING}**")
@@ -243,6 +252,17 @@ def my_votes_embeds(rows, data, *, now=None, display_name=None, timezone_name=No
                     result = f"-# (Voting closes in {duration})"
             label = discord.utils.escape_markdown(f"{poll.team1_id} vs {poll.team2_id}")
             pick = discord.utils.escape_markdown(chosen) if chosen is not None else None
+            if current_policy():
+                label = matchup(poll)
+                if chosen is not None:
+                    slot = 1 if chosen == poll.team1_id else 2
+                    pick = team_token(chosen, poll.match_id, slot)
+                if poll.winner_id:
+                    # Correctness and its emoji must share the result window;
+                    # winner emphasis never surrounds either team name.
+                    correct = chosen == poll.winner_id
+                    outcome = " " + result_token(match, f"({'Correct' if correct else 'Incorrect'} {emojis['correct' if correct else 'incorrect']})") if match else ""
+                    result = f"Result: {score_token(match)}" if match else "Result unavailable"
             date, time = private_match_details(poll.start_time, timezone_name, time_format=time_format)
             stage = data.stages_by_id.get(match.stage_id) if match else None
             stage_name = stage.name if stage else "Stage to be confirmed"

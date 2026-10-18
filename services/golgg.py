@@ -158,6 +158,7 @@ def format_stat_groups(values, groups):
 
 
 async def team_stats_text(team, year):
+    from services.spoilers import aggregate_token
     names = [f"Worlds {year} Main Event", f"Worlds {year} Play-In"]
     tables = await asyncio.gather(*(fetch_table(name, year) for name in names))
     blocks = []
@@ -182,4 +183,4 @@ async def team_stats_text(team, year):
         else:
             text += f"\n[Browse Worlds Team Stats on gol.gg](<{BASE}list/season-ALL/split-ALL/tournament-{quote(names[0], safe='')}/>)"
         blocks.append(text)
-    return "\n\n".join(blocks)
+    return aggregate_token("\n\n".join(blocks))

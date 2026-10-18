@@ -17,6 +17,8 @@ def get_matches_for_team(
     data: TournamentData,
     team_id: str,
 ) -> list[Match]:
+    from services.spoilers import current_policy
+    policy = current_policy()
     return [
         match
         for match in data.matches
@@ -24,6 +26,7 @@ def get_matches_for_team(
             match.team1_id,
             match.team2_id,
         }
+        and not (policy and policy.participant_protected(match, 1 if match.team1_id == team_id else 2))
     ]
 
 

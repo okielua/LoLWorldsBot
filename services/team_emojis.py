@@ -61,6 +61,16 @@ def custom_emoji(name):
 
 def team_text(text):
     """Decorate visible team names without changing IDs, URLs, or spoilers."""
+    from services.spoilers import current_policy, team_token
+    policy = current_policy()
+    if policy is not None:
+        aliases = {alias: team.id for team in policy.data.teams
+                   for alias in (team.id, team.short_name, team.name)}
+        names = "|".join(re.escape(alias) for alias in sorted(aliases, key=len, reverse=True))
+        pattern = re.compile(r"(?P<skip>⟦[^⟧]*⟧|https?://\S+|`[^`]*`|<@[^>]+>|@\w+)|"
+                             r"(?:<a?:\w+:\d+>\s*)?(?:\*\*|__)*(?<![A-Za-z0-9:])"
+                             r"(?P<name>" + names + r")(?![A-Za-z0-9:])(?:\*\*|__)*")
+        return pattern.sub(lambda found: found[0] if found["skip"] else team_token(aliases[found["name"]]), text)
     if _pattern is None:
         return text
 
@@ -106,7 +116,8 @@ def team_display(text):
     if text.startswith("-# • "):
         # Discord trims leading blank lines. Preserve a gap when this text block
         # follows buttons or another component without using extra components.
-        text = "\u200b\n\n" + text
+        from services.spoilers import current_policy
+        text = ("" if current_policy() else "\u200b") + "\n\n" + text
     return discord.ui.TextDisplay(text)
 
 

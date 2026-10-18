@@ -265,7 +265,7 @@ within Discord's message/component limits. `/tomorrow` remains informational.
 
 `/previous` publicly shows the two most recent completed series, newest first,
 using the same Riot-date and city-time styling. Scores and winner-only results
-are wrapped in Discord spoiler tags; matchups, times and stage labels stay visible.
+use the global timed spoiler policy described below; times and stage labels stay visible.
 Live, scheduled, postponed and cancelled matches are excluded. Fewer than two
 completed matches are handled without inventing results. Recency follows start
 time because the source model does not provide exact match-end timestamps.
@@ -458,9 +458,57 @@ no user selector and includes open picks without exposing anyone else's votes.
 Underlined matchups are grouped under Past Games, Ongoing Games when applicable,
 and Upcoming Games. A completed prediction shows its spoilered correct/incorrect
 label beside the user's pick, using the server's KingPeepo or peepoSad emoji when
-available. Each match includes its stage and best-of format. Results remain spoilered;
-the winning team is bold and underlined, while the score and other team are bold.
+available. Each match includes its stage and best-of format. Result spoilers expire
+under the global policy; neither team receives result-revealing winner emphasis.
 Each card ends with the shared three-line prediction help in muted subtext.
+
+### Global spoiler policy
+
+The production renderer applies the same policy to public replies, private
+replies, reminders, voting cards, histories, standings and prediction statistics.
+Live scores are omitted entirely. Completed series scores, winner/correctness
+information and affected aggregates are spoiler-tagged until the earlier of
+14 hours after completion or 2 hours before the earliest known connected series.
+Connections include either team's next fixture and recorded participant-slot
+prerequisites. Without a known connection, the 14-hour deadline applies.
+
+The schedule API has no trustworthy end timestamp or explicit bracket graph.
+`spoiler_ends` therefore persists the first observed completion time, reusing
+existing `result_observed_at` timestamps when available. This intentionally errs
+on the side of keeping results protected longer after downtime. `spoiler_slots`
+tracks each participant independently. Newly disclosed participants inherit their
+most recent preceding completed series as a prerequisite; slots already known
+before that completion stay independently visible. Unknown prerequisite results
+fail closed. A newly announced connected fixture can shorten the release deadline.
+
+Team displays use existing custom emoji before centered, fixed-width inline-code
+abbreviations. Centering uses NBSP and places an odd extra space on the right.
+The field width is at least four characters and grows for longer abbreviations.
+Each protected participant's emoji and padded name share a single spoiler.
+Controls that cannot render spoilers use a centered `?` with the server's
+`beeQuestion` emoji (Unicode question mark fallback if unavailable), preserving
+the original vote IDs. Left/right button order matches left/right fixture order.
+Confirmations use the same neutral placeholder. Other independently known teams,
+dates, start times, stage labels and series formats remain visible.
+
+Swiss rows use alphabetical order, with affected records concealed. Prediction
+rankings and advanced aggregates conceal the complete affected body, including
+names/rank order, rather than exposing a winner through ordering or highlighting.
+Gol.gg aggregates are protected too; aggregate details are withheld while a series
+is live. Team-filtered history omits a future fixture if the queried team's very
+presence would be a spoiler. Targeted follower mentions also exclude hidden
+participants so the recipient list cannot disclose an unannounced team.
+
+`spoiler_messages` stores non-ephemeral draft content/components, not interaction
+tokens. A 15-second release worker silently edits existing messages through the
+bot's channel API; it neither reposts nor pings. Tracking and completion times
+survive restarts. A one-time migration adopts editable bot messages from the
+preceding 24 hours, including old daily cards; inaccessible channels are logged.
+Old ephemeral replies cannot be recovered or reliably edited after token expiry:
+users rerun the command to refresh them. Existing historical messages outside
+that migration window are not rewritten. The Discord REST and interaction-webhook
+guards are covered against the pinned discord.py version; keep these transport
+tests when upgrading the library.
 Missing custom emojis retain their
 named shortcode instead of substituting a different emoji.
 Long histories are split across private cards. Voting results on reminders

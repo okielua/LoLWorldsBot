@@ -25,6 +25,7 @@ from services.presentation import embed_card_payload, message_payload
 from services.prediction_display import VOTE_CONFIRMATION_HELP, group_voting_messages
 from services.voting import personal_vote_payloads, schedule_vote_payloads, my_vote_payloads, current_votes_controls
 from services.leaderboard_views import leaderboard_payload, leaderboard_context, show_personal_stats
+from services.spoilers import current_policy, matchup, score_token
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -67,6 +68,9 @@ def load_command(name, worlds, **dependencies):
         "leaderboard_payload": leaderboard_payload,
         "leaderboard_context": leaderboard_context,
         "show_personal_stats": show_personal_stats,
+        "current_policy": current_policy,
+        "matchup": matchup,
+        "score_token": score_token,
         "embed_card_payload": embed_card_payload,
     }
     namespace.update(dependencies)
@@ -229,6 +233,7 @@ def load_formatters(worlds):
         "format_timezone_times": format_timezone_times,
         "format_clock_time": format_clock_time,
         "TOURNAMENT_TIMEZONE": TOURNAMENT_TIMEZONE,
+        "current_policy": current_policy, "matchup": matchup, "score_token": score_token,
     }
     exec(compile(ast.Module(body=functions, type_ignores=[]), "bot.py", "exec"), namespace)
     return namespace

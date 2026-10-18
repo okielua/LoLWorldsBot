@@ -5,6 +5,7 @@ import discord
 from services.prediction_stats import PredictionStats, AdvancedPredictionStats, competition_ranks
 from services.team_emojis import team_text, custom_emoji
 from services.footnotes import format_footnotes
+from services.spoilers import aggregate_token
 
 
 ACCENT = 0x5865F2
@@ -59,10 +60,10 @@ def leaderboard_embeds(entries, *, previous=None, preview=False):
     pages, body = [], prefix
     for block in blocks or ["No results yet. The standings update as matches finish."]:
         if len(body) + len(block) + len(LEADERBOARD_HELP) + 4 > 3700:
-            pages.append(discord.Embed(title=title, description=body.rstrip() + "\n\n" + LEADERBOARD_HELP, colour=ACCENT))
+            pages.append(discord.Embed(title=title, description=aggregate_token(body.rstrip()) + "\n\n" + LEADERBOARD_HELP, colour=ACCENT))
             body = prefix
         body += format_footnotes(block) + "\n\n"
-    pages.append(discord.Embed(title=title, description=body.rstrip() + "\n\n" + LEADERBOARD_HELP, colour=ACCENT))
+    pages.append(discord.Embed(title=title, description=aggregate_token(body.rstrip()) + "\n\n" + LEADERBOARD_HELP, colour=ACCENT))
     return pages
 
 
@@ -115,7 +116,7 @@ def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous
         + "-# How often I predict correctly when fewer than half the voters on Communism back my chosen team. Evenly split votes don’t count.\n\n"
         f"{minority}"
     )
-    return discord.Embed(title=title, description=format_footnotes(body), colour=ACCENT)
+    return discord.Embed(title=title, description=aggregate_token(format_footnotes(body)), colour=ACCENT)
 
 
 def sample_leaderboard_entries(display_name):
