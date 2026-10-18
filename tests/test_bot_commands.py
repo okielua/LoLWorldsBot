@@ -489,8 +489,9 @@ def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeyp
         call = reply.response.send_message.call_args
         text = rendered_message(call).description
         assert rendered_message(call).title == "__Worlds Bot: List of all Commands__"
-        for category in ("Setup", "Matches and Results", "Voting", "Leaderboards"):
-            assert f"## __{category}__" in text
+        headings = [f"## __{index}. {category}__" for index, category in enumerate(
+            ("Setup", "Voting", "Leaderboards", "Match and Player Infos"), 1)]
+        assert [line for line in text.splitlines() if line.startswith("## __")] == headings
         for item in namespace["bot"].tree.get_commands():
             if item.name in {"serversetup", "help", "ping"}:
                 assert f"`/{item.name}`" not in text

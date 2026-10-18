@@ -1607,12 +1607,40 @@ async def help_command(
 ):
     message = """# Worlds Bot: List of all Commands
 
-## __Setup__
+## __1. Setup__
 
 `/mysetup`
 Choose your timezone, time format, teams, and Worlds role and match reminder preferences.
 
-## __Matches and Results__
+## __2. Voting__
+
+`/dailypost`
+Open the latest daily Worlds voting post in this server.
+
+`/currentvotes`
+View currently open votes. Everyone’s picks are revealed when voting closes, 5 minutes before each match.
+
+`/changevote`
+Make or change your predictions while voting is open.
+
+`/myvotes`
+See your past and upcoming votes, check results, and change votes while voting is open.
+
+`/myvotestats`
+See your rank, accuracy, streaks, and advanced personal prediction stats.
+
+`/votehistory`
+See a server member’s prediction history and advanced vote stats.
+
+## __3. Leaderboards__
+
+`/leaderboard`
+See Communism’s leaderboard for predictions made through this bot.
+
+`/pickems`
+Open the server’s leaderboard for Riot’s official Pick’ems.
+
+## __4. Match and Player Infos__
 
 `/today`
 See today’s matches and vote on matchups while voting is open.
@@ -1636,35 +1664,7 @@ See a specific team’s Worlds matches and tournament stats from gol.gg.
 See a player’s Worlds stats from gol.gg. Start typing to find a player.
 
 `/swiss-standings`
-See all teams’ win–loss records for the Worlds Swiss Stage.
-
-## __Voting__
-
-`/dailypost`
-Open the latest daily Worlds voting post in this server.
-
-`/currentvotes`
-View currently open votes. Everyone’s picks are revealed when voting closes, 5 minutes before each match.
-
-`/changevote`
-Make or change your predictions while voting is open.
-
-`/myvotes`
-See your past and upcoming votes, check results, and change votes while voting is open.
-
-`/myvotestats`
-See your rank, accuracy, streaks, and advanced personal prediction stats.
-
-`/votehistory`
-See a server member’s prediction history and advanced vote stats.
-
-## __Leaderboards__
-
-`/leaderboard`
-See Communism’s leaderboard for predictions made through this bot.
-
-`/pickems`
-Open the server’s leaderboard for Riot’s official Pick’ems."""
+See all teams’ win–loss records for the Worlds Swiss Stage."""
     await interaction.response.send_message(**message_payload(message, title_level=1), ephemeral=True,
                                             allowed_mentions=discord.AllowedMentions.none())
 
