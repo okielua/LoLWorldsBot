@@ -288,6 +288,47 @@ def test_empty_leaderboard_is_visible_during_result_protection(protected):
     assert "||" not in result["embeds"][0]["description"]
 
 
+def test_spoiler_refresh_cannot_overwrite_new_public_voter_list(protected, database):
+    from discord.http import Route
+    policy, _, future, end = protected
+
+    async def scenario():
+        old = {"content": team_token("MVK", future.id, 2) + "\n@Lua"}
+        new = {"content": old["content"] + "\n@Miwa"}
+        worker_started, finish_worker = asyncio.Event(), asyncio.Event()
+        writes = []
+
+        async def request(route, **kwargs):
+            if not worker_started.is_set():
+                worker_started.set()
+                await finish_worker.wait()
+            writes.append(kwargs["json"]["content"])
+            return {"id": "42", "channel_id": "12"}
+
+        client = SimpleNamespace(http=SimpleNamespace(request=request))
+        delivery = SpoilerDelivery(client, database)
+        delivery.remember({"id": "42", "channel_id": "12"}, old, render_payload(old))
+        policy.clock = lambda: end + timedelta(hours=12)
+        delivery.install()
+        try:
+            release = asyncio.create_task(delivery.release_once())
+            await asyncio.wait_for(worker_started.wait(), timeout=5)
+            edit = asyncio.create_task(client.http.request(
+                Route("PATCH", "/channels/{channel_id}/messages/{message_id}", channel_id=12, message_id=42), json=new))
+            await asyncio.sleep(0)
+            finish_worker.set()
+            await asyncio.gather(release, edit)
+            assert "@Miwa" in writes[-1]
+            with closing(database()) as db:
+                draft, rendered = db.execute("SELECT draft, rendered FROM spoiler_messages").fetchone()
+            assert "@Miwa" in draft and "@Miwa" in rendered
+        finally:
+            finish_worker.set()
+            delivery.uninstall()
+
+    asyncio.run(scenario())
+
+
 def test_wrongly_hidden_link_post_is_repaired_by_silent_edit(protected, database):
     http = AsyncMock(return_value={})
     delivery = SpoilerDelivery(SimpleNamespace(http=SimpleNamespace(request=http)), database)

@@ -224,11 +224,14 @@ class SpoilerDelivery:
             draft = kwargs.get("json")
             is_message = route.method in {"POST", "PATCH"} and "/messages" in route.path
             if is_message and isinstance(draft, dict) and current_policy() is not None:
-                rendered = render_payload(draft)
-                kwargs["json"] = rendered
-                response = await delivery.original_request(route, **kwargs)
-                delivery.remember_safely(response, draft, rendered)
-                return response
+                # Serialize the acknowledged edit and stored draft with release
+                # edits. Otherwise a release pass can restore an older voter list.
+                async with delivery._lock:
+                    rendered = render_payload(draft)
+                    kwargs["json"] = rendered
+                    response = await delivery.original_request(route, **kwargs)
+                    delivery.remember_safely(response, draft, rendered)
+                    return response
             return await delivery.original_request(route, **kwargs)
 
         self.client.http.request = guarded_request
@@ -242,10 +245,11 @@ class SpoilerDelivery:
             is_message = isinstance(draft, dict) and any(key in draft for key in ("content", "embeds", "components"))
             if not is_message or current_policy() is None:
                 return await original(adapter, route, session, **kwargs)
-            rendered = render_payload(draft)
-            kwargs["payload"] = {**payload, "data": rendered} if draft is not payload else rendered
-            response = await original(adapter, route, session, **kwargs)
-            delivery.remember_safely(response, draft, rendered)
-            return response
+            async with delivery._lock:
+                rendered = render_payload(draft)
+                kwargs["payload"] = {**payload, "data": rendered} if draft is not payload else rendered
+                response = await original(adapter, route, session, **kwargs)
+                delivery.remember_safely(response, draft, rendered)
+                return response
 
         AsyncWebhookAdapter.request = guarded_webhook
