@@ -16,7 +16,7 @@ from models import MatchStatus
 from services import polls
 from services.match_times import TOURNAMENT_TIMEZONE, format_tournament_date, private_match_details, registered_match_times
 from services.user_settings import get_registered_timezones, get_user_timezone
-from services.prediction_display import PREDICTION_BLUE, VOTE_CONFIRMATION_HELP, change_vote_text, format_prediction_results, my_votes_embeds, prediction_history_section
+from services.prediction_display import PREDICTION_BLUE, VOTE_CONFIRMATION_HELP, change_vote_text, format_prediction_results, my_votes_embeds, prediction_history_section, voting_time_remaining
 from services.server_reminders import validate_reminder_channel
 from services.server_settings import get_server_settings
 from services.prediction_stats import get_previous_day_mvp, get_voter_display_names
@@ -468,6 +468,14 @@ class VotingManager:
             date = format_tournament_date(match.start_time)
             text = (("🧪 **TEST**\n\n" if self.test_mode else "")
                     + f"🗳️ **@{name}** just cast a vote on:\n\n## {pairing}\n({date})")
+            deadline = match.start_time - timedelta(minutes=5)
+            now = self.clock()
+            if now < deadline:
+                remaining = voting_time_remaining(deadline, now)
+                text += (f"\n\n-# • You have {remaining} to vote.\n"
+                         "-# • Use `/dailyvote` to open the voting post, or `/changevote` to make or change your prediction.")
+            else:
+                text += "\n\n-# • Voting for this match has now closed."
             await channel.send(**message_payload(text), allowed_mentions=discord.AllowedMentions.none())
         except (discord.DiscordException, OSError, sqlite3.Error, ValueError):
             logger.warning("Vote saved, but participation announcement could not be sent", exc_info=True)

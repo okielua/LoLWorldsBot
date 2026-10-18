@@ -624,7 +624,25 @@ def test_simulated_vote_announcements_are_labelled_and_never_ping(context):
     text = rendered_message(sent).description
     assert "TEST" in text and "@Lua" in text and "just cast a vote on:\n\n## " in text
     assert "(Thu, 15 Oct 2026)" in text
+    assert "You have 11 hours and 55 minutes to vote." in text
+    assert "Use `/dailyvote`" in text and "`/changevote`" in text
     assert "C9" in text and "KC" in text
+
+
+@pytest.mark.parametrize("minutes,expected", [(130, "2 hours and 5 minutes"),
+                                            (6, "1 minute"), (5.5, "less than a minute"), (5, None)])
+def test_announcement_voting_time_uses_five_minute_cutoff(context, minutes, expected):
+    manager, store, channel, now, _ = context
+    match = store.data.matches[0]
+    now[0] = match.start_time - timedelta(minutes=minutes)
+    asyncio.run(manager.announce_vote(match.id, "Lua"))
+    text = rendered_message(channel.send.call_args).description
+    if expected:
+        assert f"You have {expected} to vote." in text
+        assert "`/dailyvote`" in text and "`/changevote`" in text
+    else:
+        assert "Voting for this match has now closed." in text
+        assert "You have" not in text and "`/changevote`" not in text
 
 
 def test_failed_vote_does_not_send_participation_message(context):

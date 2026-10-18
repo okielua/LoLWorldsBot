@@ -310,6 +310,8 @@ Successful vote-button interactions also send a short participation message in
 the `/serversetup` reminder channel: `🗳️ @name just cast a vote on:`, followed by
 the matchup on its own large heading with team emojis and centered tags, then
 the match's tournament date in parentheses.
+An accompanying footnote gives the voting time remaining when posted (up to the
+five-minute-before-start cutoff), with `/dailyvote` and `/changevote` instructions.
 The selected team stays private, participant spoiler protection still applies,
 and all user/role/everyone pings are disabled. Controlled prediction simulations
 send the same announcements with a clear TEST label. Missing channels or failed announcements never
