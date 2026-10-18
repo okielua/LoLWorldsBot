@@ -161,7 +161,8 @@ def group_voting_messages(cards):
             card, = payload["view"].children
             length = sum(len(item.content) for item in card.walk_children()
                          if isinstance(item, discord.ui.TextDisplay))
-            if view.children and (size + length > 4000 or view.total_children_count + 2 > 40):
+            component_count = 1 + sum(1 for _ in card.walk_children())
+            if view.children and (size + length > 4000 or view.total_children_count + component_count > 40):
                 messages.append({"view": view})
                 view, size = SetupRequiredLayoutView(timeout=900), 0
             payload["view"].remove_item(card)

@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 import discord
 from services.team_emojis import team_display, team_emoji, team_text
-from services.presentation import MATCH_GAP, embed_card_payload, message_payload
+from services.presentation import MATCH_GAP, SpacedContainer, embed_card_payload, message_payload
 
 from models import MatchStatus
 from services import polls
@@ -148,7 +148,7 @@ class ScheduleVotesView(SetupRequiredLayoutView):
     def __init__(self, manager, title, context, entries, poll_by_id):
         super().__init__(timeout=None)
         self.matches = [match for match, _ in entries]
-        card = discord.ui.Container(accent_colour=discord.Colour(PREDICTION_BLUE))
+        card = SpacedContainer(accent_colour=discord.Colour(PREDICTION_BLUE))
         self.add_item(card)
         card.add_item(team_display(f"## {title}\n\n{context.strip()}"))
         for index, (match, text) in enumerate(entries):
@@ -175,7 +175,7 @@ def schedule_vote_payloads(manager, title, context, entries, poll_by_id):
     for match, text in entries:
         entry = (match, team_text(text))
         length = len(entry[1]) + 4
-        if page and (len(page) >= 8 or size + length > 3800):
+        if page and (len(page) >= 7 or size + length > 3800):
             pages.append({"view": ScheduleVotesView(manager, title, context, page, poll_by_id)})
             page, size = [], base_size
         page.append(entry)
@@ -190,7 +190,7 @@ class PersonalVotesView(SetupRequiredLayoutView):
     def __init__(self, manager, user_id, rendered):
         super().__init__(timeout=900)
         self.user_id = user_id
-        card = discord.ui.Container(accent_colour=discord.Colour(PREDICTION_BLUE))
+        card = SpacedContainer(accent_colour=discord.Colour(PREDICTION_BLUE))
         self.add_item(card)
         title = rendered[0][2].partition("\n\n")[0]
         card.add_item(team_display(title))
@@ -222,7 +222,7 @@ class MyVotesView(PersonalVotesView):
         discord.ui.LayoutView.__init__(self, timeout=900)
         self.user_id = user_id
         self.pick_texts = {}
-        card = discord.ui.Container(accent_colour=discord.Colour(PREDICTION_BLUE))
+        card = SpacedContainer(accent_colour=discord.Colour(PREDICTION_BLUE))
         self.add_item(card)
         card.add_item(team_display(f"## {embed.title}"))
         if embed.description:
@@ -278,7 +278,7 @@ def personal_vote_payloads(manager, available, user_id, saved, *, timezone_name=
         text = change_vote_text(manager.store.data.matches_by_id[poll.match_id], now=now, selected_team=selected,
                                 test_mode=getattr(manager, "test_mode", False), timezone_name=timezone_name, time_format=time_format)
         text = team_text(text)
-        if page and (len(page) >= 8 or size + len(text) > 3800):
+        if page and (len(page) >= 7 or size + len(text) > 3800):
             pages.append({"view": PersonalVotesView(manager, user_id, page)})
             page, size = [], 0
         page.append((poll, selected, text))
@@ -297,7 +297,7 @@ class DailyPredictionsView(SetupRequiredLayoutView):
             raise ValueError("This matchday exceeds Discord's single-message component limit.")
         date = datetime.fromisoformat(day)
         timezones = get_registered_timezones()
-        card = discord.ui.Container(accent_colour=discord.Colour(PREDICTION_BLUE))
+        card = SpacedContainer(accent_colour=discord.Colour(PREDICTION_BLUE), compact_spacing=len(matches) > 7)
         self.add_item(card)
         data = manager.store.data
         matchdays = sorted({
@@ -347,8 +347,8 @@ class DailyPredictionsView(SetupRequiredLayoutView):
                 details.append(match.round_name)
             details.append(f"Bo{match.best_of}")
             stage_label = discord.utils.escape_markdown(" · ".join(details))
-            # An invisible line preserves whitespace without adding components:
-            # eight-match days must still fit Discord's 40-component limit.
+            # The container turns this boundary into a structural spacer, or a
+            # retained blank glyph line for boards at the component limit.
             gap = MATCH_GAP if match_index else ""
             times = "\n".join(f"-# {line}" for line in registered_match_times(match.start_time, timezones).splitlines())
             card.add_item(team_display(

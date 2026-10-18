@@ -10,13 +10,35 @@ MATCH_GAP = "\u00a0\n\n"
 logger = logging.getLogger(__name__)
 
 
+class SpacedContainer(discord.ui.Container):
+    """Use structural spacing at match and footnote component boundaries."""
+    def __init__(self, *args, compact_spacing=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.compact_spacing = compact_spacing
+
+    def add_item(self, item):
+        if isinstance(item, discord.ui.TextDisplay) and self.children:
+            gap = item.content.startswith((MATCH_GAP, "\u200b\n\n", "-# "))
+            if gap and not isinstance(self.children[-1], discord.ui.Separator):
+                if self.compact_spacing:
+                    # Eight/nine-match daily boards cannot fit extra separator
+                    # components. Braille blank has visible width and is not
+                    # whitespace, so Discord retains this empty text line.
+                    item.content = "\u2800\n\n" + item.content.lstrip("\u00a0\u200b\n")
+                else:
+                    super().add_item(discord.ui.Separator(
+                        visible=False, spacing=discord.SeparatorSpacing.large,
+                    ))
+        return super().add_item(item)
+
+
 class MessageCard(discord.ui.LayoutView):
     """Use the same text renderer as daily voting; preserve existing controls."""
     def __init__(self, text, controls=None):
         super().__init__(timeout=controls.timeout if controls else 900)
         self.controls = controls
         self.expiry_interaction = None
-        card = discord.ui.Container(accent_colour=discord.Colour(BLUE))
+        card = SpacedContainer(accent_colour=discord.Colour(BLUE))
         positions = getattr(controls, "control_after_paragraphs", None)
         if positions:
             paragraphs = text.split("\n\n")

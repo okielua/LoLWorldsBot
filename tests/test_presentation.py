@@ -13,6 +13,25 @@ import discord
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_footnotes_after_buttons_have_a_real_large_spacer():
+    async def scenario():
+        controls = discord.ui.View()
+        controls.first_control_after_paragraph = 1
+        controls.add_item(discord.ui.Button(label="Vote", custom_id="spacing-test"))
+        payload = message_payload("Matchup\n\n-# • Use `/help`.", controls=controls)
+        card, = payload["view"].children
+        row_index = next(index for index, item in enumerate(card.children)
+                         if isinstance(item, discord.ui.ActionRow))
+        spacer = card.children[row_index + 1]
+        assert isinstance(spacer, discord.ui.Separator)
+        assert spacer.spacing == discord.SeparatorSpacing.large
+        assert spacer.visible is False
+        assert "/help" in card.children[row_index + 2].content
+        wire = payload["view"].to_components()[0]["components"]
+        assert wire[row_index + 1] == {"type": 14, "divider": False, "spacing": 2}
+    asyncio.run(scenario())
+
+
 def test_setup_card_deletes_after_timeout_using_latest_interaction():
     async def scenario():
         controls = discord.ui.View(timeout=600)

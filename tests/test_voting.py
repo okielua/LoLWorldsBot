@@ -323,6 +323,12 @@ def test_simulated_daily_buttons_show_the_visible_team_names(context, monkeypatc
         assert len(match_blocks) == 2
         assert not match_blocks[0].startswith("\u00a0\n\n")
         assert match_blocks[1].startswith("\u00a0\n\n## ")
+        for index, child in enumerate(card.children):
+            if isinstance(child, discord.ui.TextDisplay) and child.content.startswith("\u00a0\n\n"):
+                spacer = card.children[index - 1]
+                assert isinstance(spacer, discord.ui.Separator)
+                assert spacer.spacing == discord.SeparatorSpacing.large
+                assert spacer.visible is False
         for block in match_blocks:
             assert block.index("## ") < block.index("Play-ins")
         assert view.total_children_count <= 40
@@ -484,9 +490,10 @@ def test_eight_match_swiss_day_spanning_utc_midnight_is_one_interleaved_post(con
     for i in range(1, len(card.children) - 1, 2):
         assert isinstance(card.children[i], discord.ui.TextDisplay)
         assert isinstance(card.children[i + 1], discord.ui.ActionRow)
-        assert card.children[i].content.startswith("\u00a0\n\n") is (i > 1)
+        assert card.children[i].content.startswith("\u2800\n\n") is (i > 1)
         assert card.children[i].content.index("## ") < card.children[i].content.index("Bo5")
     assert view.total_children_count <= 40
+    assert card.children[-1].content.startswith("\u2800\n\n-# ")
 
 
 def test_pick_changes_remain_private_and_do_not_edit_the_daily_post(context):
