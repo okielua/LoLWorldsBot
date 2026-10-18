@@ -302,6 +302,10 @@ times appear below the two voting columns. The completion window
 is stored in SQLite and does not restart on refresh, result corrections, or bot
 restarts. The source model has no exact finish timestamp, so this hour is measured
 from the first fresh completed result the bot observes, rather than match start.
+`/dailypost` privately links to this server's latest published daily voting post and
+shows its matchday date. It does not create another post or send notifications.
+Before any daily post has been published, it directs members to `/today`.
+
 The daily post and leaderboard do not list open picks. Each match's database cutoff is
 exactly five minutes before scheduled start. Buttons are disabled on the next
 15-second update, and the reminder path also updates the controls before sending.

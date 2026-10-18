@@ -31,6 +31,18 @@ def test_vote_can_change_before_start_but_counts_once(data):
         cast_vote(123, match.id, 1, "C9", match.start_time)
 
 
+def test_latest_daily_post_is_scoped_to_server_and_tournament(data):
+    from services.polls import get_latest_daily_post, save_daily_post
+
+    assert get_latest_daily_post(123, data.tournament.id) is None
+    save_daily_post(123, data.tournament.id, "2026-10-18", 10, 20, "new")
+    save_daily_post(123, data.tournament.id, "2026-10-17", 10, 19, "old")
+    save_daily_post(456, data.tournament.id, "2026-10-19", 30, 40, "other server")
+    save_daily_post(123, "other-tournament", "2026-10-20", 50, 60, "other tournament")
+
+    assert get_latest_daily_post(123, data.tournament.id) == ("2026-10-18", 10, 20)
+
+
 def test_points_are_cumulative_idempotent_and_corrected_with_results(data):
     for match in data.matches:
         create_poll(123, match)

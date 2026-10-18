@@ -294,6 +294,15 @@ def get_daily_post(guild_id, tournament_id, day):
         """, (guild_id, tournament_id, day)).fetchone()
 
 
+def get_latest_daily_post(guild_id, tournament_id):
+    with closing(get_connection()) as connection:
+        return connection.execute("""
+            SELECT match_day, channel_id, message_id FROM daily_prediction_posts
+            WHERE guild_id = ? AND tournament_id = ?
+            ORDER BY match_day DESC LIMIT 1
+        """, (guild_id, tournament_id)).fetchone()
+
+
 def get_daily_post_days(guild_id, tournament_id):
     with closing(get_connection()) as connection:
         return {row[0] for row in connection.execute(

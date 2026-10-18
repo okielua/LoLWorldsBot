@@ -82,6 +82,35 @@ def run_command(name, worlds):
     return send_message.call_args
 
 
+@pytest.mark.parametrize("post", [None, ("2026-10-18", 10, 20)])
+def test_dailypost_links_saved_board_privately_without_publishing(post):
+    import discord
+
+    worlds = SimpleNamespace(tournament=SimpleNamespace(id="worlds"))
+    lookup_calls = []
+
+    def lookup(guild_id, tournament_id):
+        lookup_calls.append((guild_id, tournament_id))
+        return post
+
+    interaction = SimpleNamespace(guild_id=123, response=SimpleNamespace(defer=AsyncMock()),
+                                  followup=SimpleNamespace(send=AsyncMock()))
+    callback = load_command("dailypost", worlds, asyncio=asyncio, discord=discord, get_latest_daily_post=lookup)
+    asyncio.run(callback(interaction))
+
+    assert lookup_calls == [(123, "worlds")]
+    interaction.response.defer.assert_awaited_once_with(ephemeral=True)
+    interaction.followup.send.assert_awaited_once()
+    call = interaction.followup.send.call_args
+    assert call.kwargs["ephemeral"] is True
+    text = rendered_message(call).description
+    if post:
+        assert "https://discord.com/channels/123/10/20" in text
+        assert "2026-10-18" in text
+    else:
+        assert "No daily voting post has been published" in text
+
+
 def test_simulation_uses_earliest_scheduled_match_from_current_dataset():
     worlds = load_tournament_data(PROJECT_ROOT / "data" / "worlds_2026.json")
     earliest = min(worlds.matches, key=lambda match: match.start_time)

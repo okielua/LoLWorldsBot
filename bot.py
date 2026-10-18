@@ -20,7 +20,7 @@ from services.server_reminders import ServerReminderDelivery
 from services.server_settings import initialize_server_settings
 from services.server_setup import ServerSetupView, build_server_setup_content
 from services.worlds_role import configured_worlds_role, worlds_subscription_enabled, toggle_worlds_subscription, initialize_worlds_subscription
-from services.polls import get_user_votes, get_upcoming_match_votes, get_recent_completed_match_ids, has_match_votes, initialize_polls
+from services.polls import get_user_votes, get_upcoming_match_votes, get_recent_completed_match_ids, has_match_votes, initialize_polls, get_latest_daily_post
 from services.prediction_display import PREDICTION_BLUE, VOTE_CONFIRMATION_HELP, group_voting_messages, hidden_votes_payload, my_votes_embeds, upcoming_votes_embed
 from services.match_times import TOURNAMENT_TIMEZONE, format_clock_time, format_timezone_times, private_match_details
 from services.user_settings import get_registered_timezones
@@ -1467,6 +1467,21 @@ async def changevote(interaction: discord.Interaction):
                                         ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
 
+@bot.tree.command(name="dailypost", description="Find the latest daily Worlds voting post in this server.")
+@app_commands.guild_only()
+async def dailypost(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    post = await asyncio.to_thread(get_latest_daily_post, interaction.guild_id, worlds.tournament.id)
+    if post is None:
+        text = "## __Daily Voting Post__\n\nNo daily voting post has been published in this server yet. Use `/today` to see today's matches."
+    else:
+        day, channel_id, message_id = post
+        link = f"https://discord.com/channels/{interaction.guild_id}/{channel_id}/{message_id}"
+        text = f"## __Latest Daily Voting Post__\n\nMatchday: {day}\n\n[Open the daily voting post]({link})\n\n-# Voting closes 5 minutes before each match."
+    await interaction.followup.send(**message_payload(text), ephemeral=True,
+                                    allowed_mentions=discord.AllowedMentions.none())
+
+
 @bot.tree.command(name="currentvotes", description="View current match voting; everyone's picks appear after voting closes.")
 @app_commands.guild_only()
 async def currentvotes(interaction: discord.Interaction):
@@ -1608,6 +1623,9 @@ See a player’s Worlds stats from gol.gg. Start typing to find a player.
 See all teams’ win–loss records for the Worlds Swiss Stage.
 
 ## __Voting__
+
+`/dailypost`
+Open the latest daily Worlds voting post in this server.
 
 `/currentvotes`
 View currently open votes. Everyone’s picks are revealed when voting closes, 5 minutes before each match.
