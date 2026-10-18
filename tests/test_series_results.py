@@ -39,7 +39,8 @@ def test_completion_announces_once_and_latest_survives_restart(context):
         notice = card.title + "\n" + card.description
         assert "Series Voting Results" in notice
         assert "@Lua" in notice and "@Miwa" in notice
-        assert "Voted for" in notice
+        assert notice.count("· 1 vote (50%)") == 2
+        assert "Voted for" not in notice
         assert "Correct predictions" not in notice and "Incorrect predictions" not in notice
         assert "2 votes cast" in notice and "50%" in notice
         latest = latest_result(123, store.data.tournament.id)
@@ -236,9 +237,9 @@ def test_existing_result_card_and_history_are_refreshed_without_pings(context):
         await manager.series_results.tick()
         message.edit.assert_awaited_once()
         card = rendered_message(message.edit.call_args)
-        assert "Voted for" in card.description and "@Lua" in card.description
+        assert "· 1 vote (100%)" in card.description and "@Lua" in card.description
         assert "Correct predictions" not in card.description
         assert message.edit.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
-        assert "Voted for" in latest_result(123, store.data.tournament.id)[2][0]
+        assert "· 1 vote (100%)" in latest_result(123, store.data.tournament.id)[2][0]
         assert channel.send.await_count == sent
     asyncio.run(scenario())

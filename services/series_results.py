@@ -60,12 +60,11 @@ def result_pages(match, votes, *, test_mode=False):
         names = sorted(("@" + discord.utils.escape_mentions(discord.utils.escape_markdown(
             " ".join((name or f'User {uid}').split())[:64]))
             for uid, team, name in valid if team == team_id), key=str.casefold)
-        lines.append((f"Voted for {team_token(team_id)}", names or ["None"]))
-    split = f"**{len(valid)} vote{'s' if len(valid) != 1 else ''} cast**"
-    for team in (match.team1_id, match.team2_id):
-        count = sum(chosen == team for _, chosen, _ in valid)
-        split += f"\n{team_token(team)}: {count} ({count / len(valid):.0%})" if valid else f"\n{team_token(team)}: 0"
-    pages, body = [], heading + "\n\n" + (split if valid else "No votes were cast for this series.")
+        count = len(names)
+        label = f"{team_token(team_id)} · {count} vote{'s' if count != 1 else ''} ({count / len(valid):.0%})"
+        lines.append((label, names or ["No votes"]))
+    total = f"**{len(valid)} vote{'s' if len(valid) != 1 else ''} cast**"
+    pages, body = [], heading + "\n\n" + (total if valid else "No votes were cast for this series.")
     for label, names in lines:
         body += "\n\n### " + label
         for name in names:
