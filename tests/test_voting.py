@@ -79,7 +79,7 @@ def test_daily_post_opens_early_without_pings_and_survives_restart(context):
         assert card.children[-2].content == (
             "\u00a0\n\n"
             "-# • *Use `/vote` to change your prediction until 5 minutes before a match.*\n"
-            "-# • *Use `/votehistory` to see how everyone voted once voting closes.*\n"
+            "-# • *Use `/votehistory` for the latest completed series' voting results.*\n"
             "-# • *Use `/leaderboard` to see Communism's Worlds prediction standings.*"
         )
         assert "1 point" not in str(components)
@@ -1047,7 +1047,7 @@ def test_controlled_prediction_day_completes_without_affecting_real_leaderboard(
         await tasks[0]
         assert not background.prediction_test_running
         assert manager.client.prediction_test_manager is None
-        assert channel.send.await_count == 3
+        assert channel.send.await_count == 5  # Board, two cutoff reminders, two completed-series results.
         assert get_leaderboard(123, store.data.tournament.id) == []
         assert get_delivery_record(123, store.data.matches[0].id) is None
         report, preview = interaction.followup.send.call_args_list

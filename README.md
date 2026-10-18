@@ -214,7 +214,8 @@ These rules apply to every command, setup panel, component reply, and test repor
   and vote counts, plain `@name` text without pings, and blank space if no voters.
 - Private vote confirmations show one date in the recipient's saved timezone
   (PT fallback), bold matchup teams, and the selected prediction as a heading.
-- Setup, admin actions, `/votehistory`, and developer simulations remain private.
+- Setup, admin actions, member-specific `/votehistory`, and developer controls remain private.
+  `/votehistory` without a member retrieves the latest series' public voting results.
   Informational commands, daily voting posts, and real reminders remain public.
   Setup controls, reminder recipients, vote cutoffs, and scoring are unchanged.
 
@@ -298,7 +299,7 @@ replaced without deleting prediction rows; the new message receipt is persisted.
 Active boards are checked on restart and every five minutes, even when their
 content has not changed, so deletion does not leave voting unavailable indefinitely.
 
-Voting uses three commands: `/vote`, `/votehistory <name>`, and `/leaderboard`.
+Voting uses three commands: `/vote`, `/votehistory [name]`, and `/leaderboard`.
 `/vote` is the private panel for making/changing current predictions, with green
 checked buttons for the caller's saved picks. The public daily post has a
 **Vote / Change My Vote** button opening that same panel; its shared quick-vote
@@ -476,13 +477,33 @@ If the admin running the test votes, the test also sends them a private TEST
 prediction-history preview with simulated series scores and correct/incorrect
 outcomes behind spoiler tags, using the same layout as `/votehistory`.
 
-`/votehistory <name>` requires a member selected from autocomplete, limited to
+The simulation also publishes one public TEST results card per completed series,
+without pings. After voting, **Simulate Match Finish** in `/serversetup` completes
+both test series immediately (the first team wins 3–0 for a Bo5). This action exists
+only in development and never modifies live matches. `/votehistory` without a
+member retrieves the latest simulated announcement during/after that test.
+
+`/votehistory [name]` has an optional member selected from autocomplete, limited to
 current server voters. Selecting yourself opens your own past predictions and
 a **My Stats** button.
 Other members' open picks remain hidden until voting closes. History is private,
 uses five predictions per page, and includes the shared advanced statistics for
 the selected member. Completed results, correctness, and affected stats retain
 global spoiler protection. Upcoming picks and changes belong in `/vote`.
+
+Without a member, `/votehistory` publicly shows the most recently announced
+completed series' final score, total votes, team split, and correct/incorrect
+voters. It stays available until the next results announcement is published.
+Names are plain text; retrieving/paging results never pings anyone.
+
+When a published poll's series completes, the bot posts its voting results once
+in the configured reminder channel, mentioning the Worlds role and subscribers
+to either team. Recipients are deduplicated and role members do not also get
+individual mentions. Large recipient sets use bounded follow-up mention batches.
+Final scores and outcome-bearing prediction details follow that series' fixed
+12-hour spoiler window. Empty-vote status text stays visible. Result receipts and
+pending mention batches persist across restarts; an initial install does not
+announce the entire backlog of historical matches. Public reminders must be On.
 
 ### Global spoiler policy
 

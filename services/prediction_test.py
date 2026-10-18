@@ -23,6 +23,21 @@ from services.runtime_config import development_enabled
 logger = logging.getLogger(__name__)
 
 
+async def finish_prediction_test(interaction, guild_id):
+    if not development_enabled():
+        return "Prediction simulations are disabled in production."
+    manager = getattr(interaction.client, "prediction_test_manager", None)
+    if manager is None or manager.guild_id != guild_id or not manager.test_mode:
+        return "Start Test Daily Predictions first, cast your votes, then simulate the finish."
+    manager.store.data = replace(manager.store.data, matches=[
+        replace(match, status=MatchStatus.COMPLETED, winner_id=match.team1_id,
+                team1_score=match.best_of // 2 + 1, team2_score=0)
+        if match.status != MatchStatus.COMPLETED else match for match in manager.store.data.matches])
+    manager.store.fetched_at = manager.clock()
+    await manager.tick()
+    return "Simulated series finishes. Check the public TEST voting results; no one was pinged. Use `/votehistory` to retrieve the latest result."
+
+
 async def start_prediction_test(interaction, guild_id):
     if not development_enabled():
         return "Prediction simulations are disabled in production."
@@ -50,6 +65,7 @@ async def start_prediction_test(interaction, guild_id):
     )
     background.prediction_test_running = True
     interaction.client.prediction_test_manager = manager
+    interaction.client.last_prediction_test_manager = manager
     try:
         await manager.tick()
         day = matches[0].start_time.astimezone(MATCHDAY_ZONE).date().isoformat()
@@ -70,6 +86,9 @@ async def start_prediction_test(interaction, guild_id):
                 store.fetched_at = datetime.now(UTC)
                 await manager.tick()
                 for match in matches:
+                    if store.data.matches_by_id[match.id].status == MatchStatus.COMPLETED:
+                        done.add(match.id)
+                        continue
                     if match.id not in done and datetime.now(UTC) >= match.start_time - timedelta(minutes=5):
                         if await sender.deliver(match.id):
                             done.add(match.id)
@@ -119,4 +138,5 @@ async def start_prediction_test(interaction, guild_id):
     return (
         "Test daily post sent. Vote using its buttons: the first match closes in about one minute, "
         "the second in about two. No users will be pinged. Keep the bot running; a private test scoreboard will follow."
+        " You can also use Simulate Match Finish in `/serversetup` after voting to publish the end-of-series results immediately."
     )

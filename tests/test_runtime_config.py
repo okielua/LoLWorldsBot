@@ -68,7 +68,7 @@ def test_production_setup_has_no_sample_controls_and_simulation_entrypoints_are_
     from services.server_settings import ServerSettings
     from services.presentation import message_payload
     from services.reminder_test import run_reminder_test
-    from services.prediction_test import start_prediction_test
+    from services.prediction_test import start_prediction_test, finish_prediction_test
     monkeypatch.setenv("BOT_MODE", "production")
     monkeypatch.setattr(server_setup, "get_server_settings", lambda *args: ServerSettings(123))
     async def scenario():
@@ -82,6 +82,7 @@ def test_production_setup_has_no_sample_controls_and_simulation_entrypoints_are_
         assert view.publish_daily in view.children and view.delete_daily in view.children
         assert "disabled" in await run_reminder_test(None, None, 123)
         assert "disabled" in await start_prediction_test(None, 123)
+        assert "disabled" in await finish_prediction_test(None, 123)
     asyncio.run(scenario())
 
 

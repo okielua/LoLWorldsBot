@@ -9,7 +9,7 @@ from services.setup_gate import SetupRequiredView, SetupRequiredModal
 
 from services.server_reminders import validate_reminder_channel
 from services.reminder_test import run_reminder_test
-from services.prediction_test import start_prediction_test
+from services.prediction_test import start_prediction_test, finish_prediction_test
 from services.leaderboard_display import sample_leaderboard_entries
 from services.leaderboard_views import leaderboard_payload
 from services.server_settings import (
@@ -144,7 +144,7 @@ class ServerSetupView(SetupRequiredView):
         self.test_reminder_with_pings.disabled = self.test_reminder.disabled
         self.publish_daily.disabled = settings.reminder_channel_id is None
         if not development_enabled():
-            for item in (self.test_reminder, self.test_reminder_with_pings, self.test_predictions, self.preview_leaderboard):
+            for item in (self.test_reminder, self.test_reminder_with_pings, self.test_predictions, self.finish_predictions, self.preview_leaderboard):
                 self.remove_item(item)
 
     async def interaction_check(self, interaction):
@@ -233,6 +233,13 @@ class ServerSetupView(SetupRequiredView):
         payload = leaderboard_payload(entries, self.guild_id, interaction.client.voting_manager.store.data.tournament.id,
                                       previous={1: 2, 2: 1, 3: 2, 4: 5, 5: 4, 6: 6}, preview=True)
         await interaction.followup.send(**payload, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
+    @discord.ui.button(label="Simulate Match Finish", emoji="🏁", row=4)
+    async def finish_predictions(self, interaction, button):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        message = await finish_prediction_test(interaction, self.guild_id)
+        await interaction.followup.send(**message_payload(message), ephemeral=True,
+                                        allowed_mentions=discord.AllowedMentions.none())
 
     async def on_error(self, interaction, error, item):
         logger.error("Server setup failed", exc_info=(type(error), error, error.__traceback__))

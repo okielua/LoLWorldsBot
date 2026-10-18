@@ -16,7 +16,7 @@ from services.spoilers import current_policy, matchup, score_token, team_token, 
 
 PREDICTION_BLUE = 0x5865F2
 VOTING_FOOTER = format_footnotes(
-    "-# • Use `/votehistory` to see how everyone voted once voting closes.\n"
+    "-# • Use `/votehistory` for the latest completed series' voting results.\n"
     "-# • Use `/leaderboard` to see Communism's Worlds prediction standings."
 )
 VOTE_CONFIRMATION_HELP = format_footnotes(

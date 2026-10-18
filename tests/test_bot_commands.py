@@ -519,8 +519,8 @@ def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeyp
                 assert f"`/{item.name} [count]`" in text
             elif item.name == "votehistory":
                 parameter, = item.parameters
-                assert parameter.name == "name" and parameter.required and parameter.autocomplete
-                assert "`/votehistory <name>`" in text
+                assert parameter.name == "name" and not parameter.required and parameter.autocomplete
+                assert "`/votehistory [name]`" in text
             elif item.name in {"schedule", "team", "player"}:
                 parameter, = item.parameters
                 assert parameter.required

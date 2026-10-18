@@ -454,6 +454,8 @@ class VotingManager:
         self._checked_at = {}
         self._notice_pairs = set()
         self._daily_pages = {}
+        from services.series_results import SeriesResults
+        self.series_results = SeriesResults(self)
 
     async def _followers(self, channel, matches, role_id=None):
         users = await asyncio.to_thread(get_all_user_reminder_preferences)
@@ -834,6 +836,7 @@ class VotingManager:
     async def tick(self):
         await self._flush_opportunities()
         await asyncio.to_thread(polls.reconcile_polls, self.guild_id, self.store.data, self.clock(), fresh=self.fresh())
+        await self.series_results.tick()
         days = self.match_days()
         recorded_days = await asyncio.to_thread(polls.get_daily_post_days, self.guild_id, self.store.data.tournament.id)
         for day in sorted(set(days) | recorded_days):
