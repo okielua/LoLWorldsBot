@@ -1454,9 +1454,9 @@ async def changevote(interaction: discord.Interaction):
                                         ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
 
-@bot.tree.command(name="dailypost", description="Find the latest daily Worlds voting post in this server.")
+@bot.tree.command(name="dailyvote", description="Find the latest daily Worlds voting post in this server.")
 @app_commands.guild_only()
-async def dailypost(interaction: discord.Interaction):
+async def dailyvote(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     post = await asyncio.to_thread(get_latest_daily_post, interaction.guild_id, worlds.tournament.id)
     if post is None:
@@ -1584,7 +1584,7 @@ Choose your timezone, time format, teams, and Worlds role and match reminder pre
 
 ## __2. Voting__
 
-`/dailypost`
+`/dailyvote`
 Open the latest daily Worlds voting post in this server.
 
 `/currentvotes`

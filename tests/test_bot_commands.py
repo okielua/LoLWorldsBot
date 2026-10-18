@@ -91,7 +91,7 @@ def run_command(name, worlds):
 
 
 @pytest.mark.parametrize("post", [None, ("2026-10-18", 10, 20)])
-def test_dailypost_links_saved_board_privately_without_publishing(post):
+def test_dailyvote_links_saved_board_privately_without_publishing(post):
     import discord
 
     worlds = SimpleNamespace(tournament=SimpleNamespace(id="worlds"))
@@ -103,7 +103,7 @@ def test_dailypost_links_saved_board_privately_without_publishing(post):
 
     interaction = SimpleNamespace(guild_id=123, response=SimpleNamespace(defer=AsyncMock()),
                                   followup=SimpleNamespace(send=AsyncMock()))
-    callback = load_command("dailypost", worlds, asyncio=asyncio, discord=discord, get_latest_daily_post=lookup)
+    callback = load_command("dailyvote", worlds, asyncio=asyncio, discord=discord, get_latest_daily_post=lookup)
     asyncio.run(callback(interaction))
 
     assert lookup_calls == [(123, "worlds")]
