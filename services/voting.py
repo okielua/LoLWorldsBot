@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 import discord
 from services.team_emojis import team_display, team_emoji, team_text
-from services.presentation import embed_card_payload, message_payload
+from services.presentation import MATCH_GAP, embed_card_payload, message_payload
 
 from models import MatchStatus
 from services import polls
@@ -152,7 +152,7 @@ class ScheduleVotesView(SetupRequiredLayoutView):
         self.add_item(card)
         card.add_item(team_display(f"## {title}\n\n{context.strip()}"))
         for index, (match, text) in enumerate(entries):
-            card.add_item(team_display(("\u200b\n\n" if index else "") + text))
+            card.add_item(team_display((MATCH_GAP if index else "") + text))
             poll = poll_by_id.get(match.id)
             if poll:
                 card.add_item(discord.ui.ActionRow(ScheduleVoteButton(manager, poll, 1), ScheduleVoteButton(manager, poll, 2)))
@@ -196,7 +196,7 @@ class PersonalVotesView(SetupRequiredLayoutView):
         card.add_item(team_display(title))
         for index, (poll, selected, text) in enumerate(rendered):
             body = text.partition("\n\n")[2]
-            card.add_item(team_display(("\u200b\n\n" if index else "") + body))
+            card.add_item(team_display((MATCH_GAP if index else "") + body))
             card.add_item(discord.ui.ActionRow(VoteButton(manager, poll, 1), VoteButton(manager, poll, 2)))
             self.select_team(poll.match_id, selected)
 
@@ -228,12 +228,14 @@ class MyVotesView(PersonalVotesView):
         if embed.description:
             card.add_item(team_display(embed.description))
         matches = iter(rows)
+        match_index = 0
         for field in embed.fields:
             if field.name == "\u200b":
                 card.add_item(team_display(field.value))
                 continue
             poll, selected = next(matches)
-            text = team_display(f"### {field.name}\n{field.value}")
+            text = team_display((MATCH_GAP if match_index else "") + f"### {field.name}\n{field.value}")
+            match_index += 1
             card.add_item(text)
             current = available.get(poll.match_id)
             if current and {poll.team1_id, poll.team2_id} == {current.team1_id, current.team2_id}:
@@ -347,10 +349,10 @@ class DailyPredictionsView(SetupRequiredLayoutView):
             stage_label = discord.utils.escape_markdown(" · ".join(details))
             # An invisible line preserves whitespace without adding components:
             # eight-match days must still fit Discord's 40-component limit.
-            gap = (("" if current_policy() else "\u200b") + "\n\n") if match_index else ""
+            gap = MATCH_GAP if match_index else ""
             times = "\n".join(f"-# {line}" for line in registered_match_times(match.start_time, timezones).splitlines())
             card.add_item(team_display(
-                f"{gap}{stage_label}\n## {matchup(match)}\n"
+                f"{gap}## {matchup(match)}\n{stage_label}\n"
                 f"{times}\n{status}"
             ))
             card.add_item(discord.ui.ActionRow(VoteButton(manager, poll, 1), VoteButton(manager, poll, 2)))

@@ -6,6 +6,7 @@ from services.team_emojis import team_display
 from services.setup_gate import require_setup
 
 BLUE = 0x5865F2
+MATCH_GAP = "\u00a0\n\n"
 logger = logging.getLogger(__name__)
 
 

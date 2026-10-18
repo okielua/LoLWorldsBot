@@ -317,6 +317,15 @@ def test_simulated_daily_buttons_show_the_visible_team_names(context, monkeypatc
         result = render_payload({"components": view.to_components()})
         assert "[see spoiler]" not in str(result)
         assert "⟦" not in str(result)
+        card, = view.children
+        match_blocks = [child.content for child in card.children
+                        if isinstance(child, discord.ui.TextDisplay) and "Voting open" in child.content]
+        assert len(match_blocks) == 2
+        assert not match_blocks[0].startswith("\u00a0\n\n")
+        assert match_blocks[1].startswith("\u00a0\n\n## ")
+        for block in match_blocks:
+            assert block.index("## ") < block.index("Play-ins")
+        assert view.total_children_count <= 40
         buttons = [child for child in view.walk_children() if isinstance(child, discord.ui.Button)]
         for button in buttons:
             rendered = render_payload({"components": [button.to_component_dict()]})["components"][0]
@@ -475,7 +484,8 @@ def test_eight_match_swiss_day_spanning_utc_midnight_is_one_interleaved_post(con
     for i in range(1, len(card.children) - 1, 2):
         assert isinstance(card.children[i], discord.ui.TextDisplay)
         assert isinstance(card.children[i + 1], discord.ui.ActionRow)
-        assert card.children[i].content.startswith("\u200b\n\n") is (i > 1)
+        assert card.children[i].content.startswith("\u00a0\n\n") is (i > 1)
+        assert card.children[i].content.index("## ") < card.children[i].content.index("Bo5")
     assert view.total_children_count <= 40
 
 
