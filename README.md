@@ -193,7 +193,7 @@ These rules apply to every command, setup panel, component reply, and test repor
   side-by-side columns (explicit user preference).
 - One clear, underlined main title; matchups get emphasis, stage details stay muted.
 - Public match schedules use Riot's `America/Los_Angeles` calendar date, once per
-  day group. `/next`, `/schedule`, `/team`, `/today`, and `/tomorrow` do not require
+  day group. `/nextgames`, `/schedule`, `/team`, `/today`, and `/tomorrow` do not require
   personal setup just to select the shared day. Without saved zones they show Los Angeles.
 - Public messages list every saved setup timezone as `**Berlin:** 20:00`: bold city and colon,
   normal-weight time, no timezone abbreviation or seconds. Add a local date only
@@ -240,7 +240,7 @@ times list every unique timezone saved through `/mysetup` as `City: HH:MM`.
 A date suffix is included only when that city's date differs from the Riot
 matchday in `America/Los_Angeles`. City-labelled lines omit the redundant timezone
 abbreviation; DST conversion still uses the saved IANA zone. This also applies to
-`/next`, `/schedule`, `/team`, and `/currentvotes`. Private `/myvotes` and `/changevote`
+`/nextgames`, `/schedule`, `/team`, and `/currentvotes`. Private `/myvotes` and `/changevote`
 show only the recipient's local date/time (PT fallback). Private vote confirmations
 keep a single date in that same timezone and no time or city list.
 Relative countdowns appear only once. Public schedule headings group by Riot's
@@ -263,7 +263,7 @@ responses count as published opportunities; failed sends do not. Completed, live
 unknown-team, and closed matches do not get active voting buttons. Long days split
 within Discord's message/component limits. `/tomorrow` remains informational.
 
-`/previous` publicly shows the two most recent completed series, newest first,
+`/previousgames` publicly shows the three most recent completed series by default, newest first,
 using the same Riot-date and city-time styling. Scores and winner-only results
 use the global timed spoiler policy described below; times and stage labels stay visible.
 Live, scheduled, postponed and cancelled matches are excluded. Fewer than two
@@ -568,3 +568,5 @@ python -m pytest -q
 Pytest uses mocked network responses and temporary settings databases. It compiles
 project Python without starting Discord and tests parsing, pagination, cache
 recovery, reminder eligibility, queries, and command formatting.
+
+`/nextgames [count]` and `/previousgames [count]` accept an optional whole-number count from 1 to 100 (default 3). Results use pages of three matches with Previous/Next buttons. Only scheduled future matches appear in `/nextgames`; only completed matches appear in `/previousgames`. Requests exceeding the available fixtures show all available matches with an explanatory note.

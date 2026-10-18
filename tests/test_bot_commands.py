@@ -26,6 +26,8 @@ from services.prediction_display import VOTE_CONFIRMATION_HELP, group_voting_mes
 from services.voting import personal_vote_payloads, schedule_vote_payloads, my_vote_payloads, current_votes_controls
 from services.leaderboard_views import leaderboard_payload, leaderboard_context, show_personal_stats
 from services.spoilers import current_policy, matchup, score_token
+from services.match_browser import show_match_games
+from discord import app_commands
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -41,6 +43,8 @@ def load_command(name, worlds, **dependencies):
     callback.decorator_list = []
     namespace = {
         "discord": SimpleNamespace(Interaction=object),
+        "app_commands": app_commands,
+        "show_match_games": show_match_games,
         "worlds": worlds,
         "MatchStatus": MatchStatus,
         "timedelta": timedelta,
@@ -474,7 +478,12 @@ def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeyp
     assert namespace["bot"].tree.get_command("changevote").guild_only is True
     assert namespace["bot"].tree.get_command("today") is not None
     assert namespace["bot"].tree.get_command("tomorrow") is not None
-    assert namespace["bot"].tree.get_command("previous") is not None
+    assert namespace["bot"].tree.get_command("previous") is None
+    assert namespace["bot"].tree.get_command("next") is None
+    for name in ("previousgames", "nextgames"):
+        option, = namespace["bot"].tree.get_command(name).parameters
+        assert option.name == "count" and option.required is False and option.default == 3
+        assert option.min_value == 1 and option.max_value == 100
     assert not namespace["bot"].tree.get_command("myvotes").checks
     assert server_command.guild_only is True
     assert server_command.default_permissions.manage_guild
@@ -501,6 +510,8 @@ def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeyp
         for item in namespace["bot"].tree.get_commands():
             if item.name in {"serversetup", "help", "ping"}:
                 assert f"`/{item.name}`" not in text
+            elif item.name in {"previousgames", "nextgames"}:
+                assert f"`/{item.name} [count]`" in text
             elif item.name in {"votehistory", "schedule", "team", "player"}:
                 parameter, = item.parameters
                 assert parameter.required
@@ -1036,7 +1047,7 @@ def test_changevote_command_includes_every_open_match_in_one_private_response():
 
 
 @pytest.mark.parametrize("count", [0, 1, 3])
-def test_previous_is_public_and_does_not_leak_results_outside_spoilers(count):
+def test_previous_is_public_and_does_not_leak_results_outside_spoilers(count, monkeypatch):
     import re
     from services.tournament_queries import get_previous_matches
     data = load_tournament_data(PROJECT_ROOT / "data" / "worlds_2026.json")
@@ -1049,12 +1060,13 @@ def test_previous_is_public_and_does_not_leak_results_outside_spoilers(count):
                        start_time=datetime(2026, 10, 15, 18, tzinfo=UTC) + timedelta(hours=i),
                        team1_score=3, team2_score=i, winner_id="C9") for i in range(count)]
     data = replace(data, matches=matches)
+    monkeypatch.setattr("services.match_browser.get_registered_timezones", lambda: ["Europe/Berlin", "Asia/Seoul"])
     dependencies = {key: value for key, value in load_formatters(data).items() if key != "worlds"}
     sender = load_command("send_long_message", data)
     callback = load_command("previous", data, **dependencies, get_previous_matches=get_previous_matches,
                             send_long_message=sender, get_registered_timezones=lambda: ["Europe/Berlin", "Asia/Seoul"])
     callback.__globals__["datetime"] = Clock
-    interaction = SimpleNamespace(response=SimpleNamespace(send_message=AsyncMock()), followup=SimpleNamespace(send=AsyncMock()))
+    interaction = SimpleNamespace(user=SimpleNamespace(id=7), response=SimpleNamespace(send_message=AsyncMock()), followup=SimpleNamespace(send=AsyncMock()))
     asyncio.run(callback(interaction))
     call = interaction.response.send_message.call_args
     assert call.kwargs.get("ephemeral", False) is False
@@ -1063,21 +1075,21 @@ def test_previous_is_public_and_does_not_leak_results_outside_spoilers(count):
     if not count:
         assert "No completed" in card.description
         return
-    assert card.description.count("**C9** vs **KC**") == min(count, 2)
+    assert card.description.count("**C9** vs **KC**") == min(count, 3)
     assert "**Berlin:**" in card.description
     assert "**Seoul:**" in card.description
     assert "-# **Berlin:**" not in card.description and "-# **Seoul:**" not in card.description
     assert "-# Play-ins" not in card.description
-    assert card.description.count("🏁 FINISHED\n### Result: ||") == min(count, 2)
+    assert card.description.count("🏁 FINISHED\n### Result: ||") == min(count, 3)
     assert "FINAL" not in card.description
     hidden = re.findall(r"\|\|(.*?)\|\|", card.description)
-    assert len(hidden) == min(count, 2)
+    assert len(hidden) == min(count, 3)
     visible = re.sub(r"\|\|.*?\|\|", "", card.description)
     assert "3–" not in visible and "Winner:" not in visible
     assert "UPCOMING" not in card.description
     assert "Click a spoiler" in card.description
     if count == 3:
-        assert "3–0" not in card.description
+        assert "3–0" in card.description
         assert card.description.index("3–2") < card.description.index("3–1")
 
 

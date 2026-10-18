@@ -33,6 +33,7 @@ from services.standings_display import standings_text
 from services.golgg import GOLGG_FOOTNOTES, team_stats_text
 from services.golgg_players import player_catalog, player_reply, refresh_players_loop
 from services.team_history import TeamHistoryView
+from services.match_browser import show_match_games
 from services.vote_history import voter_autocomplete, show_vote_history
 from services.runtime_config import runtime_config, prepare_seed, remove_development_commands, validate_application
 from services.setup_gate import SetupCommandTree
@@ -1121,56 +1122,16 @@ async def setup(
         await asyncio.to_thread(mark_setup_completed, interaction.guild_id, interaction.user.id)
 
 
-@bot.tree.command(
-    name="next",
-    description=("Show the next Worlds match."),
-)
-async def next_match_command(
-    interaction: discord.Interaction,
-):
-    timezone_name = TOURNAMENT_TIMEZONE
-    now = datetime.now(UTC)
-    match = get_next_match(
-        worlds,
-        now,
-    )
-
-    if match is None:
-        await interaction.response.send_message(
-            **message_payload("There are no upcoming matches " "in the current tournament data.")
-        )
-
-        return
-
-    message = format_next_match(
-        match,
-        timezone_name,
-        now,
-        timezones=get_registered_timezones() or [TOURNAMENT_TIMEZONE],
-    )
-
-    await interaction.response.send_message(**message_payload(message))
+@bot.tree.command(name="nextgames", description="Show upcoming Worlds matches (default: 3).")
+@app_commands.describe(count="Number of matches to show, from 1 to 100 (default: 3).")
+async def next_match_command(interaction: discord.Interaction, count: app_commands.Range[int, 1, 100] = 3):
+    await show_match_games(interaction, worlds, format_match, count=count, upcoming=True, now=datetime.now(UTC))
 
 
-@bot.tree.command(name="previous", description="Show the last two completed Worlds matches with timed spoiler protection.")
-async def previous(interaction: discord.Interaction):
-    now = datetime.now(UTC)
-    matches = get_previous_matches(worlds, now)
-    if not matches:
-        await interaction.response.send_message(**message_payload("## __Previous Worlds Matches__\n\nNo completed Worlds matches yet."))
-        return
-    timezones = get_registered_timezones() or [TOURNAMENT_TIMEZONE]
-    lines = []
-    last_date = None
-    for match in matches:
-        match_date = local_datetime(match.start_time, TOURNAMENT_TIMEZONE).date()
-        if match_date != last_date:
-            lines.append(f"## __{format_local_date(match.start_time, TOURNAMENT_TIMEZONE)}__")
-            last_date = match_date
-        lines.append(format_match(match, TOURNAMENT_TIMEZONE, include_date=False, now=now,
-                                  timezones=timezones, hide_result=True, small_details=False))
-    lines.append("-# • Recent results use timed spoiler protection. Click a spoiler to reveal it early.")
-    await send_long_message(interaction, "# __Previous Worlds Matches__", lines)
+@bot.tree.command(name="previousgames", description="Show completed Worlds matches (default: 3), with spoiler protection.")
+@app_commands.describe(count="Number of matches to show, from 1 to 100 (default: 3).")
+async def previous(interaction: discord.Interaction, count: app_commands.Range[int, 1, 100] = 3):
+    await show_match_games(interaction, worlds, format_match, count=count, upcoming=False, now=datetime.now(UTC))
 
 
 async def show_day_schedule(interaction: discord.Interaction, day_offset: int):
@@ -1657,11 +1618,11 @@ See today’s matches and vote on matchups while voting is open.
 `/tomorrow`
 See tomorrow’s matches in the server’s registered timezones.
 
-`/next`
-See the next Worlds match.
+`/nextgames [count]` (e.g. `/nextgames 6`)
+See the next 3 matches by default, or choose 1–100. Browse 3 matches per page.
 
-`/previous`
-See the last two completed matches, with timed spoiler protection for recent results.
+`/previousgames [count]` (e.g. `/previousgames 6`)
+See the last 3 completed matches by default, or choose 1–100, with timed spoiler protection. Browse 3 matches per page.
 
 `/schedule <view>` (e.g. `/schedule Swiss Stage`)
 Browse the next five matches or view the schedule for a tournament stage.
