@@ -103,8 +103,10 @@ def render_text(text, policy=None, *, neutral=False):
             return padded_name(name, policy.width) if neutral else policy.team(team_id, emoji=team_emoji(team_id))
         return policy.team(team_id, match=match, slot=slot, emoji=team_emoji(team_id))
 
-    text = re.sub(r"⟦team:([^:⟧]+):([012]):([^⟧]+)⟧", team_replace, text)
-    text = re.sub(r"⟦choice:([^:⟧]+):([012]):([^⟧]+)⟧", lambda found: team_replace(found, True), text)
+    # Match IDs may contain colons (for example prediction-test:<uuid>:0).
+    # Parse the slot and team from the right instead of truncating the ID.
+    text = re.sub(r"⟦team:([^⟧]+):([012]):([^:⟧]+)⟧", team_replace, text)
+    text = re.sub(r"⟦choice:([^⟧]+):([012]):([^:⟧]+)⟧", lambda found: team_replace(found, True), text)
 
     def score_replace(found):
         match = policy.data.matches_by_id.get(found[1])

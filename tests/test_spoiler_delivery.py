@@ -41,8 +41,14 @@ def database(tmp_path, monkeypatch):
     return user_settings.get_connection
 
 
-def test_wire_payload_protects_only_dependent_team_and_button_uses_bee_question(protected):
+@pytest.mark.parametrize("match_id", ["future", "prediction-test:68c569d2-e05e-4dab-9b1e-ea9a19d4b6e7:0"])
+def test_wire_payload_protects_only_dependent_team_and_button_uses_bee_question(protected, match_id):
     policy, match, future, end = protected
+    original_id = future.id
+    future.id = match_id
+    policy.data.matches_by_id.pop(original_id)
+    policy.data.matches_by_id[future.id] = future
+    policy.dependencies[(future.id, 2)] = policy.dependencies.pop((original_id, 2))
     draft = {"content": matchup(future) + "\n" + score_token(match), "components": [
         {"type": 1, "components": [
             {"type": 2, "style": 1, "label": team_token("T1", future.id, 1), "emoji": {"id": "111", "name": "t1"}, "custom_id": "first"},
@@ -61,6 +67,21 @@ def test_wire_payload_protects_only_dependent_team_and_button_uses_bee_question(
     released = render_payload(draft)
     assert "||" not in released["content"]
     assert released["components"][0]["components"][1]["emoji"]["id"] == "222"
+
+
+def test_simulation_ids_outside_live_schedule_never_leak_internal_tokens(protected):
+    match_id = "prediction-test:68c569d2-e05e-4dab-9b1e-ea9a19d4b6e7:0"
+    draft = {"content": team_token("T1", match_id, 1) + " vs " + team_token("MVK", match_id, 2),
+             "components": [{"type": 2, "style": 1, "custom_id": "test-vote",
+                             "label": team_token("MVK", match_id, 2)}]}
+    result = render_payload(draft)
+    assert "⟦" not in str(result)
+    assert "prediction-test:" not in str(result)
+    assert "T1" in result["content"] and "MVK" in result["content"]
+    assert result["components"][0]["label"] == "[see spoiler]"
+    forced_neutral = render_payload({"content": team_token("MVK", match_id, 2, neutral=True)})
+    assert "⟦" not in forced_neutral["content"]
+    assert "beeQuestion" in forced_neutral["content"]
 
 
 def test_select_operational_values_and_emoji_names_are_untouched(protected):
