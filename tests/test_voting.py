@@ -27,6 +27,8 @@ def context(tmp_path, monkeypatch):
     initialize_server_settings()
     initialize_delivery_records()
     initialize_polls()
+    for user_id in (7, 8, 9):
+        user_settings.mark_setup_completed(123, user_id)
     set_reminder_channel(123, 456)
     data = load_tournament_data(Path(__file__).resolve().parents[1] / "data" / "worlds_2026.json")
     current = [data.matches[0].start_time - timedelta(hours=12)]
@@ -91,6 +93,35 @@ def test_daily_post_opens_early_without_pings_and_survives_restart(context):
         assert manager.client.add_view.called
         await restarted.vote(store.data.matches[0].id, 7, "C9")
         assert get_leaderboard(123, store.data.tournament.id) == []
+    asyncio.run(scenario())
+
+
+def test_first_timer_cannot_vote_on_daily_or_restored_buttons_until_mysetup(context):
+    from services.voting import ScheduleVoteButton
+    from services.polls import get_user_votes
+    manager, store, channel, _, _ = context
+    manager.client.voting_manager = manager
+    def caller():
+        return SimpleNamespace(guild_id=123, client=manager.client, extras={},
+                               type=discord.InteractionType.component,
+                               user=SimpleNamespace(id=999, display_name="New voter"),
+                               response=SimpleNamespace(send_message=AsyncMock(), defer=AsyncMock()),
+                               followup=SimpleNamespace(send=AsyncMock()))
+    async def scenario():
+        await manager.tick()
+        button = next(item for item in channel.send.call_args.kwargs["view"].walk_children() if isinstance(item, discord.ui.Button))
+        first = caller()
+        await button.callback(first)
+        assert "Run `/mysetup`" in rendered_message(first.response.send_message.call_args).description
+        first.response.defer.assert_not_awaited()
+        assert get_user_votes(123, store.data.tournament.id, 999) == []
+        poll = get_polls(123, store.data.tournament.id)[0]
+        dynamic = ScheduleVoteButton(manager, poll, 1)
+        restored = await ScheduleVoteButton.from_custom_id(first, dynamic.item, dynamic.template.fullmatch(dynamic.custom_id))
+        assert not await restored.interaction_check(caller())
+        user_settings.mark_setup_completed(123, 999)
+        await restored.callback(caller())
+        assert get_user_votes(123, store.data.tournament.id, 999)[0][1] == poll.team1_id
     asyncio.run(scenario())
 
 

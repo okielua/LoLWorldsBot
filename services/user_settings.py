@@ -80,6 +80,25 @@ def initialize_database():
                 PRIMARY KEY (guild_id, user_id)
             )
         """)
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS completed_setup (
+                guild_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+                PRIMARY KEY (guild_id, user_id)
+            )
+        """)
+        # These members already opened /mysetup before setup became mandatory.
+        connection.execute("INSERT OR IGNORE INTO completed_setup SELECT guild_id, user_id FROM worlds_role_onboarding")
+
+
+def has_completed_setup(guild_id, user_id):
+    with closing(get_connection()) as connection:
+        return connection.execute("SELECT 1 FROM completed_setup WHERE guild_id=? AND user_id=?",
+                                  (guild_id, user_id)).fetchone() is not None
+
+
+def mark_setup_completed(guild_id, user_id):
+    with closing(get_connection()) as connection, connection:
+        connection.execute("INSERT OR IGNORE INTO completed_setup VALUES (?, ?)", (guild_id, user_id))
 
 
 def worlds_role_initialized(guild_id, user_id):

@@ -21,7 +21,7 @@ def test_setup_card_deletes_after_timeout_using_latest_interaction():
         card = payload["view"]
         card.expire_with(original)
         assert card.timeout == 600
-        click = SimpleNamespace(extras={}, delete_original_response=AsyncMock())
+        click = SimpleNamespace(extras={"setup_verified": True}, delete_original_response=AsyncMock())
         assert await card.interaction_check(click)
         await card.on_timeout()
         click.delete_original_response.assert_awaited_once()
@@ -34,7 +34,7 @@ def test_refresh_stops_previous_setup_expiry_without_deleting_current_card():
         original = SimpleNamespace(extras={}, delete_original_response=AsyncMock())
         old = message_payload("## Setup")["view"]
         old.expire_with(original)
-        click = SimpleNamespace(extras={}, delete_original_response=AsyncMock())
+        click = SimpleNamespace(extras={"setup_verified": True}, delete_original_response=AsyncMock())
         await old.interaction_check(click)
         new = message_payload("## Updated Setup")["view"]
         new.expire_with(click)

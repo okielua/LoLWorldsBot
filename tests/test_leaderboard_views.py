@@ -22,6 +22,8 @@ def stats_data(tmp_path, monkeypatch):
     monkeypatch.setattr(user_settings, "DATABASE_FILE", tmp_path / "stats.db")
     user_settings.initialize_database()
     initialize_polls()
+    for user_id in (7, 8):
+        user_settings.mark_setup_completed(123, user_id)
     data = load_tournament_data(Path(__file__).resolve().parents[1] / "data/worlds_2026.json")
     start = datetime(2026, 10, 16, 18, tzinfo=UTC)
     swiss = next(stage for stage in data.stages if "swiss" in stage.name.lower())

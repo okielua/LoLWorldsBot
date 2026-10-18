@@ -24,6 +24,7 @@ from services.status_labels import VOTING_CLOSED, VOTING_OPEN, VOTING_PENDING
 from services.user_settings import get_all_user_reminder_preferences
 from services.reminder_engine import get_server_ping_user_ids
 from services.worlds_role import individual_subscribers
+from services.setup_gate import require_setup, SetupRequiredView, SetupRequiredLayoutView
 
 logger = logging.getLogger(__name__)
 MATCHDAY_ZONE = ZoneInfo(TOURNAMENT_TIMEZONE)
@@ -43,6 +44,8 @@ class VoteButton(discord.ui.Button):
     async def callback(self, interaction):
         if interaction.guild_id != self.poll.guild_id or self.poll.guild_id != self.manager.guild_id:
             await interaction.response.send_message(**message_payload("This poll belongs to another server."), ephemeral=True)
+            return
+        if not await require_setup(interaction):
             return
         await interaction.response.defer(ephemeral=True, thinking=True)
         saved = False
@@ -85,7 +88,7 @@ class VoteButton(discord.ui.Button):
         await interaction.followup.send(**embed_card_payload(embed), ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
 
-class PersonalVoteView(discord.ui.View):
+class PersonalVoteView(SetupRequiredView):
     def __init__(self, manager, poll, user_id, selected_team=None):
         super().__init__(timeout=900)
         self.user_id = user_id
@@ -97,6 +100,8 @@ class PersonalVoteView(discord.ui.View):
                 button.style = discord.ButtonStyle.success
 
     async def interaction_check(self, interaction):
+        if not await super().interaction_check(interaction):
+            return False
         if interaction.user.id != self.user_id:
             await interaction.response.send_message(**message_payload("Use `/changevote` to make or change your prediction."), ephemeral=True)
             return False
@@ -111,6 +116,9 @@ class ScheduleVoteButton(discord.ui.DynamicItem[discord.ui.Button],
         button.custom_id = f"worldsday:{poll.guild_id}:{poll.match_id}:{poll.team1_id}:{poll.team2_id}:{index}"
         super().__init__(button)
 
+    async def interaction_check(self, interaction):
+        return await require_setup(interaction)
+
     @classmethod
     async def from_custom_id(cls, interaction, item, match):
         manager = interaction.client.voting_manager
@@ -121,7 +129,7 @@ class ScheduleVoteButton(discord.ui.DynamicItem[discord.ui.Button],
         return cls(manager, poll, int(match["index"]))
 
 
-class ScheduleVotesView(discord.ui.LayoutView):
+class ScheduleVotesView(SetupRequiredLayoutView):
     def __init__(self, manager, title, context, entries, poll_by_id):
         super().__init__(timeout=None)
         self.matches = [match for match, _ in entries]
@@ -162,7 +170,7 @@ def schedule_vote_payloads(manager, title, context, entries, poll_by_id):
     return pages
 
 
-class PersonalVotesView(discord.ui.LayoutView):
+class PersonalVotesView(SetupRequiredLayoutView):
     """One private card with independently editable controls for every open match."""
     def __init__(self, manager, user_id, rendered):
         super().__init__(timeout=900)
@@ -185,6 +193,8 @@ class PersonalVotesView(discord.ui.LayoutView):
                 item.style = discord.ButtonStyle.success if selected else discord.ButtonStyle.primary
 
     async def interaction_check(self, interaction):
+        if not await super().interaction_check(interaction):
+            return False
         if interaction.user.id != self.user_id:
             await interaction.response.send_message(**message_payload("Use `/changevote` to make or change your prediction."), ephemeral=True)
             return False
@@ -257,7 +267,7 @@ def personal_vote_payloads(manager, available, user_id, saved, *, timezone_name=
     return pages
 
 
-class DailyPredictionsView(discord.ui.LayoutView):
+class DailyPredictionsView(SetupRequiredLayoutView):
     def __init__(self, manager, day, matches, poll_by_id, recap="", role_id=None, user_ids=()):
         super().__init__(timeout=None)
         # Worlds has at most eight matches per day in the verified schedule.
@@ -288,6 +298,7 @@ class DailyPredictionsView(discord.ui.LayoutView):
             + ((" ".join(f"<@{user_id}>" for user_id in user_ids) + "\n\n") if user_ids and not manager.test_mode else "")
             + f"# __{'TEST: ' if manager.test_mode else ''}{title}__\n\n"
             "Here are today's matchups. Voting for each matchup closes 5 minutes before match start.\n\n"
+            "First time here? Run `/mysetup` before voting.\n\n"
             f"## __{date.strftime('%A')}, {date.day} {date.strftime('%B %Y')}__\n"
             + recap
         ))

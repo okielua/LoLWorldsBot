@@ -13,6 +13,7 @@ from services.prediction_display import my_votes_embeds
 from services.prediction_stats import get_voter_display_names
 from services.presentation import embed_card_payload, message_payload
 from services.user_settings import get_user_timezone, get_user_time_format
+from services.setup_gate import SetupRequiredView
 
 
 async def voter_autocomplete(interaction, current):
@@ -39,7 +40,7 @@ async def voter_autocomplete(interaction, current):
     return result
 
 
-class VoteHistoryView(discord.ui.View):
+class VoteHistoryView(SetupRequiredView):
     def __init__(self, pages, target, guild_id, tournament_id, data, owner_id):
         super().__init__(timeout=900)
         self.pages, self.target, self.page = pages, target, 0
@@ -52,6 +53,8 @@ class VoteHistoryView(discord.ui.View):
         self.next_page.disabled = self.page == len(self.pages) - 1
 
     async def interaction_check(self, interaction):
+        if not await super().interaction_check(interaction):
+            return False
         if interaction.guild_id != self.guild_id or interaction.user.id != self.owner_id:
             await interaction.response.send_message(**message_payload("Use `/votehistory` to open your own history view."), ephemeral=True)
             return False

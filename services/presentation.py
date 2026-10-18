@@ -3,6 +3,7 @@
 import discord
 import logging
 from services.team_emojis import team_display
+from services.setup_gate import require_setup
 
 BLUE = 0x5865F2
 logger = logging.getLogger(__name__)
@@ -50,6 +51,8 @@ class MessageCard(discord.ui.LayoutView):
 
     async def interaction_check(self, interaction):
         allowed = await self.controls.interaction_check(interaction) if self.controls else True
+        if allowed and not getattr(self.controls, "setup_controls", False) and not await require_setup(interaction):
+            return False
         if allowed and self.expiry_interaction is not None:
             self.expiry_interaction = interaction
             interaction.extras["expiring_message_card"] = self

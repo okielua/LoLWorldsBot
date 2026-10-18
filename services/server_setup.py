@@ -5,6 +5,7 @@ import logging
 import discord
 from services.presentation import message_payload
 from services.runtime_config import development_enabled
+from services.setup_gate import SetupRequiredView, SetupRequiredModal
 
 from services.server_reminders import validate_reminder_channel
 from services.reminder_test import run_reminder_test
@@ -76,7 +77,7 @@ class ReminderChannelSelect(discord.ui.ChannelSelect):
         )
 
 
-class PickemsLinkModal(discord.ui.Modal, title="Official Pick'ems Leaderboard"):
+class PickemsLinkModal(SetupRequiredModal, title="Official Pick'ems Leaderboard"):
     link = discord.ui.TextInput(label="HTTPS leaderboard link", max_length=500)
 
     def __init__(self, guild_id):
@@ -116,7 +117,7 @@ class WorldsPingRoleSelect(discord.ui.RoleSelect):
                                                 allowed_mentions=discord.AllowedMentions.none())
 
 
-class ServerSetupView(discord.ui.View):
+class ServerSetupView(SetupRequiredView):
     control_after_paragraphs = (2, 3, 4, 5, 6)
 
     def __init__(self, guild_id):
@@ -143,6 +144,8 @@ class ServerSetupView(discord.ui.View):
             self.control_after_paragraphs = (2, 3, 4, 5)
 
     async def interaction_check(self, interaction):
+        if not await super().interaction_check(interaction):
+            return False
         if not can_manage_server(interaction, self.guild_id):
             await interaction.response.send_message(**message_payload("You need the Manage Server permission to change these settings."), ephemeral=True)
             return False

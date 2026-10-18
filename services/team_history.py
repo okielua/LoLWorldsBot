@@ -3,9 +3,10 @@
 import discord
 
 from services.presentation import message_payload
+from services.setup_gate import SetupRequiredView
 
 
-class HistoryPages(discord.ui.View):
+class HistoryPages(SetupRequiredView):
     def __init__(self, pages):
         super().__init__(timeout=900)
         self.pages, self.page = pages, 0
@@ -32,7 +33,7 @@ class HistoryPages(discord.ui.View):
         await self.turn(interaction, 1)
 
 
-class TeamHistoryView(discord.ui.View):
+class TeamHistoryView(SetupRequiredView):
     def __init__(self, team_name, load_matches, *, has_matches=True):
         super().__init__(timeout=900)
         self.team_name, self.load_matches = team_name, load_matches

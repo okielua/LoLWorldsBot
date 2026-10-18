@@ -10,6 +10,7 @@ from models import MatchStatus
 from services.match_times import format_tournament_date, private_match_details
 from services.presentation import message_payload
 from services.status_labels import (MATCH_STATUS_LABELS, MATCHUP_CHANGED, VOTING_CLOSED, VOTING_OPEN, VOTING_PENDING)
+from services.setup_gate import SetupRequiredLayoutView
 
 
 PREDICTION_BLUE = 0x5865F2
@@ -145,7 +146,7 @@ def group_voting_messages(cards):
         return messages + group_voting_messages(batch)
     messages = []
     if all("view" in card for card in cards):
-        view = discord.ui.LayoutView(timeout=900)
+        view = SetupRequiredLayoutView(timeout=900)
         size = 0
         for payload in cards:
             card, = payload["view"].children
@@ -153,7 +154,7 @@ def group_voting_messages(cards):
                          if isinstance(item, discord.ui.TextDisplay))
             if view.children and (size + length > 4000 or view.total_children_count + 2 > 40):
                 messages.append({"view": view})
-                view, size = discord.ui.LayoutView(timeout=900), 0
+                view, size = SetupRequiredLayoutView(timeout=900), 0
             payload["view"].remove_item(card)
             view.add_item(card)
             size += length

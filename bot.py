@@ -35,6 +35,8 @@ from services.golgg_players import player_catalog, player_reply, refresh_players
 from services.team_history import TeamHistoryView
 from services.vote_history import voter_autocomplete, show_vote_history
 from services.runtime_config import runtime_config, prepare_seed, remove_development_commands, validate_application
+from services.setup_gate import SetupCommandTree
+from services.user_settings import mark_setup_completed
 from services.reminder_scheduler import check_reminders
 from services.reminder_engine import (
     ReminderTracker,
@@ -400,7 +402,7 @@ class WorldsBot(discord.Client):
     def __init__(self):
         super().__init__(intents=intents)
 
-        self.tree = app_commands.CommandTree(self)
+        self.tree = SetupCommandTree(self)
         self.voting_manager = VotingManager(self, tournament_store, GUILD_ID)
         self.add_dynamic_items(ScheduleVoteButton)
         self.add_dynamic_items(MyStatsButton)
@@ -588,6 +590,7 @@ class TimezoneRegionSelect(discord.ui.Select):
 
 
 class TimezoneRegionView(discord.ui.View):
+    setup_controls = True
     def __init__(self):
         super().__init__(timeout=900)
 
@@ -637,6 +640,7 @@ class TimezoneCitySelect(discord.ui.Select):
 
 
 class TimezoneCityView(discord.ui.View):
+    setup_controls = True
     def __init__(
         self,
         region: str,
@@ -753,6 +757,7 @@ class TimeFormatSelect(discord.ui.Select):
 
 
 class SetupView(discord.ui.View):
+    setup_controls = True
     control_after_paragraphs = (2, 3, 4, 5, 6)
 
     def __init__(
@@ -1086,6 +1091,8 @@ async def setup(
         **setup_payload(interaction, all_games_enabled=enabled),
 
     )
+    if interaction.guild_id is not None:
+        await asyncio.to_thread(mark_setup_completed, interaction.guild_id, interaction.user.id)
 
 
 @bot.tree.command(

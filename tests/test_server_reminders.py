@@ -32,6 +32,7 @@ NOW = datetime(2026, 10, 15, 17, 55, tzinfo=UTC)
 def database(tmp_path, monkeypatch):
     monkeypatch.setattr(user_settings, "DATABASE_FILE", tmp_path / "settings.db")
     user_settings.initialize_database()
+    user_settings.mark_setup_completed(123, 7)
     initialize_server_settings()
     initialize_delivery_records()
 
@@ -252,7 +253,7 @@ def test_server_setup_is_private_and_rechecks_admin_permission(database):
         assert view.toggle_reminders.disabled
         assert "Off" in build_server_setup_content(123)
         interaction = SimpleNamespace(
-            guild_id=123, user=SimpleNamespace(guild_permissions=SimpleNamespace(manage_guild=False)),
+            guild_id=123, user=SimpleNamespace(id=7, guild_permissions=SimpleNamespace(manage_guild=False)),
             response=SimpleNamespace(send_message=AsyncMock()),
         )
         assert not await view.interaction_check(interaction)

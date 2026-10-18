@@ -102,6 +102,12 @@ DM reminders are deferred: their controls are hidden from `/mysetup` and automat
 polling does not generate DM events. Existing saved preferences are retained.
 The private `/mysetup` card deletes itself after ten minutes without activity.
 Using a control refreshes the timer; open `/mysetup` again to start a new session.
+Personal setup is required before using other commands or bot controls, including
+public voting buttons and restart-restored buttons. New members receive a private
+prompt to run `/mysetup`; autocomplete stays empty until then. Successfully
+presenting `/mysetup` records access per server/member, without requiring optional
+team selections. Previous role-onboarding records migrate as existing setups.
+Setup controls remain accessible, and restarting does not reset setup status.
 Public delivery is configured in Discord
 through the private `/serversetup` panel, which requires the **Manage Server** permission, regardless of role names. Permission is checked again when using its controls or submitting its forms.
 

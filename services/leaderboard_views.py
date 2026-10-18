@@ -7,6 +7,7 @@ import discord
 from services.leaderboard_display import leaderboard_embeds, personal_stats_embed
 from services.prediction_stats import competition_ranks, get_competition_snapshot
 from services.presentation import message_payload, embed_card_payload
+from services.setup_gate import require_setup, SetupRequiredView
 
 
 async def leaderboard_context(interaction, tournament_id, *, data=None):
@@ -55,10 +56,15 @@ class MyStatsButton(discord.ui.DynamicItem[discord.ui.Button],
         return cls(int(match["guild"]), match["tournament"])
 
     async def callback(self, interaction):
+        if not await require_setup(interaction):
+            return
         await show_personal_stats(interaction, self.guild_id, self.tournament_id)
 
+    async def interaction_check(self, interaction):
+        return await require_setup(interaction)
 
-class LeaderboardView(discord.ui.View):
+
+class LeaderboardView(SetupRequiredView):
     def __init__(self, pages, guild_id, tournament_id):
         super().__init__(timeout=900)
         self.pages, self.page, self.guild_id = pages, 0, guild_id
