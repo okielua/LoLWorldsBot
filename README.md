@@ -498,7 +498,9 @@ Each protected participant's emoji and padded name share a single spoiler.
 Controls that cannot render spoilers use a centered `?` with the server's
 `beeQuestion` emoji (Unicode question mark fallback if unavailable), preserving
 the original vote IDs. Left/right button order matches left/right fixture order.
-Confirmations use the same neutral placeholder. Other independently known teams,
+Successful private vote confirmations reveal the actual matchup and selected
+team without spoilers or placeholders; public cards and controls remain protected.
+Other independently known teams,
 dates, start times, stage labels and series formats remain visible.
 
 Swiss rows use alphabetical order, with affected records concealed. Prediction

@@ -71,9 +71,11 @@ class VoteButton(discord.ui.Button):
                 f"## {team}"
             )
             if current_policy():
-                slot = 1 if self.team_id == self.poll.team1_id else 2
-                text = (f"Your prediction for {matchup(match)} on {date} ({stage_name}):\n"
-                        f"## {team_token(self.team_id, self.poll.match_id, slot, neutral=True)}")
+                # A successful pick is an explicit reveal in this voter's
+                # private receipt. Keep public fixtures/buttons protected.
+                pairing = f"{team_token(match.team1_id)} vs {team_token(match.team2_id)}"
+                text = (f"Your prediction for {pairing} on {date} ({stage_name}):\n"
+                        f"## {team_token(self.team_id)}")
             saved = True
         except ValueError as error:
             text = str(error)

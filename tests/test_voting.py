@@ -488,6 +488,49 @@ def test_private_vote_confirmation_and_changed_confirmation(context):
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize("selected_index", [0, 1])
+def test_successful_private_confirmation_reveals_all_teams_even_when_pick_was_hidden(context, monkeypatch, selected_index):
+    import json
+    from services import spoilers
+    from services.spoiler_delivery import render_payload
+    from services.team_emojis import configure_team_emojis, team_emoji
+
+    manager, store, channel, current, _ = context
+    match = store.data.matches[0]
+    prior = replace(match, id="prerequisite", start_time=match.start_time - timedelta(days=1),
+                    status=MatchStatus.COMPLETED, winner_id=match.team2_id, team1_score=1, team2_score=3)
+    policy = spoilers.SpoilerPolicy(replace(store.data, matches=[prior, *store.data.matches]),
+                                   ended_at={prior.id: current[0]}, dependencies={(match.id, 2): [prior.id]},
+                                   clock=manager.clock)
+    monkeypatch.setattr(spoilers, "_current", policy)
+    configure_team_emojis([discord.PartialEmoji(name="CLOUD9", id=111), discord.PartialEmoji(name="KC", id=222),
+                           discord.PartialEmoji(name="beeQuestion", id=333)], store.data.teams)
+
+    async def scenario():
+        assert policy.participant_protected(match, 2)
+        await manager.tick()
+        buttons = [item for item in channel.send.call_args.kwargs["view"].walk_children() if isinstance(item, discord.ui.Button)]
+        public = render_payload({"components": channel.send.call_args.kwargs["view"].to_components()})
+        assert "beeQuestion" in json.dumps(public)
+        interaction = SimpleNamespace(guild_id=123, user=SimpleNamespace(id=7, display_name="Lua"),
+            response=SimpleNamespace(defer=AsyncMock()), followup=SimpleNamespace(send=AsyncMock()))
+        await buttons[selected_index].callback(interaction)
+        reply = interaction.followup.send.call_args.kwargs
+        assert reply["ephemeral"] is True
+        private = json.dumps(render_payload({"components": reply["view"].to_components()}), ensure_ascii=False)
+        assert "||" not in private and "beeQuestion" not in private
+        assert policy.team(match.team1_id, emoji=team_emoji(match.team1_id)) in private
+        assert policy.team(match.team2_id, emoji=team_emoji(match.team2_id)) in private
+        chosen = match.team1_id if selected_index == 0 else match.team2_id
+        assert "## " + policy.team(chosen, emoji=team_emoji(chosen)) in private
+        assert policy.participant_protected(match, 2)  # No public reveal side effect.
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        configure_team_emojis(())
+
+
 def test_daily_post_shows_registered_zones_but_confirmation_keeps_single_date(context):
     manager, store, channel, _, message = context
     for uid, zone in [(1, "Europe/London"), (2, "Europe/Berlin"), (3, "Asia/Tokyo")]:
