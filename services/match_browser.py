@@ -37,7 +37,9 @@ async def show_match_games(interaction, data, formatter, *, count, upcoming, now
         (match for match in data.matches if match.status == MatchStatus.COMPLETED and match.start_time <= now),
         key=lambda match: (match.start_time, match.id), reverse=True,
     )
-    title = "Next Worlds Matches" if upcoming else "Previous Worlds Matches"
+    direction = "Next" if upcoming else "Previous"
+    shown = min(count, len(matches))
+    title = f"{direction} {shown} {'Match' if shown == 1 else 'Matches'}"
     if not matches:
         empty = "No upcoming matches." if upcoming else "No completed Worlds matches yet."
         await interaction.response.send_message(**message_payload(f"# {title}\n\n{empty}"))

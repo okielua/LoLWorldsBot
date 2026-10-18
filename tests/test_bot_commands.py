@@ -1071,7 +1071,7 @@ def test_previous_is_public_and_does_not_leak_results_outside_spoilers(count, mo
     call = interaction.response.send_message.call_args
     assert call.kwargs.get("ephemeral", False) is False
     card = rendered_message(call)
-    assert card.title == "__Previous Worlds Matches__"
+    assert card.title == f"__Previous {min(count, 3)} {'Match' if count == 1 else 'Matches'}__"
     if not count:
         assert "No completed" in card.description
         return

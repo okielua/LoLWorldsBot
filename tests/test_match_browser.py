@@ -47,6 +47,8 @@ def test_clamps_to_available_matches_and_pages_in_correct_order(browser, upcomin
         sent = interaction.response.send_message.call_args.kwargs
         assert not sent.get("ephemeral", False)
         controls = sent["view"].controls
+        assert all(page.startswith(f"# {'Next' if upcoming else 'Previous'} {min(requested, 12)} Matches\n")
+                   for page in controls.pages)
         assert len(controls.pages) == (min(requested, 12) + 2) // 3
         assert all(page.count("Match fixture-") == 3 for page in controls.pages)
         note = f"Only 12 {'upcoming' if upcoming else 'completed'} matches are available."
