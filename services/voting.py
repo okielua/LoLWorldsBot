@@ -64,6 +64,9 @@ class VoteButton(discord.ui.Button):
                 self.poll.match_id, interaction.user.id, self.team_id, interaction.user.display_name,
                 expected_pair=(self.poll.team1_id, self.poll.team2_id),
             )
+            # Update the shared board before confirmations or announcements can
+            # delay it. The saved vote must already be visible when we celebrate it.
+            await self.manager.refresh_participation(self.poll.match_id)
             match = self.manager.store.data.matches_by_id.get(self.poll.match_id, self.poll)
             team1 = discord.utils.escape_markdown(match.team1_id)
             team2 = discord.utils.escape_markdown(match.team2_id)
@@ -104,7 +107,6 @@ class VoteButton(discord.ui.Button):
         await interaction.followup.send(**embed_card_payload(embed), ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
         if saved:
             await self.manager.announce_vote(self.poll.match_id, interaction.user.display_name)
-            await self.manager.refresh_participation(self.poll.match_id)
 
 
 class PersonalVoteView(SetupRequiredView):
@@ -562,7 +564,7 @@ class VotingManager:
                 day = match.start_time.astimezone(MATCHDAY_ZONE).date().isoformat()
                 receipt = await asyncio.to_thread(polls.get_daily_post, self.guild_id, self.store.data.tournament.id, day)
                 if receipt:
-                    await self._sync_day(day, self.match_days()[day])
+                    await self._sync_day(day, self.match_days()[day], participation=True)
         except (discord.DiscordException, OSError, sqlite3.Error, ValueError):
             logger.warning("Vote saved, but the public voter list could not refresh", exc_info=True)
 
@@ -675,9 +677,9 @@ class VotingManager:
             self._registered.discard(day)
             return day
 
-    async def _sync_day(self, day, matches, *, manual=False):
+    async def _sync_day(self, day, matches, *, manual=False, participation=False):
         async with self._lock:
-            if not manual and self.clock() < self._retry_at.get(day, self.clock()):
+            if not manual and not participation and self.clock() < self._retry_at.get(day, self.clock()):
                 return None
             tournament_id = self.store.data.tournament.id
             if not manual and await asyncio.to_thread(polls.daily_post_suppressed, self.guild_id, tournament_id, day):

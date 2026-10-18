@@ -561,6 +561,44 @@ def test_private_vote_confirmation_and_changed_confirmation(context):
     asyncio.run(scenario())
 
 
+def test_vote_refreshes_public_board_before_confirmation_or_announcement(context):
+    manager, store, channel, now, message = context
+
+    async def scenario():
+        await manager.tick()
+        button = next(item for item in channel.send.call_args.kwargs["view"].walk_children()
+                      if isinstance(item, discord.ui.Button))
+        # A previous transient board failure must not postpone a new vote's update.
+        day = next(iter(manager._posted))
+        manager._retry_at[day] = now[0] + timedelta(seconds=60)
+        confirmation_started = asyncio.Event()
+        release_confirmation = asyncio.Event()
+
+        async def slow_confirmation(**kwargs):
+            confirmation_started.set()
+            await release_confirmation.wait()
+
+        interaction = SimpleNamespace(
+            guild_id=123, user=SimpleNamespace(id=8, display_name="Miwa"),
+            response=SimpleNamespace(defer=AsyncMock()),
+            followup=SimpleNamespace(send=AsyncMock(side_effect=slow_confirmation)),
+        )
+        task = asyncio.create_task(button.callback(interaction))
+        try:
+            await asyncio.wait_for(confirmation_started.wait(), timeout=5)
+            message.edit.assert_awaited_once()
+            components = str(message.edit.call_args.kwargs["view"].to_components())
+            assert "@Miwa" in components
+            assert channel.send.await_count == 1  # Announcement hasn't started.
+            assert message.edit.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
+        finally:
+            release_confirmation.set()
+            await task
+        assert channel.send.await_count == 2
+
+    asyncio.run(scenario())
+
+
 @pytest.mark.parametrize("selected_index", [0, 1])
 def test_successful_private_confirmation_reveals_all_teams_even_when_pick_was_hidden(context, monkeypatch, selected_index):
     import json
