@@ -106,22 +106,23 @@ def test_test_completion_never_pings_and_latest_command_is_public(context):
     asyncio.run(scenario())
 
 
-def test_series_scoped_spoilers_and_large_results(context, monkeypatch):
+@pytest.mark.parametrize("test_mode", [False, True])
+def test_series_results_are_visible_without_changing_other_spoiler_rules(context, monkeypatch, test_mode):
     manager, store, _, now, _ = context
     match = complete(store, now, store.data.matches[0])
     policy = spoilers.SpoilerPolicy(store.data, ended_at={match.id: now[0]}, clock=lambda: now[0])
     monkeypatch.setattr(spoilers, "_current", policy)
     votes = [(i, match.team1_id if i % 2 else match.team2_id, f"Voter {i}") for i in range(300)]
-    pages = result_pages(match, votes)
+    pages = result_pages(match, votes, test_mode=test_mode)
     assert len(pages) > 1 and all(len(page) < 3600 for page in pages)
     for page in pages:
-        hidden = render_payload({"content": page})["content"]
-        assert "@Voter" in hidden and "||@Voter" not in hidden and "⟦" not in hidden
-        assert "Final score:** ||3–1||" in hidden
-        without_score = "\n".join(line for line in hidden.splitlines() if "Final score:" not in line)
-        assert "||" not in without_score.replace("||✅||", "✅").replace("||❌||", "❌")
-        voter_lines = [line for line in hidden.splitlines() if "@Voter" in line]
-        assert all(line.startswith(("||✅|| @Voter", "||❌|| @Voter")) for line in voter_lines)
+        visible = render_payload({"content": page})["content"]
+        assert "@Voter" in visible and "⟦" not in visible and "||" not in visible
+        assert "Final score:** 3–1" in visible
+        voter_lines = [line for line in visible.splitlines() if "@Voter" in line]
+        assert all(line.startswith(("✅ @Voter", "❌ @Voter")) for line in voter_lines)
+    ordinary = render_payload({"content": spoilers.score_token(match) + "\n" + spoilers.result_token(match, "✅")})
+    assert "||3–1||" in ordinary["content"] and "||✅||" in ordinary["content"]
     now[0] += timedelta(hours=12)
     released = [render_payload({"content": page})["content"] for page in pages]
     assert all("||" not in page for page in released)

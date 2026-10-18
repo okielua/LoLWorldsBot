@@ -509,10 +509,11 @@ When a published poll's series completes, the bot posts its voting results once
 in the configured reminder channel, mentioning the Worlds role and subscribers
 to either team. Recipients are deduplicated and role members do not also get
 individual mentions. Large recipient sets use bounded follow-up mention batches.
-The final score and each voter's ✅/❌ icon follow that series' fixed 12-hour
-spoiler window. Voters are stacked one per line beneath their chosen team, with
-only the correctness emoji concealed. Team names, vote counts, percentages and
-voter names stay visible. Result receipts and
+Series voting results cards are an explicit exception to spoiler protection:
+final scores, team names, vote counts, percentages, stacked voter names and their
+✅/❌ icons are all visible immediately. This applies to the public end-of-series
+announcement, its pages, and `/votehistory` without a member, including simulations.
+Other commands retain the 12-hour spoiler rule. Result receipts and
 pending mention batches persist across restarts; an initial install does not
 announce the entire backlog of historical matches. Public reminders must be On.
 
