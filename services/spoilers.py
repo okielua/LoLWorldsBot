@@ -53,6 +53,8 @@ def result_token(match, text):
 def aggregate_token(text, match_ids=None):
     if _current is None:
         return text
+    if match_ids is not None and not match_ids:
+        return text  # An explicitly empty dependency set cannot reveal a result.
     if not _current.data.matches:
         return f"⟦aggregate:unknown⟧{text}⟦/aggregate⟧"
     ids = match_ids if match_ids is not None else [m.id for m in _current.data.matches

@@ -91,6 +91,7 @@ class CompetitionSnapshot:
     pending: dict
     eligible: int
     advanced: dict = field(default_factory=dict)
+    result_match_ids: tuple | None = None
 
 
 def advanced_prediction_stats(eligible, by_user):
@@ -238,7 +239,8 @@ def get_competition_snapshot(guild_id, tournament_id, *, match_day=None, data=No
         predictions.sort(key=lambda row: (row.start_time, row.match_id), reverse=True)
     for predictions in pending.values():
         predictions.sort(key=lambda row: (row.start_time, row.match_id))
-    return CompetitionSnapshot(calculate(eligible), previous, recent, pending, len(eligible), advanced_prediction_stats(eligible, by_user))
+    return CompetitionSnapshot(calculate(eligible), previous, recent, pending, len(eligible),
+                               advanced_prediction_stats(eligible, by_user), tuple(row[1] for row in eligible))
 
 
 def get_competition_stats(guild_id, tournament_id, *, match_day=None):

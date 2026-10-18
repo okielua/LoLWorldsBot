@@ -76,15 +76,23 @@ def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous
         row = PredictionStats(user_id, 0, 0, snapshot.eligible, 0, 0)
     rank = ranks.get(user_id)
     standing = f"{rank} of {len(rows)}" if rank else UNAVAILABLE
+    rank_scope = snapshot.result_match_ids
+    personal_scope = tuple(prediction.match_id for prediction in snapshot.recent.get(user_id, ()))
+    if not personal_scope and row.submitted:
+        personal_scope = rank_scope
+
+    def value(text):
+        return aggregate_token(str(text), personal_scope)
+
     body = (
         "-# (All stats cover completed series from Swiss Stage onward.)\n\n"
-        f"**My rank: {standing}**\n"
-        f"**My correct predictions: {row.correct}**\n\n"
-        f"My votes: **{row.submitted} of {row.eligible} past matches**\n"
-        f"My accuracy: **{accuracy_text(row)}{' correct' if row.submitted else ''}**\n"
-        f"My incorrect predictions: **{row.submitted - row.correct}**\n"
-        f"My missed votes: **{row.eligible - row.submitted}**\n\n"
-        f"My current streak: **{row.current_streak}**\nMy best streak: **{row.longest_streak}**"
+        f"**My rank: {aggregate_token(standing, rank_scope) if rank else standing}**\n"
+        f"**My correct predictions: {value(row.correct)}**\n\n"
+        f"My votes: **{value(f'{row.submitted} of {row.eligible} past matches')}**\n"
+        f"My accuracy: **{value(accuracy_text(row) + (' correct' if row.submitted else ''))}**\n"
+        f"My incorrect predictions: **{value(row.submitted - row.correct)}**\n"
+        f"My missed votes: **{value(row.eligible - row.submitted)}**\n\n"
+        f"My current streak: **{value(row.current_streak)}**\nMy best streak: **{value(row.longest_streak)}**"
     )
     advanced = snapshot.advanced.get(user_id, AdvancedPredictionStats())
 
@@ -92,12 +100,12 @@ def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous
         if team is None:
             return "Not enough data"
         percentage = f"{float(team.accuracy) * 100:.1f}".rstrip("0").rstrip(".")
-        return team_text(f"**{team.team_id}** · **{team.correct}/{team.scored} correct ({percentage}%)**")
+        return value(team_text(f"**{team.team_id}** · **{team.correct}/{team.scored} correct ({percentage}%)**"))
 
     backed = advanced.hopium_supplier
-    backing_text = (team_text(f"**{backed.team_id}** · **backed to win in {backed.backed_losses} series they lost**")
-                    if backed else "Not enough data")
-    minority = (f"**{advanced.minority_correct}/{advanced.minority_total} minority predictions correct**"
+    backing_text = value(team_text(f"**{backed.team_id}** · **backed to win in {backed.backed_losses} series they lost**")
+                         if backed else "Not enough data")
+    minority = (value(f"**{advanced.minority_correct}/{advanced.minority_total} minority predictions correct**")
                 if advanced.minority_total else "Not enough data")
     def section(name, title):
         return f"\n\n## {custom_emoji(name) or ':' + name + ':'} __{title}__\n"
@@ -116,7 +124,7 @@ def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous
         + "-# How often I predict correctly when fewer than half the voters on Communism back my chosen team. Evenly split votes don’t count.\n\n"
         f"{minority}"
     )
-    return discord.Embed(title=title, description=aggregate_token(format_footnotes(body)), colour=ACCENT)
+    return discord.Embed(title=title, description=format_footnotes(body), colour=ACCENT)
 
 
 def sample_leaderboard_entries(display_name):

@@ -504,8 +504,11 @@ Other independently known teams,
 dates, start times, stage labels and series formats remain visible.
 
 Swiss rows use alphabetical order, with affected records concealed. Prediction
-rankings and advanced aggregates conceal the complete affected body, including
-names/rank order, rather than exposing a winner through ordering or highlighting.
+rankings conceal the complete affected body, including names/rank order, rather
+than exposing a winner through ordering or highlighting. Personal advanced stats
+keep headings, explanations and labels readable and protect only affected values.
+Their dependencies come from the actual eligible Swiss-onward results and the
+member's scored predictions; unrelated Play-in results do not hide an empty card.
 Gol.gg aggregates are protected too; aggregate details are withheld while a series
 is live. Team-filtered history omits a future fixture if the queried team's very
 presence would be a spoiler. Targeted follower mentions also exclude hidden

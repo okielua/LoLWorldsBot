@@ -49,6 +49,36 @@ def interaction_for(data, user_id):
     )
 
 
+def test_playin_result_does_not_spoiler_empty_swiss_advanced_stats(stats_data, monkeypatch):
+    from services import spoilers
+    from services.prediction_stats import get_competition_snapshot
+    from services.spoiler_delivery import render_payload
+
+    playin = next(stage for stage in stats_data.stages if "play" in stage.name.lower())
+    completed = replace(stats_data.matches[0], stage_id=playin.id)
+    data = replace(stats_data, matches=[completed, stats_data.matches[1]])
+    now = completed.start_time + timedelta(minutes=30)
+    policy = spoilers.SpoilerPolicy(data, ended_at={completed.id: now}, clock=lambda: now)
+    monkeypatch.setattr(spoilers, "_current", policy)
+    snapshot = get_competition_snapshot(123, data.tournament.id, data=data, from_swiss=True)
+    assert snapshot.result_match_ids == () and snapshot.eligible == 0
+    assert policy.protected(completed)
+
+    async def scenario():
+        interaction = interaction_for(data, 7)
+        await show_personal_stats(interaction, 123, data.tournament.id, data=data, target_user=interaction.user)
+        reply = interaction.followup.send.call_args.kwargs
+        assert reply["ephemeral"] is True
+        rendered = render_payload({"components": reply["view"].to_components()})
+        text = "\n".join(child["content"] for card in rendered["components"] for child in card["components"]
+                         if child.get("type") == 10)
+        assert "||" not in text
+        assert "__Check Your PayPal__" in text
+        assert text.count("Not enough data") == 4
+        assert "**My correct predictions: 0**" in text
+    asyncio.run(scenario())
+
+
 def test_button_and_stats_command_return_identical_private_clicker_stats(stats_data):
     from test_bot_commands import load_command
     data = stats_data

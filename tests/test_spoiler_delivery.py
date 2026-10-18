@@ -250,3 +250,44 @@ def test_reopened_series_gets_a_new_completion_observation(protected, database):
     new_end = end + timedelta(hours=1)
     policy = SpoilerLedger(database).observe(data, new_end)
     assert policy.ended_at[match.id] == new_end
+
+
+def test_personal_stats_protect_values_but_keep_labels_and_explanations_readable(protected):
+    from services.leaderboard_display import personal_stats_embed
+    from services.prediction_stats import CompetitionSnapshot, Prediction, PredictionStats
+
+    policy, match, _, end = protected
+    pick = Prediction(match.id, match.team1_id, match.team2_id, match.start_time, match.winner_id, match.winner_id)
+    snapshot = CompetitionSnapshot([PredictionStats(7, 1, 1, 1, 1, 1)], None, {7: [pick]}, {}, 1,
+                                   result_match_ids=(match.id,))
+    draft = {"embeds": [personal_stats_embed(snapshot, 7, "lua").to_dict()]}
+    text = render_payload(draft)["embeds"][0]["description"]
+    assert "**My rank: ||1 of 1||**" in text
+    assert "**My correct predictions: ||1||**" in text
+    assert "__Check Your PayPal__" in text
+    assert "__Can’t Read These Frauds__" in text
+    assert "Requires at least 3 scored predictions" in text
+    assert "completed series from Swiss Stage onward" in text
+    assert not text.startswith("||")
+    policy.clock = lambda: end + timedelta(hours=14)
+    assert "||" not in render_payload(draft)["embeds"][0]["description"]
+
+
+def test_unrelated_protected_result_does_not_hide_personal_stats(protected):
+    from dataclasses import replace
+    from services.leaderboard_display import personal_stats_embed
+    from services.prediction_stats import CompetitionSnapshot, Prediction, PredictionStats
+
+    policy, protected_match, _, end = protected
+    released = replace(protected_match, id="released", start_time=end - timedelta(hours=19))
+    policy.data.matches.append(released)
+    policy.data.matches_by_id[released.id] = released
+    policy.ended_at[released.id] = end - timedelta(hours=15)
+    pick = Prediction(released.id, released.team1_id, released.team2_id, released.start_time, released.winner_id, released.winner_id)
+    snapshot = CompetitionSnapshot([PredictionStats(7, 1, 1, 1, 1, 1)], None, {7: [pick]}, {}, 1,
+                                   result_match_ids=(released.id,))
+    assert policy.protected(protected_match)
+    assert not policy.protected(released)
+    text = render_payload({"embeds": [personal_stats_embed(snapshot, 7, "lua").to_dict()]})["embeds"][0]["description"]
+    assert "||" not in text
+    assert "**My correct predictions: 1**" in text
