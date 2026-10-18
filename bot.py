@@ -1629,8 +1629,8 @@ See your past and upcoming votes, check results, and change votes while voting i
 `/myvotestats`
 See your rank, accuracy, streaks, and advanced personal prediction stats.
 
-`/votehistory`
-See a server member’s prediction history and advanced vote stats.
+`/votehistory <member>` (e.g. `/votehistory lua`)
+See a server member’s prediction history and advanced vote stats. Start typing and choose a member from the suggestions.
 
 ## __3. Leaderboards__
 
@@ -1654,13 +1654,13 @@ See the next Worlds match.
 `/previous`
 See the last two completed matches, with timed spoiler protection for recent results.
 
-`/schedule`
+`/schedule <view>` (e.g. `/schedule Swiss Stage`)
 Browse the next five matches or view the schedule for a tournament stage.
 
-`/team`
+`/team <teamname>` (e.g. `/team T1`)
 See a specific team’s Worlds matches and tournament stats from gol.gg.
 
-`/player`
+`/player <playername>` (e.g. `/player Zeka`)
 See a player’s Worlds stats from gol.gg. Start typing to find a player.
 
 `/swiss-standings`
