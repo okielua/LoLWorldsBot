@@ -534,7 +534,7 @@ def test_private_vote_confirmation_and_changed_confirmation(context):
         assert embed.description.startswith(f"Your prediction for **C9** vs **KC** on {date} (Play-ins):\n## KC")
         assert interaction.followup.send.call_args.kwargs["ephemeral"]
         assert interaction.followup.send.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
-        channel.send.assert_awaited_once()
+        assert channel.send.await_count == 3  # Board plus two participation messages.
     asyncio.run(scenario())
 
 
@@ -574,11 +574,64 @@ def test_successful_private_confirmation_reveals_all_teams_even_when_pick_was_hi
         chosen = match.team1_id if selected_index == 0 else match.team2_id
         assert "## " + policy.team(chosen, emoji=team_emoji(chosen)) in private
         assert policy.participant_protected(match, 2)  # No public reveal side effect.
+        announcement = channel.send.call_args.kwargs
+        assert announcement["allowed_mentions"].to_dict() == {"parse": []}
+        public_notice = json.dumps(render_payload({"components": announcement["view"].to_components()}), ensure_ascii=False)
+        assert "@Lua" in public_notice and "voted on the upcoming match" in public_notice
+        assert "||" in public_notice  # Protected participant stays protected.
+        assert "Your prediction" not in public_notice and "Your pick" not in public_notice
 
     try:
         asyncio.run(scenario())
     finally:
         configure_team_emojis(())
+
+
+def test_announcement_failure_does_not_undo_vote_or_private_confirmation(context):
+    from services.polls import get_user_votes
+    manager, store, channel, _, _ = context
+
+    async def scenario():
+        await manager.tick()
+        button = next(item for item in channel.send.call_args.kwargs["view"].walk_children()
+                      if isinstance(item, discord.ui.Button))
+        channel.send.side_effect = discord.Forbidden(SimpleNamespace(status=403, reason="Forbidden"), "Missing Permissions")
+        interaction = SimpleNamespace(guild_id=123, user=SimpleNamespace(id=7, display_name="Lua"),
+            response=SimpleNamespace(defer=AsyncMock()), followup=SimpleNamespace(send=AsyncMock()))
+        await button.callback(interaction)
+        assert get_user_votes(123, store.data.tournament.id, 7)[0][1] == button.team_id
+        assert interaction.followup.send.call_args.kwargs["ephemeral"] is True
+        assert "Your prediction" in rendered_message(interaction.followup.send.call_args).description
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("skip", ["simulation", "no_channel"])
+def test_announcement_skips_simulations_and_unconfigured_channels(context, skip):
+    manager, store, channel, _, _ = context
+    if skip == "simulation":
+        manager.test_mode = True
+    else:
+        with user_settings.get_connection() as connection:
+            connection.execute("DELETE FROM server_settings WHERE guild_id = 123")
+    asyncio.run(manager.announce_vote(store.data.matches[0].id, "Lua"))
+    channel.send.assert_not_awaited()
+
+
+def test_failed_vote_does_not_send_participation_message(context):
+    manager, store, channel, now, _ = context
+
+    async def scenario():
+        await manager.tick()
+        button = next(item for item in channel.send.call_args.kwargs["view"].walk_children()
+                      if isinstance(item, discord.ui.Button))
+        now[0] = store.data.matches[0].start_time
+        store.fetched_at = now[0]
+        interaction = SimpleNamespace(guild_id=123, user=SimpleNamespace(id=7, display_name="Lua"),
+            response=SimpleNamespace(defer=AsyncMock()), followup=SimpleNamespace(send=AsyncMock()))
+        await button.callback(interaction)
+        channel.send.assert_awaited_once()
+        assert "closed" in rendered_message(interaction.followup.send.call_args).description.lower()
+    asyncio.run(scenario())
 
 
 def test_daily_post_shows_registered_zones_but_confirmation_keeps_single_date(context):
@@ -602,7 +655,7 @@ def test_daily_post_shows_registered_zones_but_confirmation_keeps_single_date(co
         await manager.tick()
         updated = str(message.edit.call_args.kwargs["view"].to_components())
         assert "Seoul" in updated and "Tokyo" not in updated
-        channel.send.assert_awaited_once()
+        assert channel.send.await_count == 2  # Board plus participation message.
     asyncio.run(scenario())
 
 

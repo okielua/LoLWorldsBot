@@ -306,6 +306,13 @@ from the first fresh completed result the bot observes, rather than match start.
 shows its matchday date. It does not create another post or send notifications.
 Before any daily post has been published, it directs members to `/today`.
 
+Successful vote-button interactions also send a short participation message in
+the `/serversetup` reminder channel: `🗳️ @name voted on the upcoming match …!`
+The selected team stays private, participant spoiler protection still applies,
+and all user/role/everyone pings are disabled. Controlled prediction simulations
+do not send these announcements. Missing channels or failed announcements never
+undo a saved vote or prevent its private confirmation.
+
 Members with **Manage Server** can use `/serversetup` → **Publish Daily Post**
 or **Delete Daily Post**. Manual publishing creates or refreshes the earliest
 unfinished matchday's board, even if automatic reminders are off. New posts ping

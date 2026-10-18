@@ -101,6 +101,8 @@ class VoteButton(discord.ui.Button):
                     except discord.DiscordException:
                         logger.exception("Prediction saved, but private button selection could not be updated")
         await interaction.followup.send(**embed_card_payload(embed), ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+        if saved:
+            await self.manager.announce_vote(self.poll.match_id, interaction.user.display_name)
 
 
 class PersonalVoteView(SetupRequiredView):
@@ -446,6 +448,27 @@ class VotingManager:
             raise ValueError("This matchup changed. Please use the current prediction buttons.")
         return await asyncio.to_thread(polls.cast_vote, self.guild_id, match_id, user_id, team_id, self.clock(), display_name,
                                        (match.team1_id, match.team2_id))
+
+    async def announce_vote(self, match_id, display_name):
+        """Celebrate participation without identifying the selected team."""
+        if self.test_mode:
+            return
+        try:
+            match = self.store.data.matches_by_id.get(match_id)
+            if match is None:
+                return
+            settings = await asyncio.to_thread(get_server_settings, self.guild_id)
+            if settings.reminder_channel_id is None:
+                return
+            channel = self.client.get_channel(settings.reminder_channel_id)
+            if channel is None:
+                channel = await self.client.fetch_channel(settings.reminder_channel_id)
+            validate_reminder_channel(channel, self.guild_id)
+            name = discord.utils.escape_mentions(discord.utils.escape_markdown(" ".join(display_name.split())))
+            text = f"🗳️ **@{name}** voted on the upcoming match {matchup(match)}!"
+            await channel.send(**message_payload(text), allowed_mentions=discord.AllowedMentions.none())
+        except (discord.DiscordException, OSError, sqlite3.Error, ValueError):
+            logger.warning("Vote saved, but participation announcement could not be sent", exc_info=True)
 
     async def personal_vote_targets(self, user_id):
         if not self.fresh():
