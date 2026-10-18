@@ -492,7 +492,9 @@ def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeyp
         for category in ("Setup", "Matches and Results", "Voting", "Leaderboards"):
             assert f"## __{category}__" in text
         for item in namespace["bot"].tree.get_commands():
-            if not item.name.startswith(("test", "simulate")):
+            if item.name in {"serversetup", "help", "ping"}:
+                assert f"`/{item.name}`" not in text
+            elif not item.name.startswith(("test", "simulate")):
                 assert f"`/{item.name}`" in text
             assert 1 <= len(item.description) <= 100
         assert call.kwargs["ephemeral"] is True
