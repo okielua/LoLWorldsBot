@@ -13,8 +13,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from models import MatchStatus
 
 
-RESULT_WINDOW = timedelta(hours=14)
-CONNECTED_LEAD = timedelta(hours=2)
+RESULT_WINDOW = timedelta(hours=12)
 _current = None
 
 
@@ -241,17 +240,7 @@ class SpoilerPolicy:
         end = self.ended_at.get(match.id)
         if end is None:
             return None
-        connected = []
-        teams = {match.team1_id, match.team2_id} - {"TBD"}
-        for future in self.data.matches:
-            if future.id == match.id or future.status == MatchStatus.CANCELLED:
-                continue
-            if future.start_time <= match.start_time:
-                continue
-            depends = any(match.id in self.dependencies.get((future.id, slot), ()) for slot in (1, 2))
-            if teams.intersection({future.team1_id, future.team2_id}) or depends:
-                connected.append(future.start_time - CONNECTED_LEAD)
-        return min([end + RESULT_WINDOW, *connected])
+        return end + RESULT_WINDOW
 
     def protected(self, match, now=None):
         if match.status != MatchStatus.COMPLETED:

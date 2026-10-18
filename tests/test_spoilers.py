@@ -37,33 +37,36 @@ def test_shared_field_keeps_both_margins_even_for_longest_tag():
     assert padded_name("MVK", policy.width) == "\xa0MVK\xa0\xa0"
 
 
-def test_full_series_score_releases_at_exact_fourteen_hour_boundary():
+def test_full_series_score_releases_at_exact_twelve_hour_boundary():
     end, earlier, data = scenario()
     policy = SpoilerPolicy(data, ended_at={earlier.id: end})
-    assert policy.score(earlier, end + timedelta(hours=14, microseconds=-1)) == "||3–1||"
-    assert policy.score(earlier, end + timedelta(hours=14)) == "3–1"
+    assert policy.score(earlier, end + timedelta(hours=12, microseconds=-1)) == "||3–1||"
+    assert policy.score(earlier, end + timedelta(hours=12)) == "3–1"
 
 
-def test_earliest_connected_match_shortens_window_and_cancelled_does_not():
+def test_upcoming_connected_and_cancelled_matches_do_not_change_twelve_hour_window():
     end, earlier, data = scenario(datetime(2026, 10, 19, 5, tzinfo=UTC))
     policy = SpoilerPolicy(data, ended_at={earlier.id: end})
-    assert policy.release_at(earlier) == end + timedelta(hours=7)
+    assert policy.release_at(earlier) == end + timedelta(hours=12)
+    assert policy.protected(earlier, end + timedelta(hours=9))  # Even when the next series starts.
+    assert policy.protected(earlier, end + timedelta(hours=12, microseconds=-1))
+    assert not policy.protected(earlier, end + timedelta(hours=12))
     data.matches.append(replace(data.matches[-1], id="cancelled", start_time=end + timedelta(hours=1), status=MatchStatus.CANCELLED))
-    assert policy.release_at(earlier) == end + timedelta(hours=7)
+    assert policy.release_at(earlier) == end + timedelta(hours=12)
 
 
-def test_dependency_connects_unknown_fixture_and_slots_are_independent():
+def test_dependent_participants_are_independent_and_use_twelve_hour_deadline():
     end, earlier, data = scenario(datetime(2026, 10, 19, 5, tzinfo=UTC))
     future = replace(data.matches[-1], team1_id="T1", team2_id="TBD")
     data.matches[-1] = future
     data.matches_by_id[future.id] = future
     policy = SpoilerPolicy(data, ended_at={earlier.id: end}, dependencies={(future.id, 2): [earlier.id]})
-    assert policy.release_at(earlier) == end + timedelta(hours=7)
+    assert policy.release_at(earlier) == end + timedelta(hours=12)
     assert not policy.participant_protected(future, 1, end)
     assert policy.participant_protected(future, 2, end)
     assert policy.team("T1", match=future, slot=1, emoji=":t1:", now=end) == ":t1: `\xa0\xa0T1\xa0\xa0`"
     assert policy.team("MVK", match=future, slot=2, emoji=":mvk:", now=end) == "||:mvk: `\xa0MVK\xa0\xa0`||"
-    assert not policy.participant_protected(future, 2, end + timedelta(hours=7))
+    assert not policy.participant_protected(future, 2, end + timedelta(hours=12))
 
 
 def test_live_scores_never_render_and_unknown_end_fails_closed():

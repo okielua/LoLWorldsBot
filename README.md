@@ -489,10 +489,8 @@ global spoiler protection. Upcoming picks and changes belong in `/vote`.
 The production renderer applies the same policy to public replies, private
 replies, reminders, voting cards, histories, standings and prediction statistics.
 Live scores are omitted entirely. Completed series scores, winner/correctness
-information and affected aggregates are spoiler-tagged until the earlier of
-14 hours after completion or 2 hours before the earliest known connected series.
-Connections include either team's next fixture and recorded participant-slot
-prerequisites. Without a known connection, the 14-hour deadline applies.
+information and affected aggregates are spoiler-tagged for 12 hours after the
+series finishes. Upcoming matches never shorten or extend this deadline.
 
 The schedule API has no trustworthy end timestamp or explicit bracket graph.
 `spoiler_ends` therefore persists the first observed completion time, reusing

@@ -63,7 +63,7 @@ def test_wire_payload_protects_only_dependent_team_and_button_uses_bee_question(
     assert second["emoji"]["id"] == "333"
     assert second["custom_id"] == "second"
     assert draft == original
-    policy.clock = lambda: end + timedelta(hours=8)
+    policy.clock = lambda: end + timedelta(hours=12)
     released = render_payload(draft)
     assert "||" not in released["content"]
     assert released["components"][0]["components"][1]["emoji"]["id"] == "222"
@@ -102,7 +102,7 @@ def test_live_aggregates_are_withheld_and_completed_aggregates_fully_concealed(p
     live = render_payload({"content": content})["content"]
     assert "Alice" not in live and "1 correct" not in live
     match.status = MatchStatus.COMPLETED
-    policy.clock = lambda: end + timedelta(hours=14)
+    policy.clock = lambda: end + timedelta(hours=12)
     assert "||" not in render_payload({"content": content})["content"]
 
 
@@ -116,7 +116,10 @@ def test_release_edits_existing_message_silently_after_restart(protected, databa
     restarted = SpoilerDelivery(client, database)
     asyncio.run(restarted.release_once())
     http.assert_not_awaited()
-    policy.clock = lambda: end + timedelta(hours=8)
+    policy.clock = lambda: end + timedelta(hours=12, microseconds=-1)
+    asyncio.run(restarted.release_once())
+    http.assert_not_awaited()
+    policy.clock = lambda: end + timedelta(hours=12)
     asyncio.run(restarted.release_once())
     http.assert_awaited_once()
     payload = http.call_args.kwargs["json"]
@@ -230,7 +233,7 @@ def test_partial_edit_keeps_original_score_draft_for_later_release(protected, da
     change = {"components": []}
     delivery.remember(response, change, render_payload(change))
     # A partial component edit must not discard the original body.
-    policy.clock = lambda: end + timedelta(hours=14)
+    policy.clock = lambda: end + timedelta(hours=12)
     asyncio.run(delivery.release_once())
     assert http.call_args.kwargs["json"]["content"] == "3–1"
 
@@ -262,7 +265,7 @@ def test_hidden_rankings_use_neutral_order_then_restore_rank_order(protected):
     hidden = render_payload(draft)["content"]
     assert hidden.index("Amy") < hidden.index("Zoe")
     assert all(line.startswith("||") for line in hidden.splitlines() if line.strip())
-    policy.clock = lambda: end + timedelta(hours=14)
+    policy.clock = lambda: end + timedelta(hours=12)
     released = render_payload(draft)["content"]
     assert released.index("Zoe") < released.index("Amy")
     assert "||" not in released
@@ -307,7 +310,7 @@ def test_personal_stats_protect_values_but_keep_labels_and_explanations_readable
     assert "Requires at least 3 scored predictions" in text
     assert "completed series from Swiss Stage onward" in text
     assert not text.startswith("||")
-    policy.clock = lambda: end + timedelta(hours=14)
+    policy.clock = lambda: end + timedelta(hours=12)
     assert "||" not in render_payload(draft)["embeds"][0]["description"]
 
 
