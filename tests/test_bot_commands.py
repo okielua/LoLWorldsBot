@@ -473,6 +473,13 @@ def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeyp
         "Next 5 Games", "Play-ins", "Swiss Stage", "Quarterfinals", "Semifinals", "Final",
     ]
     server_command = namespace["bot"].tree.get_command("serversetup")
+    inspect_command = namespace["bot"].tree.get_command("setup")
+    assert inspect_command.guild_only and inspect_command.default_permissions.manage_guild
+    member_option, = inspect_command.parameters
+    assert member_option.name == "name" and member_option.required
+    assert member_option.type == discord.AppCommandOptionType.user
+    with pytest.raises(discord.app_commands.MissingPermissions):
+        inspect_command.checks[0](SimpleNamespace(permissions=discord.Permissions.none()))
     assert namespace["bot"].tree.get_command("pickems").description == "Open the server's official Riot Pick'ems leaderboard."
     assert namespace["bot"].tree.get_command("leaderboard").guild_only is True
     assert namespace["bot"].tree.get_command("vote").guild_only is True
@@ -513,7 +520,7 @@ def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeyp
             ("Setup", "Voting", "Leaderboards", "Match and Player Infos"), 1)]
         assert [line for line in text.splitlines() if line.startswith("## __")] == headings
         for item in namespace["bot"].tree.get_commands():
-            if item.name in {"serversetup", "help", "ping"}:
+            if item.name in {"serversetup", "setup", "help", "ping"}:
                 assert f"`/{item.name}`" not in text
             elif item.name in {"previousgames", "nextgames"}:
                 assert f"`/{item.name} [count]`" in text
@@ -620,6 +627,41 @@ def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeyp
         assert 456 not in timezones
         view.stop()
     asyncio.run(check_setup())
+
+    async def check_read_only_setup():
+        role = SimpleNamespace(id=789, mention="<@&789>")
+        member = SimpleNamespace(id=123, display_name="Test user", roles=[role])
+        guild = SimpleNamespace(id=123, get_role=lambda _: role, fetch_member=AsyncMock(return_value=member))
+        viewer = SimpleNamespace(id=999, guild_permissions=discord.Permissions(manage_guild=True))
+        reply = SimpleNamespace(user=viewer, guild=guild, guild_id=123,
+            response=SimpleNamespace(defer=AsyncMock(), send_message=AsyncMock()),
+            followup=SimpleNamespace(send=AsyncMock()))
+        before = (dict(timezones), dict(formats), {uid: set(teams) for uid, teams in followed.items()})
+        await inspect_command.callback(reply, member)
+        guild.fetch_member.assert_awaited_once_with(member.id)
+        reply.response.defer.assert_awaited_once_with(ephemeral=True)
+        call = reply.followup.send.call_args
+        assert call.kwargs["ephemeral"] is True
+        assert call.kwargs["allowed_mentions"].to_dict() == {"parse": []}
+        view = call.kwargs["view"]
+        assert view.controls is None
+        assert not any(isinstance(item, (discord.ui.Button, discord.ui.Select, discord.ui.ActionRow))
+                       for item in view.walk_children())
+        normal = message_payload(namespace["build_setup_content"](member.id, member.display_name, member=member, guild=guild),
+                                 controls=namespace["SetupView"](member.id, member=member, guild=guild))["view"]
+        assert [item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)] == [
+            item.content for item in normal.walk_children() if isinstance(item, discord.ui.TextDisplay)]
+        assert len([item for item in view.walk_children() if isinstance(item, discord.ui.Separator)]) == 4
+        assert before == (timezones, formats, followed)
+        view.stop()
+        normal.stop()
+        # A role named Admin grants no access without actual server permissions.
+        guild.fetch_member.reset_mock()
+        reply.user = SimpleNamespace(id=999, guild_permissions=discord.Permissions.none(), roles=[SimpleNamespace(name="Admin")])
+        await inspect_command.callback(reply, member)
+        guild.fetch_member.assert_not_awaited()
+        assert reply.response.send_message.call_args.kwargs["ephemeral"] is True
+    asyncio.run(check_read_only_setup())
 
 
 def test_prediction_leaderboard_shows_tied_ranks_without_exposing_vote_counts():

@@ -18,7 +18,7 @@ from services.live_tournament import LiveTournamentStore, TBD_TEAM_ID
 from services.lolesports import LoLEsportsClient, QUERY_HASH
 from services.server_reminders import ServerReminderDelivery
 from services.server_settings import initialize_server_settings
-from services.server_setup import ServerSetupView, build_server_setup_content
+from services.server_setup import ServerSetupView, build_server_setup_content, can_manage_server
 from services.worlds_role import configured_worlds_role, worlds_subscription_enabled, toggle_worlds_subscription, initialize_worlds_subscription
 from services.polls import get_user_votes, get_upcoming_match_votes, get_recent_completed_match_ids, has_match_votes, initialize_polls, get_latest_daily_post
 from services.prediction_display import PREDICTION_BLUE, VOTE_CONFIRMATION_HELP, group_voting_messages, hidden_votes_payload, my_votes_embeds, upcoming_votes_embed
@@ -891,6 +891,20 @@ def setup_payload(interaction, *, timezone_region=None, all_games_enabled=None):
     return payload
 
 
+def read_only_setup_payload(member, guild):
+    context = dict(member=member, guild=guild)
+    payload = message_payload(build_setup_content(member.id, member.display_name, **context),
+                              controls=SetupView(member.id, **context))
+    # Build with the same paragraph boundaries and spacing as /mysetup, then
+    # remove every interactive row rather than merely disabling the controls.
+    view = payload["view"]
+    for item in list(view.walk_children()):
+        if isinstance(item, discord.ui.ActionRow):
+            item.parent.remove_item(item)
+    view.controls = None
+    return payload
+
+
 async def require_timezone(
     interaction: discord.Interaction,
 ) -> str | None:
@@ -1123,6 +1137,29 @@ async def setup(
     )
     if interaction.guild_id is not None:
         await asyncio.to_thread(mark_setup_completed, interaction.guild_id, interaction.user.id)
+
+
+@bot.tree.command(name="setup", description="Privately inspect a member's settings without changing them. Requires Manage Server.")
+@app_commands.guild_only()
+@app_commands.default_permissions(manage_guild=True)
+@app_commands.checks.has_permissions(manage_guild=True)
+@app_commands.describe(name="Choose the server member whose settings you want to inspect.")
+async def inspect_setup(interaction: discord.Interaction, name: discord.Member):
+    if not can_manage_server(interaction, GUILD_ID):
+        await interaction.response.send_message(**message_payload(
+            "You need the Manage Server permission in this bot's server to inspect member settings."), ephemeral=True)
+        return
+    await interaction.response.defer(ephemeral=True)
+    try:
+        # Fetch current server membership/roles rather than trusting a cached
+        # role snapshot when reporting the all-games notification subscription.
+        member = await interaction.guild.fetch_member(name.id)
+    except discord.NotFound:
+        await interaction.followup.send(**message_payload("That member is no longer in this server."), ephemeral=True)
+        return
+    payload = read_only_setup_payload(member, interaction.guild)
+    payload["view"].expire_with(interaction)
+    await interaction.followup.send(**payload, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
 
 @bot.tree.command(name="nextgames", description="Show upcoming Worlds matches (default: 3).")
@@ -1660,7 +1697,7 @@ async def on_app_command_error(
     )
 
     if isinstance(error, app_commands.MissingPermissions):
-        message = "You need the Manage Server permission to use `/serversetup`."
+        message = "You need the Manage Server permission to use this command."
     else:
         message = "Something went wrong while " "running that command."
 

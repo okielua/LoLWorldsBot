@@ -221,6 +221,15 @@ These rules apply to every command, setup panel, component reply, and test repor
 
 ### Daily predictions
 
+Server managers can privately inspect a member using `/setup @member` (required
+native member argument). It requires Manage Server permission and uses the same
+card text and section spacing as `/mysetup`, with all buttons and dropdowns
+removed. It reads the target's saved timezone, time format, followed teams and
+team-ping preference, plus their current membership of the configured Worlds
+role in this server. Viewing settings does not initialize a role subscription,
+mark setup complete, or write preferences. The admin command stays out of the
+member-facing `/help` list.
+
 Presentation preference: use normal-weight cards for new bot messages, with a blue
 accent. Use standard title case for fixed titles and section headings throughout
 the bot, preserving proper names such as PayPal. Keep articles and short
