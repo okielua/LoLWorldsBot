@@ -106,7 +106,7 @@ def test_unvoted_match_only_has_remaining_time_and_deadline_is_exact():
     assert len(history_values(embed)) == 1
     closed, = my_votes_embeds([(poll, match.team1_id)], data, now=cutoff)
     assert "Awaiting result" in history_values(closed)[0]
-    assert "/changevote" not in history_values(closed)[0]
+    assert "/vote" not in history_values(closed)[0]
     assert "Voting closes in" not in history_values(closed)[0]
 
 
@@ -120,7 +120,7 @@ def test_upcoming_votes_only_command_hint_is_small_grey():
     assert "\n\n**🗳️ Voting for this match closes in 2 hours and 15 minutes**\n\n" in text
     assert "**UTC:**" not in text
     assert [line for line in text.splitlines() if line.startswith("-# ")] == [
-        "-# • *Use `/changevote` to make or change your prediction for these games*"]
+        "-# • *Use `/vote` to make or change your prediction for these games*"]
     assert "Votes are private until" not in text
 
 
@@ -137,7 +137,7 @@ def test_tbd_match_shows_pending_voting_without_countdown_or_controls(slot):
         payload = hidden_votes_payload(match, now=now, controls=controls)
         text = payload["view"].children[0].children[0].content
         assert "Voting will open once both teams are confirmed." in text
-        assert "closes in" not in text and "/changevote" not in text
+        assert "closes in" not in text and "/vote" not in text
         assert not any(isinstance(item, discord.ui.Button) for item in payload["view"].walk_children())
         closed = hidden_votes_payload(match, now=match.start_time)
         assert "Voting closed" in closed["view"].children[0].children[0].content
@@ -182,7 +182,7 @@ def test_personal_history_uses_one_zone_and_currentvotes_omits_city_times(monkey
     assert public == "🕒 UPCOMING"
     help_block = public_embed.fields[-1].value
     assert all(line.startswith("-# • *Use `/") and line.endswith("*") for line in help_block.splitlines())
-    assert "`/currentvotes`" in help_block and "`/leaderboard`" in help_block
+    assert "`/votehistory`" in help_block and "`/leaderboard`" in help_block
     assert public_embed.fields[-1].inline is False
     assert public_embed.footer.text is None
     assert "**" not in help_block

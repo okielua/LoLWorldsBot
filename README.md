@@ -201,7 +201,7 @@ These rules apply to every command, setup panel, component reply, and test repor
   above the city list. City lists use small grey text with only city labels bold.
 - Private match displays use only the recipient's saved timezone and its local
   calendar date. Without a saved timezone they use Pacific Time, labelled `11:00h (PT)`.
-  `/myvotes` includes the local start time; `/changevote` and test history previews
+  `/votehistory` includes the local start time; `/vote` and test history previews
   use the same rule. Date-only vote confirmations retain just the recipient's date.
 - `/mysetup` includes a personal time-format dropdown: `1:00h (CEST)` or
   `1:00 am (CEST)`. It defaults to 24-hour time, persists across restarts, and
@@ -214,7 +214,7 @@ These rules apply to every command, setup panel, component reply, and test repor
   and vote counts, plain `@name` text without pings, and blank space if no voters.
 - Private vote confirmations show one date in the recipient's saved timezone
   (PT fallback), bold matchup teams, and the selected prediction as a heading.
-- Setup, admin actions, `/myvotes`, and developer simulations remain private.
+- Setup, admin actions, `/votehistory`, and developer simulations remain private.
   Informational commands, daily voting posts, and real reminders remain public.
   Setup controls, reminder recipients, vote cutoffs, and scoring are unchanged.
 
@@ -240,7 +240,7 @@ times list every unique timezone saved through `/mysetup` as `City: HH:MM`.
 A date suffix is included only when that city's date differs from the Riot
 matchday in `America/Los_Angeles`. City-labelled lines omit the redundant timezone
 abbreviation; DST conversion still uses the saved IANA zone. This also applies to
-`/nextgames`, `/schedule`, `/team`, and `/currentvotes`. Private `/myvotes` and `/changevote`
+`/nextgames`, `/schedule`, `/team`, and `/votehistory`. Private `/votehistory` and `/vote`
 show only the recipient's local date/time (PT fallback). Private vote confirmations
 keep a single date in that same timezone and no time or city list.
 Relative countdowns appear only once. Public schedule headings group by Riot's
@@ -256,7 +256,7 @@ Empty days get a public no-matches response. Long days split across public embed
 
 `/today` also provides team prediction buttons beneath eligible known matchups,
 with private confirmations and the same five-minute cutoff. Its three small grey
-help lines link to `/changevote`, `/currentvotes`, and `/leaderboard`. These public
+help lines link to `/vote`, `/votehistory`, and `/leaderboard`. These public
 buttons retain their matchup snapshot across restarts, reject changed pairings
 and late clicks, and reuse existing poll/vote rows. Only acknowledged Discord
 responses count as published opportunities; failed sends do not. Completed, live,
@@ -289,29 +289,29 @@ replaced without deleting prediction rows; the new message receipt is persisted.
 Active boards are checked on restart and every five minutes, even when their
 content has not changed, so deletion does not leave voting unavailable indefinitely.
 
-Votes and changes receive private confirmations. `/currentvotes` targets the next
-scheduled match, live matches, and completed polls whose result was first observed
-within the last hour. It never discloses an open pick, count, percentage, or voter.
-Matches are grouped into one Discord response with a separate card per match.
-Voting results retain their side-by-side team columns. Extra messages are used
-only if Discord's combined text, embed, or component limits require a split.
-Public result details require both a locked poll and a successful five-minute
-reminder receipt. Until then it shows only a privacy notice and match information.
-It never pings voters and has no match selector. Status, date and city
-times appear below the two voting columns. The completion window
-is stored in SQLite and does not restart on refresh, result corrections, or bot
-restarts. The source model has no exact finish timestamp, so this hour is measured
-from the first fresh completed result the bot observes, rather than match start.
-`/dailyvote` privately links to this server's latest published daily voting post and
-shows its matchday date. It does not create another post or send notifications.
-Before any daily post has been published, it directs members to `/today`.
+Voting uses three commands: `/vote`, `/votehistory [member]`, and `/leaderboard`.
+`/vote` is the private panel for making/changing current predictions, with green
+checked buttons for the caller's saved picks. The public daily post has a
+**Vote / Change My Vote** button opening that same panel; its shared quick-vote
+buttons remain available, including on posts created before the consolidation.
+The old `/changevote`, `/myvotes`, `/currentvotes`, `/dailyvote`, and `/myvotestats`
+commands are retired. No `/whovoted` command is needed.
+
+Each daily matchup publicly shows **These users cast a vote:** followed by one
+plain `@name` per line, sorted by name, with no pings or selected teams. The list
+updates after voting and during normal polling, and survives restarts through
+SQLite. Changing a pick does not duplicate a voter. Stale votes for changed
+pairings are excluded. Very long lists show a summary plus a **See All Voters**
+button, which opens a public paginated list; this keeps daily cards within Discord
+text and component limits. Five-minute reminders retain their revealed voting
+results after voting closes.
 
 Successful vote-button interactions also send a short participation message in
 the `/serversetup` reminder channel: `🗳️ @name just cast a vote on:`, followed by
 the matchup on its own large heading with team emojis and centered tags, then
 the match's tournament date in parentheses.
 An accompanying footnote gives the voting time remaining when posted (up to the
-five-minute-before-start cutoff), with `/dailyvote` and `/changevote` instructions.
+five-minute-before-start cutoff), with `/vote` instructions.
 The selected team stays private, participant spoiler protection still applies,
 and all user/role/everyone pings are disabled. Controlled prediction simulations
 send the same announcements with a clear TEST label. Missing channels or failed announcements never
@@ -336,14 +336,14 @@ names. Only opted-in reminder recipients are pinged; voter names themselves do n
 create additional pings.
 
 SQLite stores match polls, editable predictions, daily message IDs, and results.
-`/changevote` privately lists every published, currently open match in chronological
+`/vote` privately lists every published, currently open match in chronological
 order, with independent team buttons below each matchup. Saved selections are green
 and checked; changing one immediately updates its buttons without changing other
 predictions. Long lists split into cards within Discord's limits. The buttons use
 the same save/change path and exact five-minute cutoff as daily posts. If no poll is open, it
 links the user to `/today` and `/tomorrow`. Confirmation cards include small grey
-help for `/changevote`, `/currentvotes`, and `/leaderboard`.
-During an active controlled prediction test, `/changevote` targets the isolated test
+help for `/vote`, `/votehistory`, and `/leaderboard`.
+During an active controlled prediction test, `/vote` targets the isolated test
 manager and labels its reply TEST. When that test finishes or fails, it switches
 back to the live tournament. This never copies test votes into live scoring.
 `/leaderboard` is public and ranks current server members by correct series
@@ -369,7 +369,7 @@ so repeated requests and restarts do not reset movement. A newly ranked player
 shows New; unchanged ranks have no arrow. Unknown legacy comparison data yields
 no movement.
 
-The blue **My Advanced Stats** button and `/myvotestats` use the same private handler and database
+The blue **My Advanced Stats** button and `/votehistory` → **My Stats** use the same private handler and database
 snapshot, scoped to the leaderboard's server and tournament. The button always
 shows the clicking user's data and survives restarts. Personal stats use a first-level
 My Worlds Stats title, My rank/correct predictions, and summary lines for My votes,
@@ -465,23 +465,15 @@ report. Keep the bot running for about two minutes. Test records use their own
 tournament ID and do not affect the real `/leaderboard` or real match receipts.
 If the admin running the test votes, the test also sends them a private TEST
 prediction-history preview with simulated series scores and correct/incorrect
-outcomes behind spoiler tags, using the same layout as `/myvotes`.
+outcomes behind spoiler tags, using the same layout as `/votehistory`.
 
-`/votehistory voter` requires a server member selected from autocomplete, limited
-to members who have voted in the current tournament. It privately displays their
-complete history in pages of five predictions, keeping picks hidden until voting
-closes. The **View Advanced Stats** button opens the same stats display as
-`/myvotestats`, calculated for the selected voter.
-
-`/myvotes` privately shows the caller's current-tournament predictions in this
-server, including correct/incorrect outcomes once a winner is recorded. It has
-no user selector and includes open picks without exposing anyone else's votes.
-Underlined matchups are grouped under Past Games, Ongoing Games when applicable,
-and Upcoming Games. A completed prediction shows its spoilered correct/incorrect
-label beside the user's pick, using the server's KingPeepo or peepoSad emoji when
-available. Each match includes its stage and best-of format. Result spoilers expire
-under the global policy; neither team receives result-revealing winner emphasis.
-Each card ends with the shared three-line prediction help in muted subtext.
+`/votehistory [member]` defaults to the caller's own past predictions and a
+**My Stats** button, including when that person has not voted yet. The optional
+member is selected from autocomplete, limited to current server voters.
+Other members' open picks remain hidden until voting closes. History is private,
+uses five predictions per page, and includes the shared advanced statistics for
+the selected member. Completed results, correctness, and affected stats retain
+global spoiler protection. Upcoming picks and changes belong in `/vote`.
 
 ### Global spoiler policy
 
@@ -540,7 +532,7 @@ Missing custom emojis retain their
 named shortcode instead of substituting a different emoji.
 Long histories are split across private cards. Voting results on reminders
 use a blue embed with side-by-side bold team names, normal-weight percentages
-and vote counts in the payload, plus small grey two-line `/currentvotes` and
+and vote counts in the payload, plus small grey two-line `/votehistory` and
 `/leaderboard` help in a full-width Markdown field. Native footer text is not used,
 so both commands retain inline-code formatting. Native embed font weight depends on the Discord client;
 these result columns are the approved exception to the normal-weight card rule.

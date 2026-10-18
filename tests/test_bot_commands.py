@@ -471,11 +471,12 @@ def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeyp
     server_command = namespace["bot"].tree.get_command("serversetup")
     assert namespace["bot"].tree.get_command("pickems").description == "Open the server's official Riot Pick'ems leaderboard."
     assert namespace["bot"].tree.get_command("leaderboard").guild_only is True
-    assert namespace["bot"].tree.get_command("myvotestats").guild_only is True
+    assert namespace["bot"].tree.get_command("vote").guild_only is True
+    for retired in ("changevote", "myvotes", "currentvotes", "dailyvote", "myvotestats", "whovoted"):
+        assert namespace["bot"].tree.get_command(retired) is None
     player_option, = namespace["bot"].tree.get_command("player").parameters
     assert player_option.name == "name" and player_option.required and player_option.autocomplete
-    assert namespace["bot"].tree.get_command("myvotes").guild_only is True
-    assert namespace["bot"].tree.get_command("changevote").guild_only is True
+    assert namespace["bot"].tree.get_command("votehistory").guild_only is True
     assert namespace["bot"].tree.get_command("today") is not None
     assert namespace["bot"].tree.get_command("tomorrow") is not None
     assert namespace["bot"].tree.get_command("previous") is None
@@ -484,7 +485,7 @@ def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeyp
         option, = namespace["bot"].tree.get_command(name).parameters
         assert option.name == "count" and option.required is False and option.default == 3
         assert option.min_value == 1 and option.max_value == 100
-    assert not namespace["bot"].tree.get_command("myvotes").checks
+    assert not namespace["bot"].tree.get_command("vote").checks
     assert server_command.guild_only is True
     assert server_command.default_permissions.manage_guild
     interaction = SimpleNamespace(permissions=discord.Permissions.none())
@@ -512,7 +513,11 @@ def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeyp
                 assert f"`/{item.name}`" not in text
             elif item.name in {"previousgames", "nextgames"}:
                 assert f"`/{item.name} [count]`" in text
-            elif item.name in {"votehistory", "schedule", "team", "player"}:
+            elif item.name == "votehistory":
+                parameter, = item.parameters
+                assert not parameter.required
+                assert "`/votehistory [member]`" in text
+            elif item.name in {"schedule", "team", "player"}:
                 parameter, = item.parameters
                 assert parameter.required
                 assert f"`/{item.name} <" in text

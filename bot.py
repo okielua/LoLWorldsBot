@@ -35,6 +35,7 @@ from services.golgg_players import player_catalog, player_reply, refresh_players
 from services.team_history import TeamHistoryView
 from services.match_browser import show_match_games
 from services.vote_history import voter_autocomplete, show_vote_history
+from services.vote_panel import OpenVotePanel, PublicVotersButton
 from services.runtime_config import runtime_config, prepare_seed, remove_development_commands, validate_application
 from services.setup_gate import SetupCommandTree
 from services.spoilers import SpoilerLedger, current_policy, matchup, score_token
@@ -418,6 +419,7 @@ class WorldsBot(discord.Client):
         self.voting_manager = VotingManager(self, tournament_store, GUILD_ID)
         self.add_dynamic_items(ScheduleVoteButton)
         self.add_dynamic_items(MyStatsButton)
+        self.add_dynamic_items(OpenVotePanel, PublicVotersButton)
         self.server_delivery = ServerReminderDelivery(self, tournament_store, GUILD_ID, poll_manager=self.voting_manager)
         self.background_polling = BackgroundPolling(
             tournament_store,
@@ -1431,11 +1433,12 @@ async def pickems(interaction: discord.Interaction):
         await interaction.response.send_message(**message_payload("The Pick'ems link hasn't been set yet. A server admin can add it in `/serversetup`."), ephemeral=True)
 
 
-@bot.tree.command(name="changevote", description="Make or change your predictions for matches where voting is still open.")
+@bot.tree.command(name="vote", description="Vote or change your predictions privately; your selected teams have a green checkmark.")
 @app_commands.guild_only()
 async def changevote(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
-    manager = getattr(interaction.client, "prediction_test_manager", None) or interaction.client.voting_manager
+    manager = (getattr(interaction, "extras", {}).get("vote_panel_manager")
+               or getattr(interaction.client, "prediction_test_manager", None) or interaction.client.voting_manager)
     try:
         available = await manager.personal_vote_targets(interaction.user.id)
     except ValueError as error:
@@ -1508,7 +1511,7 @@ async def currentvotes(interaction: discord.Interaction):
 @app_commands.guild_only()
 @app_commands.describe(voter="Choose a server member who has voted before.")
 @app_commands.autocomplete(voter=voter_autocomplete)
-async def votehistory(interaction: discord.Interaction, voter: str):
+async def votehistory(interaction: discord.Interaction, voter: str | None = None):
     await show_vote_history(interaction, voter)
 
 
@@ -1584,23 +1587,12 @@ Choose your timezone, time format, teams, and Worlds role and match reminder pre
 
 ## __2. Voting__
 
-`/dailyvote`
-Open the latest daily Worlds voting post in this server.
+`/vote`
+Open your private voting panel. Vote or change a pick; your selected team is marked green with ✓.
+Voter names appear publicly under each daily matchup, without pings. Picks stay private until voting closes.
 
-`/currentvotes`
-View currently open votes. Everyone’s picks are revealed when voting closes, 5 minutes before each match.
-
-`/changevote`
-Make or change your predictions while voting is open.
-
-`/myvotes`
-See your past and upcoming votes, check results, and change votes while voting is open.
-
-`/myvotestats`
-See your rank, accuracy, streaks, and advanced personal prediction stats.
-
-`/votehistory <member>` (e.g. `/votehistory @apodso`)
-See a server member’s prediction history and advanced vote stats. Start typing and choose a member from the suggestions.
+`/votehistory [member]` (e.g. `/votehistory @apodso`)
+Leave the member blank for your own past predictions and the My Stats button, or choose a member to view their history and stats.
 
 ## __3. Leaderboards__
 
@@ -1685,6 +1677,9 @@ async def on_app_command_error(
 # --------------------------------------------------
 # Start bot
 # --------------------------------------------------
+
+for retired_command in ("changevote", "myvotes", "currentvotes", "dailyvote", "myvotestats"):
+    bot.tree.remove_command(retired_command)
 
 bot.run(
     TOKEN,

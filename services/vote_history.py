@@ -79,16 +79,16 @@ class VoteHistoryView(SetupRequiredView):
                                   target_user=self.target)
 
 
-async def show_vote_history(interaction, voter):
+async def show_vote_history(interaction, voter=None):
     await interaction.response.defer(ephemeral=True)
     manager = interaction.client.voting_manager
     data, now = manager.store.data, datetime.now(UTC)
     names = await asyncio.to_thread(get_voter_display_names, interaction.guild_id, data.tournament.id)
     try:
-        user_id = int(voter)
-        if user_id not in names:
+        user_id = int(voter) if voter is not None else interaction.user.id
+        if voter is not None and user_id not in names:
             raise ValueError
-        target = interaction.guild.get_member(user_id) or await interaction.guild.fetch_member(user_id)
+        target = interaction.user if voter is None else interaction.guild.get_member(user_id) or await interaction.guild.fetch_member(user_id)
     except (ValueError, discord.NotFound):
         await interaction.followup.send(**message_payload("Choose a server member from the voter suggestions."), ephemeral=True)
         return
@@ -114,5 +114,7 @@ async def show_vote_history(interaction, voter):
                 page.set_field_at(field_index, name=field.name, value=field.value.replace("Your pick:", "Their pick:"), inline=False)
         page.remove_field(len(page.fields) - 1)
     controls = VoteHistoryView(pages, target, interaction.guild_id, data.tournament.id, data, interaction.user.id)
+    if target.id == interaction.user.id:
+        controls.stats.label = "My Stats"
     await interaction.followup.send(**embed_card_payload(pages[0], controls=controls), ephemeral=True,
                                     allowed_mentions=discord.AllowedMentions.none())

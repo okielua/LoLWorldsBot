@@ -74,12 +74,12 @@ def test_daily_post_opens_early_without_pings_and_survives_restart(context):
         assert "# __Worlds 2026 Day 1/" in str(components)
         assert "· Play-ins__" in str(components)
         assert "Here are today's matchups. Voting for each matchup closes 5 minutes before match start." in str(components)
-        assert "`/currentvotes`" in str(components)
+        assert "`/votehistory`" in str(components)
         assert "Communism's Worlds prediction standings" in str(components)
-        assert card.children[-1].content == (
+        assert card.children[-2].content == (
             "\u00a0\n\n"
-            "-# • *Use `/changevote` to change your prediction until 5 minutes before a match.*\n"
-            "-# • *Use `/currentvotes` to see how everyone voted once voting closes.*\n"
+            "-# • *Use `/vote` to change your prediction until 5 minutes before a match.*\n"
+            "-# • *Use `/votehistory` to see how everyone voted once voting closes.*\n"
             "-# • *Use `/leaderboard` to see Communism's Worlds prediction standings.*"
         )
         assert "1 point" not in str(components)
@@ -434,7 +434,7 @@ def test_five_minute_reminder_reveals_results_instead_of_linking_to_an_open_poll
         assert "### __Voting Results__" in content
         assert "### **C9**\n67%\n(2 votes)\n\n@Lua, @Jerry" in content
         assert "### **KC**\n33%\n(1 vote)\n\n@Chris" in content
-        assert "-# • *Use `/currentvotes`" in content
+        assert "-# • *Use `/votehistory`" in content
         assert content.endswith("prediction standings.*")
         assert "<@" not in content
     asyncio.run(scenario())
@@ -487,16 +487,16 @@ def test_eight_match_swiss_day_spanning_utc_midnight_is_one_interleaved_post(con
     assert len([item for item in view.walk_children() if isinstance(item, discord.ui.Button)]) == 16
     assert len(manager.match_days()) == 1
     card, = view.children
-    for i in range(1, len(card.children) - 1, 2):
+    for i in range(1, len(card.children) - 2, 2):
         assert isinstance(card.children[i], discord.ui.TextDisplay)
         assert isinstance(card.children[i + 1], discord.ui.ActionRow)
         assert card.children[i].content.startswith("\u2800\n\n") is (i > 1)
         assert card.children[i].content.index("## ") < card.children[i].content.index("Bo5")
     assert view.total_children_count <= 40
-    assert card.children[-1].content.startswith("\u2800\n\n-# ")
+    assert card.children[-2].content.startswith("\u2800\n\n-# ")
 
 
-def test_pick_changes_remain_private_and_do_not_edit_the_daily_post(context):
+def test_public_participation_updates_without_revealing_the_pick(context):
     manager, store, channel, _, message = context
     async def scenario():
         await manager.tick()
@@ -505,8 +505,10 @@ def test_pick_changes_remain_private_and_do_not_edit_the_daily_post(context):
         assert await manager.vote(match.id, 7, "KC", "Lua")
         await manager.tick()
         channel.send.assert_awaited_once()
-        message.edit.assert_not_awaited()
-        assert "Lua" not in str(channel.send.call_args.kwargs["view"].to_components())
+        message.edit.assert_awaited_once()
+        updated = str(message.edit.call_args.kwargs["view"].to_components())
+        assert "@Lua" in updated and "These users cast a vote" in updated
+        assert "Your pick" not in updated and "67%" not in updated
     asyncio.run(scenario())
 
 
@@ -523,8 +525,8 @@ def test_private_vote_confirmation_and_changed_confirmation(context):
         date = "Thu, 15 Oct 2026"
         embed = rendered_message(interaction.followup.send.call_args)
         assert embed.description.startswith(f"Your prediction for **C9** vs **KC** on {date} (Play-ins):\n## C9")
-        assert "-# • *Use `/changevote` to change your prediction until 5 minutes" in embed.description
-        assert "Use `/currentvotes`" in embed.description
+        assert "-# • *Use `/vote` to change your prediction until 5 minutes" in embed.description
+        assert "Use `/votehistory`" in embed.description
         assert "Use `/leaderboard`" in embed.description
         assert interaction.followup.send.call_args.kwargs["view"].children[0].accent_colour.value == 0x5865F2
         assert not interaction.followup.send.call_args.args
@@ -625,7 +627,7 @@ def test_simulated_vote_announcements_are_labelled_and_never_ping(context):
     assert "TEST" in text and "@Lua" in text and "just cast a vote on:\n\n## " in text
     assert "(Thu, 15 Oct 2026)" in text
     assert "You have 11 hours and 55 minutes to vote." in text
-    assert "Use `/dailyvote`" in text and "`/changevote`" in text
+    assert "Use `/vote`" in text and "`/vote`" in text
     assert "C9" in text and "KC" in text
 
 
@@ -639,10 +641,10 @@ def test_announcement_voting_time_uses_five_minute_cutoff(context, minutes, expe
     text = rendered_message(channel.send.call_args).description
     if expected:
         assert f"You have {expected} to vote." in text
-        assert "`/dailyvote`" in text and "`/changevote`" in text
+        assert "`/vote`" in text and "`/vote`" in text
     else:
         assert "Voting for this match has now closed." in text
-        assert "You have" not in text and "`/changevote`" not in text
+        assert "You have" not in text and "`/vote`" not in text
 
 
 def test_failed_vote_does_not_send_participation_message(context):
@@ -848,7 +850,7 @@ def test_today_lookup_publishes_reusable_polls_and_private_vote_confirmations(co
         assert payload["ephemeral"] is False and payload["allowed_mentions"].to_dict() == {"parse": []}
         text = rendered_message(interaction.followup.send.call_args).description
         assert "Berlin" in text and "London" in text and "Tokyo" in text
-        assert "Use `/changevote`" in text and "Use `/currentvotes`" in text and "Use `/leaderboard`" in text
+        assert "Use `/vote`" in text and "Use `/votehistory`" in text and "Use `/leaderboard`" in text
         assert "%" not in text and "votes)" not in text
         view = payload["view"]
         assert view.is_persistent() and view.total_children_count <= 40
@@ -1030,7 +1032,7 @@ def test_swiss_four_new_pairings_preserve_original_votes_and_do_not_duplicate(co
         updated = message.edit.call_args.kwargs["view"]
         assert len([item for item in updated.walk_children() if isinstance(item, discord.ui.Button)]) == 16
         assert updated.total_children_count <= 40
-        assert "Secret Friend" not in str(updated.to_components())
+        assert "@Secret Friend" in str(updated.to_components())
         assert len(get_polls(123, store.data.tournament.id)) == 8
         assert len(get_published_match_ids(123, store.data.tournament.id)) == 8
         assert get_user_votes(123, store.data.tournament.id, 7)[0][1] == base.team1_id

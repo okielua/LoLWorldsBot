@@ -65,3 +65,22 @@ def test_history_rejects_arbitrary_nonvoter_ids(monkeypatch):
     interaction, _, _ = context(monkeypatch)
     asyncio.run(history.show_vote_history(interaction, "123456"))
     assert "Choose a server member" in interaction.followup.send.call_args.kwargs["view"].children[0].children[0].content
+
+
+def test_history_defaults_to_caller_even_without_votes_and_offers_my_stats(monkeypatch):
+    interaction, data, _ = context(monkeypatch)
+    interaction.user.display_name = "Lua"
+    monkeypatch.setattr(history, "get_user_votes", lambda *args: [])
+    stats = AsyncMock()
+    monkeypatch.setattr(history, "show_personal_stats", stats)
+
+    async def scenario():
+        await history.show_vote_history(interaction)
+        payload = interaction.followup.send.call_args.kwargs
+        assert payload["ephemeral"]
+        controls = payload["view"].controls
+        assert controls.target is interaction.user
+        assert controls.stats.label == "My Stats"
+        await controls.stats.callback(interaction)
+        stats.assert_awaited_once_with(interaction, 123, data.tournament.id, target_user=interaction.user)
+    asyncio.run(scenario())

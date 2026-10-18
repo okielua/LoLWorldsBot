@@ -1,4 +1,4 @@
-"""Public leaderboard pages and the shared private /myvotestats button handler."""
+"""Public leaderboard pages and the shared private /votehistory button handler."""
 
 import asyncio
 

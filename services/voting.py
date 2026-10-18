@@ -26,6 +26,7 @@ from services.reminder_engine import get_server_ping_user_ids
 from services.worlds_role import individual_subscribers
 from services.setup_gate import require_setup, SetupRequiredView, SetupRequiredLayoutView
 from services.spoilers import current_policy, matchup, team_token, aggregate_token
+from services.vote_panel import OpenVotePanel, PublicVotersButton, voter_lines
 
 logger = logging.getLogger(__name__)
 MATCHDAY_ZONE = ZoneInfo(TOURNAMENT_TIMEZONE)
@@ -103,6 +104,7 @@ class VoteButton(discord.ui.Button):
         await interaction.followup.send(**embed_card_payload(embed), ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
         if saved:
             await self.manager.announce_vote(self.poll.match_id, interaction.user.display_name)
+            await self.manager.refresh_participation(self.poll.match_id)
 
 
 class PersonalVoteView(SetupRequiredView):
@@ -120,7 +122,7 @@ class PersonalVoteView(SetupRequiredView):
         if not await super().interaction_check(interaction):
             return False
         if interaction.user.id != self.user_id:
-            await interaction.response.send_message(**message_payload("Use `/changevote` to make or change your prediction."), ephemeral=True)
+            await interaction.response.send_message(**message_payload("Use `/vote` to make or change your prediction."), ephemeral=True)
             return False
         return True
 
@@ -213,7 +215,7 @@ class PersonalVotesView(SetupRequiredLayoutView):
         if not await super().interaction_check(interaction):
             return False
         if interaction.user.id != self.user_id:
-            await interaction.response.send_message(**message_payload("Use `/changevote` to make or change your prediction."), ephemeral=True)
+            await interaction.response.send_message(**message_payload("Use `/vote` to make or change your prediction."), ephemeral=True)
             return False
         return True
 
@@ -291,7 +293,7 @@ def personal_vote_payloads(manager, available, user_id, saved, *, timezone_name=
 
 
 class DailyPredictionsView(SetupRequiredLayoutView):
-    def __init__(self, manager, day, matches, poll_by_id, recap="", role_id=None, user_ids=()):
+    def __init__(self, manager, day, matches, poll_by_id, recap="", role_id=None, user_ids=(), participants=None):
         super().__init__(timeout=None)
         # Worlds has at most eight matches per day in the verified schedule.
         # Each match consumes four V2 components, plus the card and two text blocks.
@@ -361,6 +363,40 @@ class DailyPredictionsView(SetupRequiredLayoutView):
         card.add_item(team_display(
             VOTE_CONFIRMATION_HELP
         ))
+        # Fit participation into the existing text blocks, preserving the
+        # single daily board even on an eight-match day.
+        match_texts = [item for item in card.children if isinstance(item, discord.ui.TextDisplay)
+                       and "## " in item.content and item.content != card.children[0].content]
+        remaining = max(0, 3800 - sum(len(item.content) for item in self.walk_children()
+                                     if isinstance(item, discord.ui.TextDisplay)))
+        allowance = remaining // max(1, len(matches))
+        overflow = False
+        for match, text in zip(matches, match_texts):
+            names = voter_lines((participants or {}).get(match.id, []))
+            if allowance < 120:
+                suffix = (f"\n\n**Voters: {len(names)}** (See All Voters)." if names else "\n\nNo votes yet.")
+                if len(suffix) <= allowance:
+                    text.content += suffix
+                overflow |= bool(names)
+                continue
+            shown = []
+            used = len("\n\n**These users cast a vote:**\n") + 60
+            for name in names:
+                if used + len(name) + 1 > allowance:
+                    break
+                shown.append(name)
+                used += len(name) + 1
+            suffix = "\n\n**These users cast a vote:**\n"
+            suffix += "\n".join(shown) if names else "No votes yet."
+            if len(shown) < len(names):
+                suffix += f"\n…and {len(names) - len(shown)} more (See All Voters)."
+                overflow = True
+            text.content += suffix
+        buttons = [OpenVotePanel(manager.guild_id, data.tournament.id)]
+        if overflow:
+            buttons.append(PublicVotersButton(manager.guild_id, data.tournament.id))
+        if self.total_children_count + len(buttons) + 1 <= 40:
+            card.add_item(discord.ui.ActionRow(*buttons))
 
 
 class VotingManager:
@@ -473,12 +509,23 @@ class VotingManager:
             if now < deadline:
                 remaining = voting_time_remaining(deadline, now)
                 text += (f"\n\n-# • You have {remaining} to vote.\n"
-                         "-# • Use `/dailyvote` to open the voting post, or `/changevote` to make or change your prediction.")
+                         "-# • Use `/vote` to make or change your prediction.")
             else:
                 text += "\n\n-# • Voting for this match has now closed."
             await channel.send(**message_payload(text), allowed_mentions=discord.AllowedMentions.none())
         except (discord.DiscordException, OSError, sqlite3.Error, ValueError):
             logger.warning("Vote saved, but participation announcement could not be sent", exc_info=True)
+
+    async def refresh_participation(self, match_id):
+        try:
+            match = self.store.data.matches_by_id.get(match_id)
+            if match:
+                day = match.start_time.astimezone(MATCHDAY_ZONE).date().isoformat()
+                receipt = await asyncio.to_thread(polls.get_daily_post, self.guild_id, self.store.data.tournament.id, day)
+                if receipt:
+                    await self._sync_day(day, self.match_days()[day])
+        except (discord.DiscordException, OSError, sqlite3.Error, ValueError):
+            logger.warning("Vote saved, but the public voter list could not refresh", exc_info=True)
 
     async def personal_vote_targets(self, user_id):
         if not self.fresh():
@@ -658,7 +705,9 @@ class VotingManager:
                           f"-# {row.submitted}/{row.eligible} matches predicted · {float(row.participation):.1%} participation\n")
                 recap = aggregate_token(recap)
             role_id = settings.worlds_role_id if not self.test_mode else None
-            view = DailyPredictionsView(self, day, matches, poll_by_id, recap, role_id=role_id)
+            participants = {match.id: await asyncio.to_thread(polls.get_poll_participants, self.guild_id, match.id)
+                            for match in matches}
+            view = DailyPredictionsView(self, day, matches, poll_by_id, recap, role_id=role_id, participants=participants)
             signature = hashlib.sha256(json.dumps(view.to_components(), sort_keys=True).encode()).hexdigest()
             channel_id = receipt[0] if receipt else settings.reminder_channel_id
             try:
@@ -703,10 +752,10 @@ class VotingManager:
                     inline_followers = len(recipients) <= 90
                     if not inline_followers:
                         recipients = []
-                    view = DailyPredictionsView(self, day, matches, poll_by_id, recap, role_id=role_id, user_ids=recipients)
+                    view = DailyPredictionsView(self, day, matches, poll_by_id, recap, role_id=role_id, user_ids=recipients, participants=participants)
                     if recipients and sum(len(item.content) for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)) > 3900:
                         recipients, inline_followers = [], False
-                        view = DailyPredictionsView(self, day, matches, poll_by_id, recap, role_id=role_id)
+                        view = DailyPredictionsView(self, day, matches, poll_by_id, recap, role_id=role_id, participants=participants)
                     signature = hashlib.sha256(json.dumps(view.to_components(), sort_keys=True).encode()).hexdigest()
                     mentions = discord.AllowedMentions(everyone=False, users=[discord.Object(user_id) for user_id in recipients] if recipients else False, replied_user=False,
                                                        roles=[discord.Object(role_id)] if role_id else False)

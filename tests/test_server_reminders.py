@@ -119,7 +119,7 @@ def test_results_test_label_and_footnotes_are_inside_card():
     call = channel.send.call_args
     text = rendered_message(call).description
     assert delivery.message_prefix in text
-    assert "-# • *Use `/currentvotes`" in text
+    assert "-# • *Use `/votehistory`" in text
     assert text.endswith("prediction standings.*")
 
 

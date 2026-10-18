@@ -364,6 +364,19 @@ def get_poll_results(guild_id, match_id):
         """, (guild_id, match_id, row[1], row[2], row[1], row[2], row[2], row[1])).fetchall()
 
 
+def get_poll_participants(guild_id, match_id):
+    """Participation is public; never return a selected team before cutoff."""
+    with closing(get_connection()) as connection:
+        return connection.execute("""
+            SELECT v.user_id, v.display_name FROM poll_votes v
+            JOIN match_polls p ON p.guild_id = v.guild_id AND p.match_id = v.match_id
+            WHERE v.guild_id = ? AND v.match_id = ?
+              AND ((v.vote_team1_id = p.team1_id AND v.vote_team2_id = p.team2_id)
+                   OR (v.vote_team1_id = p.team2_id AND v.vote_team2_id = p.team1_id))
+            ORDER BY LOWER(COALESCE(v.display_name, '')), v.user_id
+        """, (guild_id, match_id)).fetchall()
+
+
 def get_upcoming_match_votes(guild_id, match_id):
     """Public results are available only after the real reminder was sent."""
     from services.delivery_records import get_delivery_record

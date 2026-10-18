@@ -16,11 +16,11 @@ from services.spoilers import current_policy, matchup, score_token, team_token, 
 
 PREDICTION_BLUE = 0x5865F2
 VOTING_FOOTER = format_footnotes(
-    "-# • Use `/currentvotes` to see how everyone voted once voting closes.\n"
+    "-# • Use `/votehistory` to see how everyone voted once voting closes.\n"
     "-# • Use `/leaderboard` to see Communism's Worlds prediction standings."
 )
 VOTE_CONFIRMATION_HELP = format_footnotes(
-    "-# • Use `/changevote` to change your prediction until 5 minutes before a match.\n"
+    "-# • Use `/vote` to change your prediction until 5 minutes before a match.\n"
     + VOTING_FOOTER
 )
 
@@ -129,7 +129,7 @@ def hidden_votes_payload(match, *, now=None, stage_name=None, no_votes=False, co
             return message_payload(header + f"**{VOTING_PENDING}**")
         return message_payload(
             header + f"**🗳️ Voting for this match closes in {voting_time_remaining(deadline, now)}**\n\n"
-            "-# • Use `/changevote` to make or change your prediction for these games", controls=controls)
+            "-# • Use `/vote` to make or change your prediction for these games", controls=controls)
     return message_payload(header + f"**{VOTING_CLOSED}**" + ("\n\nNo votes were made." if no_votes else ""))
 
 
