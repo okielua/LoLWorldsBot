@@ -14,7 +14,7 @@ from services.presentation import MATCH_GAP, SpacedContainer, embed_card_payload
 
 from models import MatchStatus
 from services import polls
-from services.match_times import TOURNAMENT_TIMEZONE, private_match_details, registered_match_times
+from services.match_times import TOURNAMENT_TIMEZONE, format_tournament_date, private_match_details, registered_match_times
 from services.user_settings import get_registered_timezones, get_user_timezone
 from services.prediction_display import PREDICTION_BLUE, VOTE_CONFIRMATION_HELP, change_vote_text, format_prediction_results, my_votes_embeds, prediction_history_section
 from services.server_reminders import validate_reminder_channel
@@ -465,7 +465,9 @@ class VotingManager:
             name = discord.utils.escape_mentions(discord.utils.escape_markdown(" ".join(display_name.split())))
             pairing = (f"{team_token(match.team1_id)} vs {team_token(match.team2_id)}"
                        if self.test_mode else matchup(match))
-            text = ("🧪 **TEST**\n\n" if self.test_mode else "") + f"🗳️ **@{name}** voted!\n\n## {pairing}"
+            date = format_tournament_date(match.start_time)
+            text = (("🧪 **TEST**\n\n" if self.test_mode else "")
+                    + f"🗳️ **@{name}** just cast a vote on:\n\n## {pairing}\n({date})")
             await channel.send(**message_payload(text), allowed_mentions=discord.AllowedMentions.none())
         except (discord.DiscordException, OSError, sqlite3.Error, ValueError):
             logger.warning("Vote saved, but participation announcement could not be sent", exc_info=True)

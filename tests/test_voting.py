@@ -577,7 +577,7 @@ def test_successful_private_confirmation_reveals_all_teams_even_when_pick_was_hi
         announcement = channel.send.call_args.kwargs
         assert announcement["allowed_mentions"].to_dict() == {"parse": []}
         public_notice = json.dumps(render_payload({"components": announcement["view"].to_components()}), ensure_ascii=False)
-        assert "@Lua" in public_notice and "voted!" in public_notice
+        assert "@Lua" in public_notice and "just cast a vote on:" in public_notice
         assert "\\n\\n## " in public_notice
         assert "||" in public_notice  # Protected participant stays protected.
         assert "Your prediction" not in public_notice and "Your pick" not in public_notice
@@ -622,7 +622,8 @@ def test_simulated_vote_announcements_are_labelled_and_never_ping(context):
     sent = channel.send.call_args
     assert sent.kwargs["allowed_mentions"].to_dict() == {"parse": []}
     text = rendered_message(sent).description
-    assert "TEST" in text and "@Lua" in text and "voted!\n\n## " in text
+    assert "TEST" in text and "@Lua" in text and "just cast a vote on:\n\n## " in text
+    assert "(Thu, 15 Oct 2026)" in text
     assert "C9" in text and "KC" in text
 
 
