@@ -39,7 +39,8 @@ def test_completion_announces_once_and_latest_survives_restart(context):
         notice = card.title + "\n" + card.description
         assert "Series Voting Results" in notice
         assert "@Lua" in notice and "@Miwa" in notice
-        assert "Correct predictions" in notice and "Incorrect predictions" in notice
+        assert "Voted for" in notice
+        assert "Correct predictions" not in notice and "Incorrect predictions" not in notice
         assert "2 votes cast" in notice and "50%" in notice
         latest = latest_result(123, store.data.tournament.id)
         assert latest and "@Miwa" in latest[2][0]
@@ -114,7 +115,10 @@ def test_series_scoped_spoilers_and_large_results(context, monkeypatch):
     assert len(pages) > 1 and all(len(page) < 3600 for page in pages)
     for page in pages:
         hidden = render_payload({"content": page})["content"]
-        assert "||@Voter" in hidden and "⟦" not in hidden
+        assert "@Voter" in hidden and "||@Voter" not in hidden and "⟦" not in hidden
+        assert "Final score:** ||3–1||" in hidden
+        without_score = "\n".join(line for line in hidden.splitlines() if "Final score:" not in line)
+        assert "||" not in without_score
     now[0] += timedelta(hours=12)
     assert all("||" not in render_payload({"content": page})["content"] for page in pages)
 
@@ -211,5 +215,30 @@ def test_live_or_unpublished_matches_never_announce_results(context):
         with polls.get_connection() as db:
             db.execute("UPDATE match_polls SET published_at=NULL WHERE guild_id=123 AND match_id=?", (first.id,))
         await manager.series_results.tick()
+        assert channel.send.await_count == sent
+    asyncio.run(scenario())
+
+
+def test_existing_result_card_and_history_are_refreshed_without_pings(context):
+    import json
+    manager, store, channel, now, message = context
+    async def scenario():
+        await manager.tick()
+        first = store.data.matches[0]
+        await manager.vote(first.id, 7, first.team1_id, "Lua")
+        complete(store, now, first)
+        await manager.tick()
+        with polls.get_connection() as db:
+            db.execute("UPDATE series_result_posts SET pages=? WHERE guild_id=123 AND match_id=?",
+                       (json.dumps(["Old card with Correct predictions"]), first.id))
+        sent = channel.send.await_count
+        message.edit.reset_mock()
+        await manager.series_results.tick()
+        message.edit.assert_awaited_once()
+        card = rendered_message(message.edit.call_args)
+        assert "Voted for" in card.description and "@Lua" in card.description
+        assert "Correct predictions" not in card.description
+        assert message.edit.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
+        assert "Voted for" in latest_result(123, store.data.tournament.id)[2][0]
         assert channel.send.await_count == sent
     asyncio.run(scenario())

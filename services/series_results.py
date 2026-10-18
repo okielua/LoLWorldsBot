@@ -16,7 +16,7 @@ from services.presentation import message_payload
 from services.reminder_engine import get_server_ping_user_ids
 from services.server_settings import get_server_settings
 from services.server_reminders import validate_reminder_channel
-from services.spoilers import aggregate_token, matchup, score_token, team_token
+from services.spoilers import score_token, team_token
 from services.team_history import HistoryPages
 from services.user_settings import get_all_user_reminder_preferences, get_connection
 from services.worlds_role import individual_subscribers
@@ -48,30 +48,28 @@ def latest_result(guild_id, tournament_id):
 
 
 def result_pages(match, votes, *, test_mode=False):
-    """Keep outcome-bearing names/counts under this series' own spoiler clock."""
-    pair = (f"{team_token(match.team1_id)} vs {team_token(match.team2_id)}"
-            if test_mode else matchup(match))
+    """Show picks by team openly; only the final score reveals the outcome."""
+    pair = f"{team_token(match.team1_id)} vs {team_token(match.team2_id)}"
     heading = f"## {'TEST: ' if test_mode else ''}Series Voting Results\n\n## {pair}\n({format_tournament_date(match.start_time)})"
     score = (f"{match.team1_score}–{match.team2_score}" if test_mode else
              score_token(match) or f"||{match.team1_score}–{match.team2_score}||")
-    protect = (lambda text: f"||{text}||") if test_mode else (lambda text: aggregate_token(text, [match.id]))
-    heading += f"\n\n**Final score:** {protect(score) if test_mode else score}"
+    heading += f"\n\n**Final score:** {'||' + score + '||' if test_mode else score}"
     valid = [(uid, team, name) for uid, team, name in votes if team in {match.team1_id, match.team2_id}]
     lines = []
-    for correct, label in (((True, '✅ Correct predictions'), (False, '❌ Incorrect predictions')) if valid else ()):
+    for team_id in ((match.team1_id, match.team2_id) if valid else ()):
         names = sorted(("@" + discord.utils.escape_mentions(discord.utils.escape_markdown(
             " ".join((name or f'User {uid}').split())[:64]))
-            for uid, team, name in valid if (team == match.winner_id) == correct), key=str.casefold)
-        lines.append((label, names or ["None"]))
-    split = f"**{len(valid)} votes cast**"
+            for uid, team, name in valid if team == team_id), key=str.casefold)
+        lines.append((f"Voted for {team_token(team_id)}", names or ["None"]))
+    split = f"**{len(valid)} vote{'s' if len(valid) != 1 else ''} cast**"
     for team in (match.team1_id, match.team2_id):
         count = sum(chosen == team for _, chosen, _ in valid)
         split += f"\n{team_token(team)}: {count} ({count / len(valid):.0%})" if valid else f"\n{team_token(team)}: 0"
-    pages, body = [], heading + "\n\n" + (protect(split) if valid else "No votes were cast for this series.")
+    pages, body = [], heading + "\n\n" + (split if valid else "No votes were cast for this series.")
     for label, names in lines:
         body += "\n\n### " + label
         for name in names:
-            line = protect(name)
+            line = name
             if len(body) + len(line) > 3200:
                 pages.append(body)
                 body = heading + "\n\n### " + label + " (continued)"
@@ -163,6 +161,35 @@ class SeriesResults:
                            (manager.guild_id, manager.store.data.tournament.id, match_id, batch))
             self._sent_ping_batches.discard(key)
 
+    async def _refresh_result_cards(self):
+        """Silently refresh saved cards when the result layout changes."""
+        manager = self.manager
+        scope = (manager.guild_id, manager.store.data.tournament.id)
+        with closing(get_connection()) as db:
+            rows = db.execute("""SELECT match_id, channel_id, message_id, pages FROM series_result_posts
+                WHERE guild_id=? AND tournament_id=? AND message_id IS NOT NULL""", scope).fetchall()
+        for match_id, channel_id, message_id, saved in rows:
+            match = manager.store.data.matches_by_id.get(match_id)
+            if match is None or match.status != MatchStatus.COMPLETED:
+                continue
+            votes = await asyncio.to_thread(polls.get_poll_results, manager.guild_id, match_id)
+            pages = result_pages(match, votes, test_mode=manager.test_mode)
+            if pages == json.loads(saved):
+                continue
+            try:
+                channel = manager.client.get_channel(channel_id) or await manager.client.fetch_channel(channel_id)
+                await channel.get_partial_message(message_id).edit(
+                    **message_payload(pages[0], controls=HistoryPages(pages)), allowed_mentions=discord.AllowedMentions.none())
+            except discord.NotFound:
+                # Keep the retrievable result even if its original post was deleted.
+                pass
+            except discord.HTTPException:
+                logger.warning("Could not refresh series result card %s; will retry", message_id, exc_info=True)
+                continue
+            with closing(get_connection()) as db, db:
+                db.execute("UPDATE series_result_posts SET pages=? WHERE guild_id=? AND tournament_id=? AND match_id=?",
+                           (json.dumps(pages), *scope, match_id))
+
     async def tick(self):
         manager = self.manager
         if not manager.fresh():
@@ -173,6 +200,7 @@ class SeriesResults:
                 for match_id, record in list(self._pending.items()):
                     self._save(match_id, record)
                     del self._pending[match_id]
+                await self._refresh_result_cards()
                 with closing(get_connection()) as db:
                     seen = {row[0] for row in db.execute("SELECT match_id FROM series_result_posts WHERE guild_id=? AND tournament_id=?",
                             (manager.guild_id, manager.store.data.tournament.id))}

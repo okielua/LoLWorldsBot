@@ -501,16 +501,17 @@ the selected member. Completed results, correctness, and affected stats retain
 global spoiler protection. Upcoming picks and changes belong in `/vote`.
 
 Without a member, `/votehistory` publicly shows the most recently announced
-completed series' final score, total votes, team split, and correct/incorrect
-voters. It stays available until the next results announcement is published.
+completed series' final score, total votes, team split, and voters grouped by
+the team they picked. It stays available until the next results announcement is published.
 Names are plain text; retrieving/paging results never pings anyone.
 
 When a published poll's series completes, the bot posts its voting results once
 in the configured reminder channel, mentioning the Worlds role and subscribers
 to either team. Recipients are deduplicated and role members do not also get
 individual mentions. Large recipient sets use bounded follow-up mention batches.
-Final scores and outcome-bearing prediction details follow that series' fixed
-12-hour spoiler window. Empty-vote status text stays visible. Result receipts and
+Only the final score follows that series' fixed 12-hour spoiler window. Team
+names, vote counts, percentages and voters stay visible; there are no correct/
+incorrect voter labels that could reveal the winner. Result receipts and
 pending mention batches persist across restarts; an initial install does not
 announce the entire backlog of historical matches. Public reminders must be On.
 
