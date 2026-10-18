@@ -67,7 +67,7 @@ def test_public_message_has_only_team_names_bold_and_explicit_deduplicated_menti
     assert "### __Subscribers:__" in text
     match = store.data.matches[0]
     stage = store.data.stages_by_id[match.stage_id]
-    assert f"*Starts in 5 minutes!*\n-# *({stage.name} · Bo{match.best_of})*" in text
+    assert f"*Starts in 5 minutes!*\n\n-# *({stage.name} · Bo{match.best_of})*" in text
     assert "### __Subscribers:__\n\n<@1> <@2>\n\n-#" in text
     assert call.kwargs["allowed_mentions"].to_dict() == {"users": [1, 2], "parse": []}
     assert not asyncio.run(delivery.deliver(match_id))

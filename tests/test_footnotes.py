@@ -12,7 +12,7 @@ from services.team_emojis import team_display
 
 def test_footnotes_have_one_bullet_no_bold_and_keep_command_code():
     source = "Normal **heading**\n-# **Use** `/changevote` for *your prediction*.\n-# • Already bulleted\n-# - Legacy bullet"
-    expected = "Normal **heading**\n-# *Use `/changevote` for your prediction.*\n\n-# • *Already bulleted*\n-# • *Legacy bullet*"
+    expected = "Normal **heading**\n\n-# *Use `/changevote` for your prediction.*\n\n-# • *Already bulleted*\n-# • *Legacy bullet*"
     assert format_footnotes(source) == expected
     assert format_footnotes(expected) == expected
     assert format_footnotes("-# **70% correct** · **Other text**") == "-# ***70% correct** · Other text*"
@@ -26,10 +26,26 @@ def test_footnote_spacing_is_consistent_inside_text_and_after_controls():
     formatted = format_footnotes(notes)
     assert format_footnotes("Body\n" + notes) == "Body\n\n" + formatted
     assert format_footnotes("Body\n\n" + notes) == "Body\n\n" + formatted
-    assert format_footnotes("Name\n-# Current streak: 3") == "Name\n-# *Current streak: 3*"
+    assert format_footnotes("Name\n-# Current streak: 3") == "Name\n\n-# *Current streak: 3*"
     displayed = team_display(notes).content
-    assert displayed == "\u200b\n\n" + formatted
+    assert displayed == "\u00a0\n\n" + formatted
     assert team_display(displayed).content == displayed
+
+
+def test_footnote_gap_survives_active_spoiler_rendering(monkeypatch):
+    from services import spoilers
+    from services.spoilers import SpoilerPolicy
+    from services.spoiler_delivery import render_payload
+    from test_spoilers import scenario
+    monkeypatch.setattr(spoilers, "_current", SpoilerPolicy(scenario()[2]))
+    for notes in (VOTE_CONFIRMATION_HELP, "-# General footnote.", "-# • First note.\n-# • Second note."):
+        display = team_display(notes)
+        wire = render_payload({"components": [display.to_component_dict()]})["components"][0]["content"]
+        assert wire.startswith("\u00a0\n\n-# ")
+        assert "\u200b" not in wire
+        assert team_display(wire).content == wire
+        body = team_display("Body\n" + notes).content
+        assert "Body\n\n-# " in body
 
 
 def test_leaderboard_uses_real_card_renderer_and_only_player_headers_are_bold():
@@ -40,7 +56,7 @@ def test_leaderboard_uses_real_card_renderer_and_only_player_headers_are_bold():
         texts = [item.content for item in payload["view"].walk_children() if isinstance(item, discord.ui.TextDisplay)]
         text, = texts
         assert text.startswith("## __TEST: Communism Worlds Leaderboard__")
-        assert "### `1.` lua: 18 correct\n-# *Voted on" in text
+        assert "### `1.` lua: 18 correct\n\n-# *Voted on" in text
         assert "Sample results. The real leaderboard is unchanged." in text
         assert "\u200b" not in text and "**75% correct**" in text
         notes = [line for line in text.splitlines() if line.startswith("-#")]
@@ -49,7 +65,7 @@ def test_leaderboard_uses_real_card_renderer_and_only_player_headers_are_bold():
         assert "-# • *Ranked by" in text
         assert len(text) <= 4000
         help_text = team_display("-# **Use** `/currentvotes` to see votes.").content
-        assert help_text == "-# *Use `/currentvotes` to see votes.*"
+        assert help_text == "\u00a0\n\n-# *Use `/currentvotes` to see votes.*"
         payload["view"].stop()
     asyncio.run(scenario())
     embed = results_embed("Prediction results\n**C9**: 0% (0 votes)\n\u200b\n**KC**: 0% (0 votes)\n\u200b")

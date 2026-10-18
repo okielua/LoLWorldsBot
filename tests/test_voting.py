@@ -77,7 +77,7 @@ def test_daily_post_opens_early_without_pings_and_survives_restart(context):
         assert "`/currentvotes`" in str(components)
         assert "Communism's Worlds prediction standings" in str(components)
         assert card.children[-1].content == (
-            "\u200b\n\n"
+            "\u00a0\n\n"
             "-# • *Use `/changevote` to change your prediction until 5 minutes before a match.*\n"
             "-# • *Use `/currentvotes` to see how everyone voted once voting closes.*\n"
             "-# • *Use `/leaderboard` to see Communism's Worlds prediction standings.*"

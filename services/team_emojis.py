@@ -123,11 +123,10 @@ def team_text(text):
 
 def team_display(text):
     text = format_footnotes(team_text(text))
-    if text.startswith("-# • "):
+    if text.startswith("-# "):
         # Discord trims leading blank lines. Preserve a gap when this text block
         # follows buttons or another component without using extra components.
-        from services.spoilers import current_policy
-        text = ("" if current_policy() else "\u200b") + "\n\n" + text
+        text = "\u00a0\n\n" + text
     return discord.ui.TextDisplay(text)
 
 

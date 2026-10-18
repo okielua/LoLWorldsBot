@@ -19,7 +19,10 @@ def format_footnotes(text):
     lines = text.split("\n")
     spaced = []
     for line in lines:
-        if line.startswith("-# • ") and spaced and spaced[-1].strip() and not spaced[-1].startswith("-# • "):
+        if line.startswith("-# ") and spaced and spaced[-1].strip() and (
+            not spaced[-1].startswith("-# ")
+            or line.startswith("-# • ") and not spaced[-1].startswith("-# • ")
+        ):
             spaced.append("")
         spaced.append(line)
     return "\n".join(spaced)

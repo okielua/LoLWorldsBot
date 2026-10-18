@@ -16,10 +16,10 @@ def test_sample_leaderboard_matches_compact_specification():
     assert embed.title == "TEST: Communism Worlds Leaderboard"
     assert embed.colour.value == 0x5865F2
     assert "Sample results. The real leaderboard is unchanged." in text
-    assert "### `1.` lua: 18 correct\n-# *Rank movement: ↑1*\n-# *Voted on 24 of 30 past matches*\n-# *Accuracy: **75% correct***\n\n-# *🔥 Current streak: 4*\n-# *Best streak: 7*" in text
-    assert "### `2.` Sample Player 2: 18 correct\n-# *Rank movement: ↓1*\n" in text
+    assert "### `1.` lua: 18 correct\n\n-# *Rank movement: ↑1*\n-# *Voted on 24 of 30 past matches*\n-# *Accuracy: **75% correct***\n\n-# *🔥 Current streak: 4*\n-# *Best streak: 7*" in text
+    assert "### `2.` Sample Player 2: 18 correct\n\n-# *Rank movement: ↓1*\n" in text
     assert "### `2.` Sample Player 3: 18 correct\n" in text
-    assert "### `4.` Sample Player 4: 14 correct\n-# *Rank movement: ↑1*\n" in text
+    assert "### `4.` Sample Player 4: 14 correct\n\n-# *Rank movement: ↑1*\n" in text
     assert "**69.2% correct**" in text and "**70% correct**" in text
     assert "### `6.` Sample Player 6: 0 correct\n" in text
     assert text.index("18 correct") < text.index("0 correct")
@@ -52,7 +52,7 @@ def test_shared_first_place_and_zero_scores_do_not_gain_a_gap_or_fake_movement()
     assert "New" not in embed.description
     assert "↑" not in embed.description.split("-# • *Ranked")[0]
     new, = leaderboard_embeds(entries, previous={})
-    assert "### `1.` A: 0 correct\n-# *Rank movement: New*" in new.description
+    assert "### `1.` A: 0 correct\n\n-# *Rank movement: New*" in new.description
 
 
 def test_personal_stats_use_requested_summary_and_four_explained_sections():
@@ -109,10 +109,10 @@ def test_renamed_insights_show_real_values_below_explanations():
     assert "\n\n**GEN** · **1/3 correct (33.3%)**" in text
     assert "\n\n**GEN** · **backed to win in 2 series they lost**" in text
     assert text.endswith("**2/3 minority predictions correct**")
-    assert "## :PeyzPal: __Check Your PayPal__\n-# *The team whose series I predict most accurately" in text
-    assert "## :PepeKMS: __Can’t Read These Frauds__\n-# *The team whose series I predict least accurately" in text
-    assert "## :Copium: __Hopium Supplier__\n-# *The team I backed to win most often when they actually lost." in text
-    assert "## :Discheesed: __Democracy Was a Mistake__\n-# *How often I predict correctly" in text
+    assert "## :PeyzPal: __Check Your PayPal__\n\n-# *The team whose series I predict most accurately" in text
+    assert "## :PepeKMS: __Can’t Read These Frauds__\n\n-# *The team whose series I predict least accurately" in text
+    assert "## :Copium: __Hopium Supplier__\n\n-# *The team I backed to win most often when they actually lost." in text
+    assert "## :Discheesed: __Democracy Was a Mistake__\n\n-# *How often I predict correctly" in text
     assert "Boldest correct call" not in text and "Recent predictions" not in text
 
 
