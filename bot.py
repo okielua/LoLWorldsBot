@@ -38,7 +38,7 @@ from services.vote_history import voter_autocomplete, show_vote_history
 from services.vote_panel import OpenVotePanel, PublicVotersButton, daily_post_reference
 from services.runtime_config import runtime_config, prepare_seed, remove_development_commands, validate_application
 from services.setup_gate import SetupCommandTree
-from services.spoilers import SpoilerLedger, current_policy, matchup, score_token
+from services.spoilers import SpoilerLedger, current_policy, date_heading_token, matchup, score_token
 from services.spoiler_delivery import SpoilerDelivery
 from services.user_settings import get_connection
 from services.user_settings import mark_setup_completed
@@ -232,7 +232,7 @@ def format_match(
     parts = []
 
     if include_date and date_as_heading:
-        parts.append(f"## __{local_date}__")
+        parts.append(f"## __{date_heading_token(match.start_time, TOURNAMENT_TIMEZONE, now=now)}__")
 
     stage_details = [display_stage_name(stage.name)] if include_stage else []
 
@@ -335,7 +335,7 @@ def format_next_match(match, timezone_name: str, now: datetime, timezones=None) 
         stage_details += f" · {match.round_name}"
     relative = format_relative_time(match.start_time, now)
     official = local_datetime(match.start_time, TOURNAMENT_TIMEZONE)
-    date_time_label = f"__{official.strftime('%a')}, {official.day} {official.strftime('%b %Y')}__\n"
+    date_time_label = f"__{date_heading_token(match.start_time, TOURNAMENT_TIMEZONE, now=now, style='short')}__\n"
     if relative:
         date_time_label += f"\n-# ({relative})"
     date_time_label += "\n" + "\n".join(f"-# {line}" for line in format_timezone_times(match.start_time, timezones or [timezone_name]).splitlines())
@@ -1145,7 +1145,7 @@ async def show_day_schedule(interaction: discord.Interaction, day_offset: int):
     timezones = get_registered_timezones() or [timezone_name]
     label = "Today" if day_offset == 0 else "Tomorrow"
     title = f"__{worlds.tournament.year} Worlds: {label}__"
-    date_label = f"{target_date.strftime('%a')}, {target_date.day} {target_date.strftime('%b %Y')}"
+    date_label = date_heading_token(target_date, timezone_name, now=now, style="short")
     context = f"__{date_label}__\n\n"
     manager = getattr(getattr(interaction, "client", None), "voting_manager", None)
     deferred = False
@@ -1272,7 +1272,7 @@ async def schedule(
                 TOURNAMENT_TIMEZONE,
             )
 
-            lines.append(f"## __{local_date}__")
+            lines.append(f"## __{date_heading_token(match.start_time, TOURNAMENT_TIMEZONE, now=now)}__")
 
         lines.append(
             format_match(

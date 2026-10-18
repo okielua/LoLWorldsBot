@@ -25,7 +25,7 @@ from services.presentation import embed_card_payload, message_payload
 from services.prediction_display import VOTE_CONFIRMATION_HELP, group_voting_messages
 from services.voting import personal_vote_payloads, schedule_vote_payloads, my_vote_payloads, current_votes_controls
 from services.leaderboard_views import leaderboard_payload, leaderboard_context, show_personal_stats
-from services.spoilers import current_policy, matchup, score_token
+from services.spoilers import current_policy, date_heading_token, matchup, score_token
 from services.match_browser import show_match_games
 from services.vote_panel import daily_post_reference
 from discord import app_commands
@@ -75,6 +75,7 @@ def load_command(name, worlds, **dependencies):
         "leaderboard_context": leaderboard_context,
         "show_personal_stats": show_personal_stats,
         "current_policy": current_policy,
+        "date_heading_token": date_heading_token,
         "matchup": matchup,
         "score_token": score_token,
         "embed_card_payload": embed_card_payload,
@@ -240,6 +241,7 @@ def load_formatters(worlds):
         "format_clock_time": format_clock_time,
         "TOURNAMENT_TIMEZONE": TOURNAMENT_TIMEZONE,
         "current_policy": current_policy, "matchup": matchup, "score_token": score_token,
+        "date_heading_token": date_heading_token,
     }
     exec(compile(ast.Module(body=functions, type_ignores=[]), "bot.py", "exec"), namespace)
     return namespace
@@ -896,7 +898,7 @@ def test_daily_lookup_is_public_with_all_zones_and_no_vote_results(offset):
     assert call.kwargs["ephemeral"] is False
     assert call.kwargs["allowed_mentions"].to_dict() == {"parse": []}
     text = rendered_message(call).description
-    assert f"{15 + offset} Oct 2026" in text
+    assert ("__Today__" if offset == 0 else "__Tomorrow__") in text
     assert all(city in text for city in ("London", "Berlin", "Tokyo"))
     assert "Play-ins" in text and "Opening Round" in text
     assert text.index("19:00") < text.index("21:00") < text.index("22:00")
@@ -937,7 +939,7 @@ def test_daily_lookup_uses_official_day_without_requiring_user_setup():
     interaction = SimpleNamespace(user=SimpleNamespace(id=7), response=SimpleNamespace(send_message=send))
     asyncio.run(callback(interaction, 0))
     send.assert_awaited_once()
-    assert "14 Oct 2026" in rendered_message(send.call_args).description
+    assert "__Today__" in rendered_message(send.call_args).description
     assert "Europe/Berlin" not in rendered_message(send.call_args).description
     assert send.call_args.kwargs["ephemeral"] is False
     prompt.assert_not_awaited()

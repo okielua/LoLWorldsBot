@@ -4,10 +4,11 @@ Operational IDs and raw results remain intact: callers must use this policy at
 the presentation boundary, never mutate matches used for votes or scoring.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from contextlib import closing
 import json
 import re
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from models import MatchStatus
 
@@ -19,6 +20,14 @@ _current = None
 
 def current_policy():
     return _current
+
+
+def date_heading_token(when, timezone_name, *, now=None, style="long"):
+    from services.match_times import date_heading
+    target = when.astimezone(ZoneInfo(timezone_name)).date() if isinstance(when, datetime) else when
+    if _current is None:
+        return date_heading(target, timezone_name, now=now, style=style)
+    return f"⟦date:{target.isoformat()}:{timezone_name}:{style}⟧"
 
 
 def set_policy(policy):
@@ -87,6 +96,13 @@ def render_text(text, policy=None, *, neutral=False):
     if policy is None:
         return text
     from services.team_emojis import team_emoji, custom_emoji
+    from services.match_times import date_heading
+    def render_date(found):
+        try:
+            return date_heading(date.fromisoformat(found[1]), found[2], now=policy.clock(), style=found[3])
+        except (ValueError, ZoneInfoNotFoundError):
+            return found[1]
+    text = re.sub(r"⟦date:(\d{4}-\d{2}-\d{2}):([^:⟧]+):(long|short|weekday)⟧", render_date, text)
 
     def team_replace(found, force_neutral=False):
         match_id, slot, team_id = found.groups()

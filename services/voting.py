@@ -25,7 +25,7 @@ from services.user_settings import get_all_user_reminder_preferences
 from services.reminder_engine import get_server_ping_user_ids
 from services.worlds_role import individual_subscribers
 from services.setup_gate import require_setup, SetupRequiredView, SetupRequiredLayoutView
-from services.spoilers import current_policy, matchup, team_token, aggregate_token
+from services.spoilers import current_policy, date_heading_token, matchup, team_token, aggregate_token
 from services.vote_panel import OpenVotePanel, PublicVotersButton, voter_lines
 
 logger = logging.getLogger(__name__)
@@ -356,7 +356,7 @@ class DailyPredictionsView(SetupRequiredLayoutView):
             + f"# __{'TEST: ' if manager.test_mode else ''}{title}__\n\n"
             "Here are today's matchups. Voting for each matchup closes 5 minutes before match start.\n\n"
             "First time here? Run `/mysetup` before voting.\n\n"
-            + f"## __{date.strftime('%A')}, {date.day} {date.strftime('%B %Y')}__\n"
+            + f"## __{date_heading_token(date.date(), MATCHDAY_ZONE.key, now=manager.clock(), style='weekday')}__\n"
             + recap
         ))
         match_texts = []

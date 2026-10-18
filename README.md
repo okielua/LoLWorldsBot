@@ -240,6 +240,10 @@ daily post, keeping an eight-match Swiss day inside Discord's component limit.
 Blank spacing separates each match block from the preceding match's buttons.
 Dates group by the US tournament matchday (`America/Los_Angeles`). Absolute match
 times list every unique timezone saved through `/mysetup` as `City: HH:MM`.
+Date headers use **Today** or **Tomorrow** when applicable in that view's existing
+calendar timezone; other days keep their calendar date. Public message headers
+refresh silently as the day changes, preserving the original dates in stored
+drafts. Private replies refresh when the command is reopened.
 A date suffix is included only when that city's date differs from the Riot
 matchday in `America/Los_Angeles`. City-labelled lines omit the redundant timezone
 abbreviation; DST conversion still uses the saved IANA zone. This also applies to

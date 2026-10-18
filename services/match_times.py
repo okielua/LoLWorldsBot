@@ -1,10 +1,26 @@
 """Explicit match times for every timezone registered through /mysetup."""
 
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from datetime import UTC, datetime, timedelta
 
 from services.user_settings import get_registered_timezones
 
 TOURNAMENT_TIMEZONE = "America/Los_Angeles"
+
+
+def date_heading(when, timezone_name=TOURNAMENT_TIMEZONE, *, now=None, style="long"):
+    zone = ZoneInfo(timezone_name)
+    target = when.astimezone(zone).date() if isinstance(when, datetime) else when
+    today = (now or datetime.now(UTC)).astimezone(zone).date()
+    if target == today:
+        return "Today"
+    if target == today + timedelta(days=1):
+        return "Tomorrow"
+    if style == "short":
+        return f"{target.strftime('%a')}, {target.day} {target.strftime('%b %Y')}"
+    if style == "weekday":
+        return f"{target.strftime('%A')}, {target.day} {target.strftime('%B %Y')}"
+    return f"{target.day} {target.strftime('%B %Y')}"
 
 
 def format_clock_time(local, abbreviation=None, *, time_format="24h"):

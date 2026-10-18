@@ -1,7 +1,7 @@
 import asyncio
 from contextlib import closing
 from copy import deepcopy
-from datetime import timedelta
+from datetime import date, timedelta
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -13,7 +13,7 @@ from models import MatchStatus
 from services import spoilers, user_settings
 from services.polls import initialize_polls
 from services.spoiler_delivery import SpoilerDelivery, render_payload
-from services.spoilers import SpoilerLedger, SpoilerPolicy, aggregate_token, matchup, score_token, team_token
+from services.spoilers import SpoilerLedger, SpoilerPolicy, aggregate_token, date_heading_token, matchup, score_token, team_token
 from services.team_emojis import configure_team_emojis
 from test_spoilers import scenario
 
@@ -127,6 +127,23 @@ def test_release_edits_existing_message_silently_after_restart(protected, databa
     assert "42" in http.call_args.args[0].url
     asyncio.run(restarted.release_once())
     http.assert_awaited_once()
+
+
+def test_public_date_header_updates_across_midnight_without_reposting_or_pinging(protected, database):
+    policy, _, _, end = protected
+    http = AsyncMock(return_value={})
+    delivery = SpoilerDelivery(SimpleNamespace(http=SimpleNamespace(request=http)), database)
+    draft = {"content": "## __" + date_heading_token(date(2026, 10, 19), "Europe/Berlin") + "__"}
+    assert render_payload(draft)["content"] == "## __Tomorrow__"
+    delivery.remember({"id": "42", "channel_id": "12"}, draft, render_payload(draft))
+    policy.clock = lambda: end + timedelta(days=1)
+    asyncio.run(delivery.release_once())
+    assert http.call_args.kwargs["json"]["content"] == "## __Today__"
+    policy.clock = lambda: end + timedelta(days=2)
+    asyncio.run(delivery.release_once())
+    assert http.call_args.kwargs["json"]["content"] == "## __19 October 2026__"
+    assert http.call_args.kwargs["json"]["allowed_mentions"] == {"parse": [], "replied_user": False}
+    assert all(call.args[0].method == "PATCH" for call in http.call_args_list)
 
 
 def test_ephemeral_replies_are_not_saved(protected, database):
