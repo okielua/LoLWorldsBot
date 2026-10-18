@@ -25,7 +25,7 @@ from services.prediction_display import PREDICTION_BLUE, VOTE_CONFIRMATION_HELP,
 from services.match_times import TOURNAMENT_TIMEZONE, format_clock_time, format_timezone_times, private_match_details
 from services.user_settings import get_registered_timezones
 from services.server_settings import get_server_settings
-from services.voting import ScheduleVoteButton, VotingManager, personal_vote_payloads, schedule_vote_payloads, my_vote_payloads, current_votes_controls
+from services.voting import DailyPageButton, ScheduleVoteButton, VotingManager, personal_vote_payloads, schedule_vote_payloads, my_vote_payloads, current_votes_controls
 from services.prediction_stats import get_competition_stats
 from services.leaderboard_views import MyStatsButton, leaderboard_context, leaderboard_payload, show_personal_stats
 from services.status_labels import MATCH_STATUS_LABELS
@@ -418,6 +418,7 @@ class WorldsBot(discord.Client):
         self.tree = SetupCommandTree(self)
         self.voting_manager = VotingManager(self, tournament_store, GUILD_ID)
         self.add_dynamic_items(ScheduleVoteButton)
+        self.add_dynamic_items(DailyPageButton)
         self.add_dynamic_items(MyStatsButton)
         self.add_dynamic_items(OpenVotePanel, PublicVotersButton)
         self.server_delivery = ServerReminderDelivery(self, tournament_store, GUILD_ID, poll_manager=self.voting_manager)

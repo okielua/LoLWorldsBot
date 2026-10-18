@@ -294,16 +294,44 @@ def personal_vote_payloads(manager, available, user_id, saved, *, timezone_name=
     return pages
 
 
+class DailyPageButton(discord.ui.DynamicItem[discord.ui.Button],
+                      template=r"worldsboardpage:(?P<guild>\d+):(?P<day>\d{4}-\d{2}-\d{2}):(?P<page>\d+):(?P<tournament>[a-f0-9]{12})"):
+    def __init__(self, guild_id, day, page, tournament, *, label="Next Matches", disabled=False):
+        self.guild_id, self.day, self.page, self.tournament = guild_id, day, page, tournament
+        super().__init__(discord.ui.Button(label=label, style=discord.ButtonStyle.secondary, disabled=disabled,
+            custom_id=f"worldsboardpage:{guild_id}:{day}:{page}:{tournament}"))
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match):
+        return cls(int(match["guild"]), match["day"], int(match["page"]), match["tournament"])
+
+    async def callback(self, interaction):
+        if not await require_setup(interaction):
+            return
+        manager = next((candidate for candidate in (
+            getattr(interaction.client, "prediction_test_manager", None),
+            getattr(interaction.client, "voting_manager", None))
+            if candidate and candidate.guild_id == interaction.guild_id == self.guild_id
+            and hashlib.sha256(candidate.store.data.tournament.id.encode()).hexdigest()[:12] == self.tournament), None)
+        if manager is None or self.day not in manager.match_days():
+            await interaction.response.send_message(**message_payload("This daily post has expired. Use `/today` for current matches."), ephemeral=True)
+            return
+        await interaction.response.defer()
+        manager._daily_pages[self.day] = self.page
+        await manager._sync_day(self.day, manager.match_days()[self.day])
+
+
 class DailyPredictionsView(SetupRequiredLayoutView):
     def __init__(self, manager, day, matches, poll_by_id, recap="", role_id=None, user_ids=(), participants=None):
         super().__init__(timeout=None)
-        # Worlds has at most eight matches per day in the verified schedule.
-        # Each match consumes four V2 components, plus the card and two text blocks.
-        if len(matches) > 9:
-            raise ValueError("This matchday exceeds Discord's single-message component limit.")
+        # Separate matchup / buttons / details blocks require five components
+        # per match. Pages keep even a full Swiss day inside one Discord post.
+        page_count = max(1, (len(matches) + 4) // 5)
+        page = min(max(0, getattr(manager, "_daily_pages", {}).get(day, 0)), page_count - 1)
+        matches = matches[page * 5:(page + 1) * 5]
         date = datetime.fromisoformat(day)
         timezones = get_registered_timezones()
-        card = SpacedContainer(accent_colour=discord.Colour(PREDICTION_BLUE), compact_spacing=len(matches) > 7)
+        card = SpacedContainer(accent_colour=discord.Colour(PREDICTION_BLUE))
         self.add_item(card)
         data = manager.store.data
         matchdays = sorted({
@@ -320,6 +348,8 @@ class DailyPredictionsView(SetupRequiredLayoutView):
                 stage_names.append(name)
         stage_label = discord.utils.escape_markdown(" / ".join(stage_names))
         title = f"Worlds {data.tournament.year} Day {matchdays.index(day) + 1}/{len(matchdays)} · {stage_label}"
+        if page_count > 1:
+            title += f" · Page {page + 1}/{page_count}"
         card.add_item(team_display(
             (f"<@&{role_id}>\n" if role_id and not manager.test_mode else "")
             + ((" ".join(f"<@{user_id}>" for user_id in user_ids) + "\n\n") if user_ids and not manager.test_mode else "")
@@ -329,6 +359,7 @@ class DailyPredictionsView(SetupRequiredLayoutView):
             + f"## __{date.strftime('%A')}, {date.day} {date.strftime('%B %Y')}__\n"
             + recap
         ))
+        match_texts = []
         for match_index, match in enumerate(matches):
             poll = poll_by_id.get(match.id)
             if poll is None:
@@ -356,18 +387,16 @@ class DailyPredictionsView(SetupRequiredLayoutView):
             # retained blank glyph line for boards at the component limit.
             gap = MATCH_GAP if match_index else ""
             times = "\n".join(f"-# {line}" for line in registered_match_times(match.start_time, timezones).splitlines())
-            card.add_item(team_display(
-                f"{gap}## {matchup(match)}\n{stage_label}\n"
-                f"{times}\n\n{status}"
-            ))
+            card.add_item(team_display(f"{gap}## {matchup(match)}"))
             card.add_item(discord.ui.ActionRow(VoteButton(manager, poll, 1), VoteButton(manager, poll, 2)))
+            details_text = team_display(f"{stage_label}\n{times}\n\n{status}")
+            card.add_item(details_text)
+            match_texts.append(details_text)
         card.add_item(team_display(
             VOTE_CONFIRMATION_HELP
         ))
         # Fit participation into the existing text blocks, preserving the
         # single daily board even on an eight-match day.
-        match_texts = [item for item in card.children if isinstance(item, discord.ui.TextDisplay)
-                       and "## " in item.content and item.content != card.children[0].content]
         remaining = max(0, 3800 - sum(len(item.content) for item in self.walk_children()
                                      if isinstance(item, discord.ui.TextDisplay)))
         allowance = remaining // max(1, len(matches))
@@ -398,6 +427,14 @@ class DailyPredictionsView(SetupRequiredLayoutView):
             buttons.append(PublicVotersButton(manager.guild_id, data.tournament.id))
         if self.total_children_count + len(buttons) + 1 <= 40:
             card.add_item(discord.ui.ActionRow(*buttons))
+        if page_count > 1:
+            tournament = hashlib.sha256(data.tournament.id.encode()).hexdigest()[:12]
+            card.add_item(discord.ui.ActionRow(
+                DailyPageButton(manager.guild_id, day, max(0, page - 1), tournament,
+                                label="Previous Matches", disabled=page == 0),
+                DailyPageButton(manager.guild_id, day, min(page_count - 1, page + 1), tournament,
+                                label="Next Matches", disabled=page == page_count - 1),
+            ))
 
 
 class VotingManager:
@@ -412,6 +449,7 @@ class VotingManager:
         self._publication_queue = {}
         self._checked_at = {}
         self._notice_pairs = set()
+        self._daily_pages = {}
 
     async def _followers(self, channel, matches, role_id=None):
         users = await asyncio.to_thread(get_all_user_reminder_preferences)

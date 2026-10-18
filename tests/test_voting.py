@@ -319,7 +319,7 @@ def test_simulated_daily_buttons_show_the_visible_team_names(context, monkeypatc
         assert "⟦" not in str(result)
         card, = view.children
         match_blocks = [child.content for child in card.children
-                        if isinstance(child, discord.ui.TextDisplay) and "Voting open" in child.content]
+                        if isinstance(child, discord.ui.TextDisplay) and " vs " in child.content]
         assert len(match_blocks) == 2
         assert not match_blocks[0].startswith("\u00a0\n\n")
         assert match_blocks[1].startswith("\u00a0\n\n## ")
@@ -329,8 +329,10 @@ def test_simulated_daily_buttons_show_the_visible_team_names(context, monkeypatc
                 assert isinstance(spacer, discord.ui.Separator)
                 assert spacer.spacing == discord.SeparatorSpacing.large
                 assert spacer.visible is False
-        for block in match_blocks:
-            assert block.index("## ") < block.index("Play-ins")
+        for index, child in enumerate(card.children):
+            if isinstance(child, discord.ui.TextDisplay) and child.content in match_blocks:
+                assert isinstance(card.children[index + 1], discord.ui.ActionRow)
+                assert "Bo5" in card.children[index + 2].content
         assert view.total_children_count <= 40
         buttons = [child for child in view.walk_children() if isinstance(child, discord.ui.Button)]
         for button in buttons:
@@ -473,7 +475,7 @@ def test_poll_receipt_failure_does_not_repeat_send_in_running_process(context, m
     asyncio.run(scenario())
 
 
-def test_eight_match_swiss_day_spanning_utc_midnight_is_one_interleaved_post(context):
+def test_eight_match_swiss_day_uses_one_paginated_post_with_buttons_under_matchups(context):
     manager, store, channel, current, _ = context
     first = store.data.matches[0].start_time.replace(day=23, hour=17)
     store.data = replace(store.data, matches=[
@@ -484,16 +486,35 @@ def test_eight_match_swiss_day_spanning_utc_midnight_is_one_interleaved_post(con
     asyncio.run(manager.tick())
     channel.send.assert_awaited_once()
     view = channel.send.call_args.kwargs["view"]
-    assert len([item for item in view.walk_children() if isinstance(item, discord.ui.Button)]) == 16
+    assert len([item for item in view.walk_children() if isinstance(item, discord.ui.Button)]) == 10
     assert len(manager.match_days()) == 1
     card, = view.children
-    for i in range(1, len(card.children) - 2, 2):
-        assert isinstance(card.children[i], discord.ui.TextDisplay)
-        assert isinstance(card.children[i + 1], discord.ui.ActionRow)
-        assert card.children[i].content.startswith("\u2800\n\n") is (i > 1)
-        assert card.children[i].content.index("## ") < card.children[i].content.index("Bo5")
+    for i, item in enumerate(card.children):
+        if isinstance(item, discord.ui.TextDisplay) and " vs " in item.content:
+            assert isinstance(card.children[i + 1], discord.ui.ActionRow)
+            assert "Bo5" in card.children[i + 2].content
     assert view.total_children_count <= 40
-    assert card.children[-2].content.startswith("\u2800\n\n-# ")
+    assert "Page 1/2" in card.children[0].content
+    manager.client.voting_manager = manager
+
+    async def turn_page():
+        from services.voting import DailyPageButton
+        next_page = next(item for item in view.walk_children()
+                         if isinstance(item, DailyPageButton) and item.item.label == "Next Matches")
+        interaction = SimpleNamespace(guild_id=123, user=SimpleNamespace(id=7), client=manager.client,
+                                      extras={}, response=SimpleNamespace(defer=AsyncMock()))
+        restored = await DailyPageButton.from_custom_id(interaction, next_page.item,
+                                                        next_page.template.fullmatch(next_page.custom_id))
+        await restored.callback(interaction)
+        updated = channel.get_partial_message.return_value.edit.call_args.kwargs["view"]
+        assert "Page 2/2" in updated.children[0].children[0].content
+        assert updated.total_children_count <= 40
+        assert len([item for item in updated.walk_children() if isinstance(item, discord.ui.Button)]) == 6
+        channel.send.assert_awaited_once()
+        assert channel.get_partial_message.return_value.edit.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
+        await manager.tick()
+        assert manager._daily_pages["2026-10-23"] == 1
+    asyncio.run(turn_page())
 
 
 def test_public_participation_updates_without_revealing_the_pick(context):
@@ -1034,7 +1055,7 @@ def test_swiss_four_new_pairings_preserve_original_votes_and_do_not_duplicate(co
         store.data = replace(store.data, matches=all_matches)
         await manager.tick()
         updated = message.edit.call_args.kwargs["view"]
-        assert len([item for item in updated.walk_children() if isinstance(item, discord.ui.Button)]) == 16
+        assert len([item for item in updated.walk_children() if isinstance(item, discord.ui.Button)]) == 10
         assert updated.total_children_count <= 40
         assert "@Secret Friend" in str(updated.to_components())
         assert len(get_polls(123, store.data.tournament.id)) == 8

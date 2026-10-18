@@ -233,7 +233,10 @@ on each line.
 
 One no-ping post contains every match in a Worlds matchday, with a separate pair
 of team buttons directly below each matchup. Discord Components V2 makes the
-interleaved layout possible in one message, including an eight-match Swiss day.
+interleaved layout possible in one message. Team voting buttons sit immediately
+under each matchup, followed by stage, times, voting status, and public voters.
+Days with more than five matches use Previous/Next Matches controls in the same
+daily post, keeping an eight-match Swiss day inside Discord's component limit.
 Blank spacing separates each match block from the preceding match's buttons.
 Dates group by the US tournament matchday (`America/Los_Angeles`). Absolute match
 times list every unique timezone saved through `/mysetup` as `City: HH:MM`.
