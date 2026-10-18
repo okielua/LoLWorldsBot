@@ -307,7 +307,8 @@ shows its matchday date. It does not create another post or send notifications.
 Before any daily post has been published, it directs members to `/today`.
 
 Successful vote-button interactions also send a short participation message in
-the `/serversetup` reminder channel: `🗳️ @name voted on the upcoming match …!`
+the `/serversetup` reminder channel: `🗳️ @name voted!`, followed by the matchup
+on its own large heading with team emojis and centered tags.
 The selected team stays private, participant spoiler protection still applies,
 and all user/role/everyone pings are disabled. Controlled prediction simulations
 send the same announcements with a clear TEST label. Missing channels or failed announcements never

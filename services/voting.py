@@ -465,7 +465,7 @@ class VotingManager:
             name = discord.utils.escape_mentions(discord.utils.escape_markdown(" ".join(display_name.split())))
             pairing = (f"{team_token(match.team1_id)} vs {team_token(match.team2_id)}"
                        if self.test_mode else matchup(match))
-            text = f"{'🧪 TEST · ' if self.test_mode else ''}🗳️ **@{name}** voted on the upcoming match {pairing}!"
+            text = ("🧪 **TEST**\n\n" if self.test_mode else "") + f"🗳️ **@{name}** voted!\n\n## {pairing}"
             await channel.send(**message_payload(text), allowed_mentions=discord.AllowedMentions.none())
         except (discord.DiscordException, OSError, sqlite3.Error, ValueError):
             logger.warning("Vote saved, but participation announcement could not be sent", exc_info=True)
