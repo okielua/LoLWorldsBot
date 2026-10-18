@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+import discord
 
 from models import MatchStatus
 from services.match_browser import show_match_games
@@ -47,8 +48,10 @@ def test_clamps_to_available_matches_and_pages_in_correct_order(browser, upcomin
         sent = interaction.response.send_message.call_args.kwargs
         assert not sent.get("ephemeral", False)
         controls = sent["view"].controls
-        assert all(page.startswith(f"# {'Next' if upcoming else 'Previous'} {min(requested, 12)} Matches\n")
-                   for page in controls.pages)
+        for index, page in enumerate(controls.pages, 1):
+            page_label = f" (Page {index}/{len(controls.pages)})" if len(controls.pages) > 1 else ""
+            assert page.startswith(f"# {'Next' if upcoming else 'Previous'} {min(requested, 12)} Matches{page_label}\n")
+            assert "-# Page " not in page
         assert len(controls.pages) == (min(requested, 12) + 2) // 3
         assert all(page.count("Match fixture-") == 3 for page in controls.pages)
         note = f"Only 12 {'upcoming' if upcoming else 'completed'} matches are available."
@@ -66,6 +69,7 @@ def test_clamps_to_available_matches_and_pages_in_correct_order(browser, upcomin
         else:
             assert controls.children == [controls.more]
             assert controls.more.label == f"See 3 More {'Next' if upcoming else 'Previous'} Matches"
+            assert controls.more.style == discord.ButtonStyle.primary
     asyncio.run(scenario())
 
 
@@ -89,7 +93,8 @@ def test_see_more_extends_three_at_a_time_updates_title_and_stops(browser, upcom
             first_new_page = shown // 3
             shown = min(shown + 3, available, 100)
             assert controls.page == first_new_page
-            assert controls.pages[0].startswith(f"# {'Next' if upcoming else 'Previous'} {shown} Matches\n")
+            assert controls.pages[0].startswith(f"# {'Next' if upcoming else 'Previous'} {shown} Matches (Page 1/{len(controls.pages)})\n")
+            assert f"(Page {controls.page + 1}/{len(controls.pages)})\n" in controls.pages[controls.page]
             text = "\n".join(controls.pages)
             assert text.count("Match fixture-") == shown
             assert len(controls.pages) == (shown + 2) // 3

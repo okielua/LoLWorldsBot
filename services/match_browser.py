@@ -26,7 +26,7 @@ class MatchPages(HistoryPages):
         if self.has_more:
             self.add_item(self.more)
 
-    @discord.ui.button(label="See 3 More Matches", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="See 3 More Matches", style=discord.ButtonStyle.primary)
     async def more(self, interaction, button):
         if self.has_more and self.extend is not None:
             self.pages, self.page, self.has_more = self.extend()
@@ -74,7 +74,8 @@ async def show_match_games(interaction, data, formatter, *, count, upcoming, now
         title = f"{direction} {limit} {'Match' if limit == 1 else 'Matches'}"
         page_count = (limit + 2) // 3
         for offset in range(0, limit, 3):
-            parts = [f"# {title}"]
+            page_label = f" (Page {offset // 3 + 1}/{page_count})" if page_count > 1 else ""
+            parts = [f"# {title}{page_label}"]
             if note:
                 parts.append(note)
             for match in matches[offset:min(offset + 3, limit)]:
@@ -82,8 +83,6 @@ async def show_match_games(interaction, data, formatter, *, count, upcoming, now
                                        now=now, timezones=timezones, hide_result=True, small_details=False))
             if not upcoming:
                 parts.append("-# • Recent results use timed spoiler protection. Click a spoiler to reveal it early.")
-            if page_count > 1:
-                parts.append(f"-# Page {offset // 3 + 1} of {page_count}")
             pages.append("\n\n".join(parts))
         return pages
 
