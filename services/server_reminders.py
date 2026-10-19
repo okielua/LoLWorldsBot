@@ -18,6 +18,7 @@ from services.reminder_engine import (
 from services.server_settings import get_server_settings
 from services.prediction_display import results_embed, format_prediction_results, VOTING_FOOTER
 from services.user_settings import get_all_user_reminder_preferences
+from services.voting_rules import swiss_batch, reminder_receipt_key
 
 
 logger = logging.getLogger(__name__)
@@ -93,6 +94,8 @@ class ServerReminderDelivery:
         if not timedelta(0) <= now - self.store.fetched_at <= timedelta(minutes=5):
             return None
         match = self.store.data.matches_by_id.get(match_id)
+        if match and swiss_batch(self.store.data, match)[0].id != match_id:
+            return None  # One reminder for the entire Swiss Bo1 matchday.
         if (match is None or match.status != MatchStatus.SCHEDULED
                 or "TBD" in {match.team1_id, match.team2_id}
                 or not is_reminder_due(match.start_time, now, 5, SERVER_RECOVERY_WINDOW_SECONDS)):
@@ -107,7 +110,8 @@ class ServerReminderDelivery:
             if self.clock() < self._retry_after.get(match_id, self.clock()):
                 return False
             try:
-                existing = await asyncio.to_thread(get_delivery_record, self.guild_id, match_id)
+                receipt_key = reminder_receipt_key(self.store.data, self.store.data.matches_by_id[match_id])
+                existing = await asyncio.to_thread(get_delivery_record, self.guild_id, receipt_key)
                 if existing is not None:
                     self.tracker.mark_sent(key)
                     return False
@@ -130,11 +134,14 @@ class ServerReminderDelivery:
                 if match is None:
                     return False
                 data = self.store.data
+                batch = swiss_batch(data, match)
                 team1 = discord.utils.escape_markdown(data.teams_by_id[match.team1_id].short_name)
                 team2 = discord.utils.escape_markdown(data.teams_by_id[match.team2_id].short_name)
                 if not prediction_results:
                     prediction_results = format_prediction_results(match, [])
                 recipients = sorted(get_server_ping_user_ids(users, match.team1_id, match.team2_id))
+                if len(batch) > 1:
+                    recipients = sorted(set().union(*(get_server_ping_user_ids(users, m.team1_id, m.team2_id) for m in batch)))
                 remaining = (match.start_time - self.clock()).total_seconds()
                 if remaining <= 0:
                     return False
@@ -156,6 +163,12 @@ class ServerReminderDelivery:
                 else:
                     for field in results.fields:
                         content += f"\n\n### {field.name}\n{field.value.rstrip(chr(0x200b)).strip()}"
+                if len(batch) > 1:
+                    pairings = "\n".join(f"### {matchup(m)}" for m in batch)
+                    content = (f"## Swiss Matchday Starts in {timing}\n\n"
+                               f"Voting is now closed for **all {len(batch)} matches**.\n\n{pairings}")
+                    if self.message_prefix:
+                        content += "\n\n" + self.message_prefix
                 role_id = settings.worlds_role_id
                 if role_id and recipients:
                     # The role mention already notifies role subscribers.
@@ -195,7 +208,7 @@ class ServerReminderDelivery:
             self._retry_after.pop(match_id, None)
             self._failures.pop(match_id, None)
             self._pending_records[match_id] = DeliveryRecord(
-                self.guild_id, match_id, settings.reminder_channel_id, message.id, self.clock(),
+                self.guild_id, receipt_key, settings.reminder_channel_id, message.id, self.clock(),
             )
             # No await between Discord acknowledging the send and the SQLite commit:
             # ordinary task cancellation cannot interrupt this receipt write.

@@ -1,5 +1,7 @@
 """Read-only voter history with the shared advanced stats display."""
 
+from services.voting_rules import voting_deadline, swiss_batch
+
 import asyncio
 from datetime import UTC, datetime, timedelta
 
@@ -96,7 +98,7 @@ async def show_vote_history(interaction, voter):
     # Stored personal picks include open polls. Never reveal another voter's
     # still-private picks, even if their poll has not been reconciled yet.
     rows = [(poll, chosen) for poll, chosen in rows
-            if now >= poll.start_time - timedelta(minutes=5)
+            if now >= voting_deadline(poll)
             or (data.matches_by_id.get(poll.match_id) and
                 data.matches_by_id[poll.match_id].status in {MatchStatus.LIVE, MatchStatus.COMPLETED, MatchStatus.CANCELLED})]
     timezone_name = await asyncio.to_thread(get_user_timezone, interaction.user.id)

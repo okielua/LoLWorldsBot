@@ -647,13 +647,21 @@ remain relative to the view's calendar. Swiss fixtures show their round and
 pre-match win/loss record from Riot's bracket description, including undrawn TBD
 fixtures. Advancement and elimination matches are labelled explicitly.
 
-The configured reminder channel receives one Swiss Pick'ems closing reminder
-within eight hours of lock, pinging only the configured Worlds role. Public
-reminders must be enabled in `/serversetup`. Riot's 2026 primer states that Swiss
-picks lock before the first Swiss match; the reminder follows that match's
-published schedule, requires fresh data, and includes the remaining hours/minutes
-and the official Pick'ems link. A SQLite receipt prevents repeat notifications
-after restarts. Starting the bot late catches up once before lock, never after.
+Swiss Bo1 matchdays use one shared voting deadline: five minutes before the
+first Bo1 of that tournament matchday, including fixtures after European
+midnight. There are two scheduled pregame posts: the daily voting post and one
+five-minute matchday reminder. The reminder notifies the Worlds role and
+followers of any team playing that day. SQLite stores the shared deadline and
+the matchday reminder receipt, so old buttons and restarts cannot bypass the
+cutoff or repeat the reminder. Other series retain individual five-minute cutoffs.
+
+The opening Swiss daily post also contains the Riot Pick'ems lock notice and
+link; it does not generate an extra pregame message. Individual vote celebration
+posts are suppressed on Swiss Bo1 matchdays, while the public voter list still
+updates. Every completed Bo1 receives its own result post. During Swiss Bo1
+sessions Riot is checked every 15 seconds; announcements require a confirmed
+completed status and valid final winner/score. Source delays and Discord limits
+can delay delivery. Existing retry/backoff behavior still applies to failures.
 
 ```powershell
 python -m py_compile bot.py

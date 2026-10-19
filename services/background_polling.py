@@ -81,7 +81,10 @@ class BackgroundPolling:
         # Draws and reschedules can be published between matchdays too.
         # Poll every minute throughout an ongoing tournament, including TBD slots.
         ongoing = self.store.data.tournament.start_date <= now.date() <= self.store.data.tournament.end_date
-        delay = 60 if active or ongoing else 300
+        fast_swiss = any(m.best_of == 1 and 'swiss' in m.stage_id.lower() and (
+            m.status == MatchStatus.LIVE or m.status == MatchStatus.SCHEDULED
+            and abs((m.start_time - now).total_seconds()) <= 3600) for m in self.store.data.matches)
+        delay = 15 if fast_swiss else 60 if active or ongoing else 300
         if self.failures:
             delay = min(60 * 2 ** min(self.failures - 1, 4), 60 if active else 900)
         retry_not_before = getattr(self.store, "retry_not_before", None)

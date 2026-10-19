@@ -1,5 +1,7 @@
 """Restart-safe entry points to personal voting and public participation."""
 
+from services.voting_rules import voting_deadline, swiss_batch
+
 import asyncio
 from datetime import timedelta
 import discord
@@ -79,7 +81,7 @@ class PublicVotersButton(discord.ui.DynamicItem[discord.ui.Button],
         await interaction.response.defer()
         pages, current = [], "# Who Has Voted"
         for match in sorted(manager.store.data.matches, key=lambda row: row.start_time):
-            if match.status != MatchStatus.SCHEDULED or manager.clock() >= match.start_time - timedelta(minutes=5):
+            if match.status != MatchStatus.SCHEDULED or manager.clock() >= voting_deadline(match, manager.store.data):
                 continue
             rows = await asyncio.to_thread(polls.get_poll_participants, self.guild_id, match.id)
             heading = f"\n\n## {matchup(match)}\nThese users cast a vote:\n"

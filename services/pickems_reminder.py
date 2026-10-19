@@ -16,6 +16,7 @@ from services.presentation import message_payload
 from services.server_reminders import validate_reminder_channel
 from services.server_settings import get_server_settings
 from services.user_settings import get_connection
+from services.voting_rules import swiss_batch
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,9 @@ class PickemsReminder:
             if not matches:
                 return False
             deadline = min(m.start_time for m in matches)
+            first = min(matches, key=lambda m: m.start_time)
+            if len(swiss_batch(data, first)) > 1:
+                return False  # Included in the daily voting post; no third pregame post.
             if not deadline - timedelta(hours=8) <= now < deadline:
                 return False
             if self._receipt(data.tournament.id):

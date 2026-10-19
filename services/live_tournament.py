@@ -15,6 +15,7 @@ from services.lolesports import LoLEsportsClient, SourceError, WORLDS_2026_ID
 from services.tournament_data import TournamentData, parse_datetime, validate_tournament_data
 from services.standings import calculate_swiss_standings
 from services.swiss import swiss_round_label
+from services.voting_rules import voting_deadline
 
 
 logger = logging.getLogger(__name__)
@@ -137,6 +138,8 @@ def _normalize_events(events, seed):
         seed, tournament=replace(seed.tournament, status=status), teams=list(teams.values()),
         matches=sorted(matches, key=lambda m: m.start_time),
     )
+    for match in data.matches:
+        match.voting_closes_at = voting_deadline(match, data)
     validate_tournament_data(data)
     data.standings = calculate_swiss_standings(data)
     return data

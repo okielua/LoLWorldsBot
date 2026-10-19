@@ -1,5 +1,7 @@
 """One private-prediction post per Worlds matchday, with five-minute cutoffs."""
 
+from services.voting_rules import voting_deadline, swiss_batch, batch_help
+
 import asyncio
 from datetime import UTC, datetime, timedelta
 import hashlib
@@ -100,7 +102,8 @@ class VoteButton(discord.ui.Button):
             text = "Couldn't save your prediction. Please try again."
         embed = discord.Embed(description=text, colour=PREDICTION_BLUE)
         if saved:
-            embed.add_field(name="\u200b", value=VOTE_CONFIRMATION_HELP, inline=False)
+            help_text = batch_help(VOTE_CONFIRMATION_HELP) if len(swiss_batch(self.manager.store.data, match)) > 1 else VOTE_CONFIRMATION_HELP
+            embed.add_field(name="\u200b", value=help_text, inline=False)
             if isinstance(self.view, PersonalVotesView):
                 self.view.select_team(self.poll.match_id, self.team_id)
                 if getattr(interaction, "message", None) is not None:
@@ -333,6 +336,17 @@ class DailyPredictionsView(SetupRequiredLayoutView):
         # Separate matchup / buttons / details blocks require five components
         # per match. Pages keep even a full Swiss day inside one Discord post.
         page_count = max(1, (len(matches) + 4) // 5)
+        batch = swiss_batch(manager.store.data, matches[0]) if matches else []
+        batch_voting = len(batch) > 1
+        introduction = (f"Vote on all {len(batch)} matchups. **Voting for every match closes together, "
+                        "5 minutes before the first match starts.**\n\n" if batch_voting else
+                        "Here are today's matchups. Voting for each matchup closes 5 minutes before match start.\n\n")
+        if batch_voting:
+            introduction += f"**All votes lock <t:{int(voting_deadline(batch[0], manager.store.data).timestamp())}:F>.**\n\n"
+            first_swiss = min((m.start_time for m in manager.store.data.matches if 'swiss' in m.stage_id.lower()), default=None)
+            if batch[0].start_time == first_swiss:
+                introduction += (f"Swiss Pick’ems also lock <t:{int(first_swiss.timestamp())}:R>. "
+                                 "[Submit your Riot picks](https://lolesports.com/en-GB/pickems).\n\n")
         page = min(max(0, getattr(manager, "_daily_pages", {}).get(day, 0)), page_count - 1)
         matches = matches[page * 5:(page + 1) * 5]
         date = datetime.fromisoformat(day)
@@ -360,8 +374,7 @@ class DailyPredictionsView(SetupRequiredLayoutView):
             (f"<@&{role_id}>\n" if role_id and not manager.test_mode else "")
             + ((" ".join(f"<@{user_id}>" for user_id in user_ids) + "\n\n") if user_ids and not manager.test_mode else "")
             + f"# __{'TEST: ' if manager.test_mode else ''}{title}__\n\n"
-            "Here are today's matchups. Voting for each matchup closes 5 minutes before match start.\n\n"
-            "First time here? Run `/mysetup` before voting.\n\n"
+            + introduction + "First time here? Run `/mysetup` before voting.\n\n"
             + f"## __{date_heading_token(date.date(), MATCHDAY_ZONE.key, now=manager.clock(), style='weekday')}__\n"
             + recap
         ))
@@ -399,7 +412,7 @@ class DailyPredictionsView(SetupRequiredLayoutView):
             card.add_item(details_text)
             match_texts.append(details_text)
         card.add_item(team_display(
-            VOTE_CONFIRMATION_HELP
+            (batch_help(VOTE_CONFIRMATION_HELP) if batch_voting else VOTE_CONFIRMATION_HELP)
         ))
         # Fit participation into the existing text blocks, preserving the
         # single daily board even on an eight-match day.
@@ -470,6 +483,8 @@ class VotingManager:
         return await individual_subscribers(channel.guild, recipients, role_id)
 
     async def _notify_new_pairings(self, channel_id, message_id, matches, poll_by_id, enabled, exclude_role_id=None):
+        if matches and len(swiss_batch(self.store.data, matches[0])) > 1:
+            return  # Swiss matchday has exactly two scheduled pregame posts.
         if self.test_mode or not enabled or not self.fresh():
             return
         tournament_id = self.store.data.tournament.id
@@ -478,7 +493,7 @@ class VotingManager:
         seen = await asyncio.to_thread(polls.voting_notice_pairs, self.guild_id, tournament_id)
         pending = [match for match in matches
                    if match.id in poll_by_id and not poll_by_id[match.id].closed
-                   and self.clock() < match.start_time - timedelta(minutes=5)
+                   and self.clock() < voting_deadline(match, self.store.data)
                    and (match.id, match.team1_id, match.team2_id) not in seen | self._notice_pairs]
         if not pending:
             return
@@ -516,7 +531,7 @@ class VotingManager:
         if (
             match is None or match.status != MatchStatus.SCHEDULED
             or "TBD" in {match.team1_id, match.team2_id}
-            or self.clock() >= match.start_time - timedelta(minutes=5)
+            or self.clock() >= voting_deadline(match, self.store.data)
         ):
             raise ValueError("Predictions have closed for this match.")
         if team_id not in {match.team1_id, match.team2_id}:
@@ -525,7 +540,7 @@ class VotingManager:
             raise ValueError("This matchup changed. Please use the current prediction buttons.")
         await asyncio.to_thread(polls.reconcile_polls, self.guild_id, self.store.data, self.clock())
         current = self.store.data.matches_by_id.get(match_id)
-        if not self.fresh() or current is None or current.status != MatchStatus.SCHEDULED or self.clock() >= current.start_time - timedelta(minutes=5):
+        if not self.fresh() or current is None or current.status != MatchStatus.SCHEDULED or self.clock() >= voting_deadline(current, self.store.data):
             raise ValueError("Predictions have closed or live data is unavailable. Please try again shortly.")
         if {current.team1_id, current.team2_id} != {match.team1_id, match.team2_id}:
             raise ValueError("This matchup changed. Please use the current prediction buttons.")
@@ -538,6 +553,8 @@ class VotingManager:
             match = self.store.data.matches_by_id.get(match_id)
             if match is None:
                 return
+            if len(swiss_batch(self.store.data, match)) > 1:
+                return  # Participation stays visible on the daily post.
             settings = await asyncio.to_thread(get_server_settings, self.guild_id)
             if settings.reminder_channel_id is None:
                 return
@@ -553,7 +570,7 @@ class VotingManager:
                     + f"🗳️ **@{name}** just cast a vote on:\n\n## {pairing}\n({date})")
             if match.round_name and "swiss" in match.stage_id.lower():
                 text += "\n" + discord.utils.escape_markdown(match.round_name)
-            deadline = match.start_time - timedelta(minutes=5)
+            deadline = voting_deadline(match, self.store.data)
             now = self.clock()
             if now < deadline:
                 remaining = voting_time_remaining(deadline, now)
@@ -588,7 +605,7 @@ class VotingManager:
             match = data.matches_by_id.get(poll.match_id)
             if (match and poll.match_id in published and not poll.closed and match.status == MatchStatus.SCHEDULED
                     and "TBD" not in {match.team1_id, match.team2_id}
-                    and self.clock() < match.start_time - timedelta(minutes=5)):
+                    and self.clock() < voting_deadline(match, self.store.data)):
                 candidates.append(poll)
         return sorted(candidates, key=lambda poll: (poll.start_time, poll.match_id))
 
@@ -604,14 +621,14 @@ class VotingManager:
                 return {}
             for match in matches:
                 if (match.status == MatchStatus.SCHEDULED and "TBD" not in {match.team1_id, match.team2_id}
-                        and self.clock() < match.start_time - timedelta(minutes=5)):
-                    await asyncio.to_thread(polls.create_poll, self.guild_id, match)
+                        and self.clock() < voting_deadline(match, self.store.data)):
+                    await asyncio.to_thread(polls.create_poll, self.guild_id, match, self.store.data)
             await asyncio.to_thread(polls.reconcile_polls, self.guild_id, self.store.data, self.clock(), fresh=self.fresh())
             available = await asyncio.to_thread(polls.get_polls, self.guild_id, self.store.data.tournament.id)
             requested = {match.id for match in matches}
             return {poll.match_id: poll for poll in available
                     if poll.match_id in requested and not poll.closed
-                    and self.clock() < poll.start_time - timedelta(minutes=5) and self.fresh()}
+                    and self.clock() < voting_deadline(poll) and self.fresh()}
 
     async def acknowledge_schedule_opportunities(self, matches, poll_by_id):
         async with self._lock:
@@ -622,7 +639,7 @@ class VotingManager:
         at = self.clock()
         for match in matches:
             poll = poll_by_id.get(match.id)
-            if poll and not poll.closed and at < match.start_time - timedelta(minutes=5):
+            if poll and not poll.closed and at < voting_deadline(match, self.store.data):
                 key = (match.id, match.team1_id, match.team2_id)
                 self._publication_queue.setdefault(key, at)
 
@@ -717,7 +734,7 @@ class VotingManager:
                 now = self.clock()
                 if (
                     not self.fresh()
-                    or not any(m.status == MatchStatus.SCHEDULED and now < m.start_time - timedelta(minutes=5) for m in matches)
+                    or not any(m.status == MatchStatus.SCHEDULED and now < voting_deadline(m, self.store.data) for m in matches)
                 ):
                     return None
             settings = await asyncio.to_thread(get_server_settings, self.guild_id)
@@ -728,9 +745,9 @@ class VotingManager:
                 for match in matches:
                     if (
                         match.status == MatchStatus.SCHEDULED and "TBD" not in {match.team1_id, match.team2_id}
-                        and self.clock() < match.start_time - timedelta(minutes=5)
+                        and self.clock() < voting_deadline(match, self.store.data)
                     ):
-                        await asyncio.to_thread(polls.create_poll, self.guild_id, match)
+                        await asyncio.to_thread(polls.create_poll, self.guild_id, match, self.store.data)
             await asyncio.to_thread(polls.reconcile_polls, self.guild_id, self.store.data, self.clock(), fresh=self.fresh())
             poll_by_id = {
                 poll.match_id: poll for poll in await asyncio.to_thread(
@@ -808,7 +825,7 @@ class VotingManager:
                     signature = hashlib.sha256(json.dumps(view.to_components(), sort_keys=True).encode()).hexdigest()
                     mentions = discord.AllowedMentions(everyone=False, users=[discord.Object(user_id) for user_id in recipients] if recipients else False, replied_user=False,
                                                        roles=[discord.Object(role_id)] if role_id else False)
-                    if not self.fresh() or not any(self.clock() < match.start_time - timedelta(minutes=5) for match in open_matches):
+                    if not self.fresh() or not any(self.clock() < voting_deadline(match, self.store.data) for match in open_matches):
                         return None
                     message = await channel.send(view=view, allowed_mentions=mentions)
                     voting_time = min(match.start_time for match in open_matches) - timedelta(minutes=5) - self.clock()

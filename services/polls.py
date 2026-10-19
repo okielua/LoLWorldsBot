@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 from models import MatchStatus
 from services.user_settings import get_connection
+from services.voting_rules import voting_deadline
 
 
 @dataclass(frozen=True)
@@ -18,6 +19,7 @@ class Poll:
     start_time: datetime
     closed: bool
     winner_id: str | None
+    voting_closes_at: datetime | None = None
 
 
 def initialize_polls():
@@ -57,6 +59,8 @@ def initialize_polls():
         if "display_name" not in columns:
             connection.execute("ALTER TABLE poll_votes ADD COLUMN display_name TEXT")
         poll_columns = {row[1] for row in connection.execute("PRAGMA table_info(match_polls)")}
+        if "voting_closes_at" not in poll_columns:
+            connection.execute("ALTER TABLE match_polls ADD COLUMN voting_closes_at TEXT")
         if "result_observed_at" not in poll_columns:
             connection.execute("ALTER TABLE match_polls ADD COLUMN result_observed_at TEXT")
         legacy_publication = "published_at" not in poll_columns
@@ -122,26 +126,27 @@ def mark_voting_notices(guild_id, tournament_id, pairs):
                                [(guild_id, tournament_id, *pair) for pair in pairs])
 
 
-def create_poll(guild_id, match):
+def create_poll(guild_id, match, data=None):
     if match.status != MatchStatus.SCHEDULED or "TBD" in {match.team1_id, match.team2_id}:
         raise ValueError("A poll needs a scheduled match with two known teams.")
     with closing(get_connection()) as connection, connection:
         connection.execute("""
-            INSERT INTO match_polls (guild_id, match_id, tournament_id, team1_id, team2_id, start_time)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO match_polls (guild_id, match_id, tournament_id, team1_id, team2_id, start_time, voting_closes_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(guild_id, match_id) DO NOTHING
         """, (guild_id, match.id, match.tournament_id, match.team1_id, match.team2_id,
-              match.start_time.astimezone(UTC).isoformat()))
+              match.start_time.astimezone(UTC).isoformat(), voting_deadline(match, data).astimezone(UTC).isoformat()))
 
 
 def _poll(row):
-    return Poll(*row[:5], datetime.fromisoformat(row[5]), bool(row[6]), row[7])
+    return Poll(*row[:5], datetime.fromisoformat(row[5]), bool(row[6]), row[7],
+                datetime.fromisoformat(row[8]) if len(row) > 8 and row[8] else None)
 
 
 def get_polls(guild_id, tournament_id):
     with closing(get_connection()) as connection:
         rows = connection.execute("""
-            SELECT guild_id, match_id, tournament_id, team1_id, team2_id, start_time, closed, winner_id
+            SELECT guild_id, match_id, tournament_id, team1_id, team2_id, start_time, closed, winner_id, voting_closes_at
             FROM match_polls WHERE guild_id = ? AND tournament_id = ?
         """, (guild_id, tournament_id)).fetchall()
     return [_poll(row) for row in rows]
@@ -153,14 +158,14 @@ def cast_vote(guild_id, match_id, user_id, team_id, now, display_name=None, expe
     with closing(get_connection()) as connection, connection:
         connection.execute("BEGIN IMMEDIATE")
         row = connection.execute("""
-            SELECT start_time, closed, team1_id, team2_id FROM match_polls
+            SELECT start_time, closed, team1_id, team2_id, voting_closes_at FROM match_polls
             WHERE guild_id = ? AND match_id = ?
         """, (guild_id, match_id)).fetchone()
-        if row is None or row[1] or now >= datetime.fromisoformat(row[0]) - timedelta(minutes=5):
+        if row is None or row[1] or now >= (datetime.fromisoformat(row[4]) if row[4] else datetime.fromisoformat(row[0]) - timedelta(minutes=5)):
             raise ValueError("Voting has closed for this match.")
-        if team_id not in row[2:]:
+        if team_id not in row[2:4]:
             raise ValueError("Choose one of the two teams in this poll.")
-        if expected_pair is not None and set(row[2:]) != set(expected_pair):
+        if expected_pair is not None and set(row[2:4]) != set(expected_pair):
             raise ValueError("This matchup changed. Please use the current prediction buttons.")
         previous = connection.execute(
             "SELECT team_id FROM poll_votes WHERE guild_id = ? AND match_id = ? AND user_id = ?",
@@ -183,7 +188,8 @@ def reconcile_polls(guild_id, data, now, *, fresh=True):
         for poll in get_polls(guild_id, data.tournament.id):
             match = matches.get(poll.match_id) if fresh else None
             start = match.start_time if match else poll.start_time
-            closed = poll.closed or now >= start - timedelta(minutes=5)
+            deadline = voting_deadline(match, data) if match else voting_deadline(poll)
+            closed = poll.closed or now >= deadline
             winner = poll.winner_id
             team1, team2 = poll.team1_id, poll.team2_id
             if fresh:
@@ -204,15 +210,15 @@ def reconcile_polls(guild_id, data, now, *, fresh=True):
                         UPDATE match_polls SET result_observed_at = NULL
                         WHERE guild_id = ? AND match_id = ? AND result_observed_at IS NOT NULL
                     """, (guild_id, poll.match_id))
-            if (start, closed, winner, team1, team2) == (poll.start_time, poll.closed, poll.winner_id, poll.team1_id, poll.team2_id):
+            if (start, closed, winner, team1, team2, deadline) == (poll.start_time, poll.closed, poll.winner_id, poll.team1_id, poll.team2_id, poll.voting_closes_at):
                 continue
             if {team1, team2} != {poll.team1_id, poll.team2_id}:
                 connection.execute("UPDATE match_polls SET published_at = NULL WHERE guild_id = ? AND match_id = ?",
                                    (guild_id, poll.match_id))
             connection.execute("""
-                UPDATE match_polls SET start_time = ?, closed = ?, winner_id = ?, team1_id = ?, team2_id = ?
+                UPDATE match_polls SET start_time = ?, closed = ?, winner_id = ?, team1_id = ?, team2_id = ?, voting_closes_at = ?
                 WHERE guild_id = ? AND match_id = ?
-            """, (start.astimezone(UTC).isoformat(), int(closed), winner, team1, team2, guild_id, poll.match_id))
+            """, (start.astimezone(UTC).isoformat(), int(closed), winner, team1, team2, deadline.astimezone(UTC).isoformat(), guild_id, poll.match_id))
 
 
 def get_leaderboard(guild_id, tournament_id):
@@ -235,7 +241,7 @@ def get_user_votes(guild_id, tournament_id, user_id, *, include_open=False, now=
         rows = connection.execute("""
             SELECT polls.guild_id, polls.match_id, polls.tournament_id,
                    polls.team1_id, polls.team2_id, polls.start_time,
-                   polls.closed, polls.winner_id, votes.team_id, votes.vote_team1_id, votes.vote_team2_id
+                   polls.closed, polls.winner_id, votes.team_id, votes.vote_team1_id, votes.vote_team2_id, polls.voting_closes_at
             FROM poll_votes AS votes
             JOIN match_polls AS polls USING (guild_id, match_id)
             WHERE polls.guild_id = ? AND polls.tournament_id = ? AND votes.user_id = ?
@@ -243,7 +249,7 @@ def get_user_votes(guild_id, tournament_id, user_id, *, include_open=False, now=
         """, (guild_id, tournament_id, user_id)).fetchall()
     result = []
     for row in rows:
-        poll = _poll(row[:8])
+        poll = _poll((*row[:8], row[11]))
         if set(row[9:11]) != {poll.team1_id, poll.team2_id}:
             poll = replace(poll, team1_id=row[9], team2_id=row[10], closed=True, winner_id=None)
         result.append((poll, row[8]))
@@ -253,7 +259,7 @@ def get_user_votes(guild_id, tournament_id, user_id, *, include_open=False, now=
         published = get_published_match_ids(guild_id, tournament_id)
         result.extend((poll, None) for poll in get_polls(guild_id, tournament_id)
                       if poll.match_id not in saved_ids and poll.match_id in published
-                      and not poll.closed and now < poll.start_time - timedelta(minutes=5))
+                      and not poll.closed and now < voting_deadline(poll))
         result.sort(key=lambda row: (row[0].start_time, row[0].match_id))
     return result
 
@@ -396,11 +402,11 @@ def has_match_votes(guild_id, match_id):
 def record_poll_opportunity(guild_id, match_id, team1_id, team2_id, published_at):
     """Only an acknowledged Discord post/edit before cutoff makes a poll eligible."""
     with closing(get_connection()) as connection, connection:
-        row = connection.execute("SELECT start_time, team1_id, team2_id FROM match_polls WHERE guild_id = ? AND match_id = ?",
+        row = connection.execute("SELECT start_time, team1_id, team2_id, voting_closes_at FROM match_polls WHERE guild_id = ? AND match_id = ?",
                                  (guild_id, match_id)).fetchone()
         if row is None or (row[1], row[2]) != (team1_id, team2_id):
             return
-        if published_at >= datetime.fromisoformat(row[0]) - timedelta(minutes=5):
+        if published_at >= (datetime.fromisoformat(row[3]) if row[3] else datetime.fromisoformat(row[0]) - timedelta(minutes=5)):
             return
         connection.execute("UPDATE match_polls SET published_at = COALESCE(published_at, ?) WHERE guild_id = ? AND match_id = ?",
                            (published_at.astimezone(UTC).isoformat(), guild_id, match_id))

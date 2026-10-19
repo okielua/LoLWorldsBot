@@ -70,6 +70,7 @@ class Match:
     team1_score: int | None = None
     team2_score: int | None = None
     winner_id: str | None = None
+    voting_closes_at: datetime | None = None
 
     def __post_init__(self):
         if self.start_time.tzinfo is None:

@@ -1,5 +1,7 @@
 """Discord presentation for private picks and revealed prediction results."""
 
+from services.voting_rules import voting_deadline, swiss_batch, batch_help
+
 import discord
 from services.team_emojis import team_text, unbold_matchup_title
 from services.footnotes import format_footnotes
@@ -107,7 +109,7 @@ def change_vote_text(match, *, now, selected_team=None, test_mode=False, timezon
     if test_mode:
         title = "TEST: " + title
     pairing = matchup(match) if current_policy() else discord.utils.escape_markdown(f"{match.team1_id} vs {match.team2_id}")
-    remaining = voting_time_remaining(match.start_time - timedelta(minutes=5), now)
+    remaining = voting_time_remaining(voting_deadline(match), now)
     date, time = private_match_details(match.start_time, timezone_name, time_format=time_format)
     return (f"## __{title}__\n\n### {pairing}\n"
             f"{date}\n"
@@ -118,7 +120,7 @@ def change_vote_text(match, *, now, selected_team=None, test_mode=False, timezon
 
 def hidden_votes_payload(match, *, now=None, stage_name=None, no_votes=False, controls=None):
     now = now or datetime.now(UTC)
-    deadline = match.start_time - timedelta(minutes=5)
+    deadline = voting_deadline(match)
     pairing = matchup(match) if current_policy() else discord.utils.escape_markdown(f"{match.team1_id} vs {match.team2_id}")
     header = f"## __Votes: {pairing}__\n\n{votes_match_details(match, stage_name)}\n\n"
     if match.status == MatchStatus.SCHEDULED and now < deadline:
@@ -221,7 +223,7 @@ def my_votes_embeds(rows, data, *, now=None, display_name=None, timezone_name=No
                 embed.add_field(name="\u200b", value=f"## __{group}__", inline=False)
                 section = group
             match = data.matches_by_id.get(poll.match_id)
-            deadline = poll.start_time - timedelta(minutes=5)
+            deadline = voting_deadline(match, data) if match else voting_deadline(poll)
             open_for_voting = (not poll.closed and now < deadline
                                and (match is None or match.status == MatchStatus.SCHEDULED))
             state = None
@@ -278,6 +280,8 @@ def my_votes_embeds(rows, data, *, now=None, display_name=None, timezone_name=No
             )
         if not rows:
             embed.description = "You haven't made any predictions in this server yet."
-        embed.add_field(name="\u200b", value=VOTE_CONFIRMATION_HELP, inline=False)
+        help_text = batch_help(VOTE_CONFIRMATION_HELP) if any(
+            (m := data.matches_by_id.get(p.match_id)) and len(swiss_batch(data, m)) > 1 for p, _ in rows) else VOTE_CONFIRMATION_HELP
+        embed.add_field(name="\u200b", value=help_text, inline=False)
         embeds.append(embed)
     return embeds

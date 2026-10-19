@@ -149,7 +149,7 @@ def get_competition_snapshot(guild_id, tournament_id, *, match_day=None, data=No
     with closing(get_connection()) as connection:
         connection.execute("BEGIN")
         polls = connection.execute("""
-            SELECT match_id, team1_id, team2_id, start_time, winner_id, published_at, result_observed_at
+            SELECT match_id, team1_id, team2_id, start_time, winner_id, published_at, result_observed_at, voting_closes_at
             FROM match_polls WHERE guild_id = ? AND tournament_id = ?
         """, (guild_id, tournament_id)).fetchall()
         votes = connection.execute("""
@@ -171,7 +171,7 @@ def get_competition_snapshot(guild_id, tournament_id, *, match_day=None, data=No
     zone = ZoneInfo(TOURNAMENT_TIMEZONE)
     observed = {}
     poll_by_id = {poll[0]: poll for poll in polls}
-    for match_id, first, second, start, winner, published, confirmed in polls:
+    for match_id, first, second, start, winner, published, confirmed, cutoff in polls:
         if not in_scope(match_id):
             continue
         start = datetime.fromisoformat(start)
@@ -180,7 +180,7 @@ def get_competition_snapshot(guild_id, tournament_id, *, match_day=None, data=No
             continue
         if winner not in {first, second} or not published:
             continue
-        if datetime.fromisoformat(published) >= start - timedelta(minutes=5):
+        if datetime.fromisoformat(published) >= (datetime.fromisoformat(cutoff) if cutoff else start - timedelta(minutes=5)):
             continue
         if match_day is not None and start.astimezone(zone).date().isoformat() != match_day:
             continue
@@ -196,15 +196,16 @@ def get_competition_snapshot(guild_id, tournament_id, *, match_day=None, data=No
         match = by_match.get(match_id)
         poll = poll_by_id[match_id]
         start = datetime.fromisoformat(poll[3])
+        deadline = datetime.fromisoformat(poll[7]) if poll[7] else start - timedelta(minutes=5)
         source = data.matches_by_id.get(match_id) if data else None
         valid = (chosen in {poll[1], poll[2]} and {first, second} == {poll[1], poll[2]}
-                 and datetime.fromisoformat(updated) < start - timedelta(minutes=5))
+                 and datetime.fromisoformat(updated) < deadline)
         unresolved = poll[4] is None or (source is not None and (source.status != MatchStatus.COMPLETED or source.winner_id not in {poll[1], poll[2]}))
         if (valid and unresolved and (source is None or source.status != MatchStatus.CANCELLED)):
             pending.setdefault(user_id, []).append(Prediction(match_id, poll[1], poll[2], start, chosen, None))
         if (match is None or chosen not in set(match[2:4])
                 or {first, second} != set(match[2:4])
-                or datetime.fromisoformat(updated) >= match[0] - timedelta(minutes=5)):
+                or datetime.fromisoformat(updated) >= deadline):
             continue
         by_user.setdefault(user_id, {})[match_id] = chosen
         recent.setdefault(user_id, []).append(Prediction(match_id, first, second, start, chosen, match[4]))
