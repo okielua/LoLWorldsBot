@@ -38,13 +38,40 @@ def initialize():
             PRIMARY KEY(guild_id, tournament_id, match_id, batch))""")
 
 
-def latest_result(guild_id, tournament_id):
+def latest_result(guild_id, tournament_id, *, match_id=None):
     initialize()
     with closing(get_connection()) as db:
         row = db.execute("""SELECT channel_id, message_id, pages FROM series_result_posts
             WHERE guild_id=? AND tournament_id=? AND message_id IS NOT NULL
-            ORDER BY published_at DESC, rowid DESC LIMIT 1""", (guild_id, tournament_id)).fetchone()
+              AND (? IS NULL OR match_id=?)
+            ORDER BY published_at DESC, rowid DESC LIMIT 1""", (guild_id, tournament_id, match_id, match_id)).fetchone()
     return (row[0], row[1], json.loads(row[2])) if row else None
+
+
+def confirmed_result(match):
+    return (match.status == MatchStatus.COMPLETED
+            and "TBD" not in {match.team1_id, match.team2_id}
+            and match.winner_id in {match.team1_id, match.team2_id}
+            and match.team1_score is not None and match.team2_score is not None
+            and max(match.team1_score, match.team2_score) == match.best_of // 2 + 1
+            and min(match.team1_score, match.team2_score) >= 0
+            and match.team1_score != match.team2_score
+            and match.winner_id == (match.team1_id if match.team1_score > match.team2_score else match.team2_id))
+
+
+def completed_vote_result(manager):
+    """Read real votes independently of whether an announcement was delivered."""
+    with closing(get_connection()) as db:
+        rows = db.execute("""SELECT match_id, team1_id, team2_id FROM match_polls
+            WHERE guild_id=? AND tournament_id=? AND published_at IS NOT NULL AND closed=1
+            ORDER BY COALESCE(result_observed_at, start_time) DESC, start_time DESC, match_id DESC""",
+            (manager.guild_id, manager.store.data.tournament.id)).fetchall()
+    for match_id, first, second in rows:
+        match = manager.store.data.matches_by_id.get(match_id)
+        if (match and confirmed_result(match)
+                and {first, second} == {match.team1_id, match.team2_id}):
+            return match, polls.get_poll_results(manager.guild_id, match_id)
+    return None
 
 
 def result_pages(match, votes, *, test_mode=False):
@@ -87,18 +114,24 @@ async def show_latest_results(interaction):
                or getattr(client, 'last_prediction_test_manager', None)
                or client.voting_manager)
     if manager.guild_id != interaction.guild_id:
-        await interaction.followup.send(**message_payload("No series voting results have been announced in this server yet."),
+        await interaction.followup.send(**message_payload("No completed series with a published vote is available in this server yet."),
                                         allowed_mentions=discord.AllowedMentions.none())
         return
-    latest = await asyncio.to_thread(latest_result, interaction.guild_id, manager.store.data.tournament.id)
-    if latest:
-        channel_id, message_id, pages = latest
-        link = f"\n\n[Open the results announcement](https://discord.com/channels/{interaction.guild_id}/{channel_id}/{message_id})"
-        pages = [page + link for page in pages]
+    if manager.fresh():
+        await asyncio.to_thread(polls.reconcile_polls, manager.guild_id, manager.store.data, manager.clock())
+    completed = await asyncio.to_thread(completed_vote_result, manager)
+    if completed:
+        match, votes = completed
+        pages = result_pages(match, votes, test_mode=manager.test_mode)
+        receipt = await asyncio.to_thread(latest_result, interaction.guild_id, manager.store.data.tournament.id, match_id=match.id)
+        if receipt:
+            channel_id, message_id, _ = receipt
+            link = f"\n\n[Open the results announcement](https://discord.com/channels/{interaction.guild_id}/{channel_id}/{message_id})"
+            pages = [page + link for page in pages]
         await interaction.followup.send(**message_payload(pages[0], controls=HistoryPages(pages)),
                                         allowed_mentions=discord.AllowedMentions.none())
     else:
-        await interaction.followup.send(**message_payload("No series voting results have been announced in this server yet."),
+        await interaction.followup.send(**message_payload("No completed series with a published vote is available in this server yet."),
                                         allowed_mentions=discord.AllowedMentions.none())
 
 
@@ -208,12 +241,7 @@ class SeriesResults:
                     return
                 for match in sorted(manager.store.data.matches, key=lambda item: item.start_time):
                     if (match.id in seen or match.id in self._pending or match.id not in published
-                            or match.status != MatchStatus.COMPLETED or match.winner_id not in {match.team1_id, match.team2_id}
-                            or match.team1_score is None or match.team2_score is None
-                            or max(match.team1_score, match.team2_score) != match.best_of // 2 + 1
-                            or min(match.team1_score, match.team2_score) < 0
-                            or match.team1_score == match.team2_score
-                            or match.winner_id != (match.team1_id if match.team1_score > match.team2_score else match.team2_id)
+                            or not confirmed_result(match)
                             or manager.clock() < self._retry_at.get(match.id, manager.clock())):
                         continue
                     try:

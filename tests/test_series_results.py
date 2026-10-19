@@ -251,3 +251,77 @@ def test_existing_result_card_and_history_are_refreshed_without_pings(context):
         assert "· 1 vote (100%)" in latest_result(123, store.data.tournament.id)[2][0]
         assert channel.send.await_count == sent
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("receipt", ["missing", "startup_skipped", "announced"])
+def test_any_member_can_summon_results_without_an_automatic_post(context, receipt):
+    manager, store, channel, now, _ = context
+    async def scenario():
+        await manager.tick()
+        first = store.data.matches[0]
+        await manager.vote(first.id, 7, first.team1_id, "Lua")
+        await manager.vote(first.id, 8, first.team2_id, "Miwa")
+        complete(store, now, first)
+        if receipt == "announced":
+            await manager.tick()
+        elif receipt == "startup_skipped":
+            with polls.get_connection() as db:
+                db.execute("INSERT INTO series_result_posts VALUES (?, ?, ?, NULL, NULL, NULL, NULL)",
+                           (123, store.data.tournament.id, first.id))
+        count = channel.send.await_count
+        interaction = SimpleNamespace(guild_id=123, user=SimpleNamespace(id=9),
+            client=SimpleNamespace(voting_manager=manager),
+            response=SimpleNamespace(defer=AsyncMock()), followup=SimpleNamespace(send=AsyncMock()))
+        await show_latest_results(interaction)
+        call = interaction.followup.send.call_args
+        card = rendered_message(call)
+        assert "Series Voting Results" in card.title
+        assert "Final score:** 3–1" in card.description
+        assert "✅ @Lua" in card.description and "❌ @Miwa" in card.description
+        assert "||" not in card.description
+        assert ("Open the results announcement" in card.description) == (receipt == "announced")
+        assert not call.kwargs.get("ephemeral", False)
+        assert call.kwargs["allowed_mentions"].to_dict() == {"parse": []}
+        assert channel.send.await_count == count
+        if receipt != "announced":
+            assert latest_result(123, store.data.tournament.id) is None
+    asyncio.run(scenario())
+
+
+def test_summon_never_exposes_live_or_other_server_votes(context):
+    manager, store, channel, now, _ = context
+    async def scenario():
+        await manager.tick()
+        first = store.data.matches[0]
+        await manager.vote(first.id, 7, first.team1_id, "Secret pick")
+        finished = complete(store, now, first)
+        interaction = SimpleNamespace(guild_id=999, client=SimpleNamespace(voting_manager=manager),
+            response=SimpleNamespace(defer=AsyncMock()), followup=SimpleNamespace(send=AsyncMock()))
+        await show_latest_results(interaction)
+        assert "Secret pick" not in rendered_message(interaction.followup.send.call_args).description
+        interaction.guild_id = 123
+        store.data = replace(store.data, matches=[replace(finished, status=MatchStatus.LIVE)])
+        await show_latest_results(interaction)
+        text = rendered_message(interaction.followup.send.call_args).description
+        assert "Secret pick" not in text and "Final score:" not in text
+    asyncio.run(scenario())
+
+
+def test_summon_prefers_new_completed_vote_over_an_older_announcement(context):
+    manager, store, channel, now, _ = context
+    async def scenario():
+        await manager.tick()
+        first, second = store.data.matches[:2]
+        await manager.vote(first.id, 7, first.team1_id, "Previous voter")
+        await manager.vote(second.id, 8, second.team2_id, "Latest voter")
+        complete(store, now, first)
+        await manager.tick()
+        assert latest_result(123, store.data.tournament.id)
+        complete(store, now, second)
+        interaction = SimpleNamespace(guild_id=123, client=SimpleNamespace(voting_manager=manager),
+            response=SimpleNamespace(defer=AsyncMock()), followup=SimpleNamespace(send=AsyncMock()))
+        await show_latest_results(interaction)
+        text = rendered_message(interaction.followup.send.call_args).description
+        assert "Latest voter" in text and "Previous voter" not in text
+        assert "Open the results announcement" not in text
+    asyncio.run(scenario())

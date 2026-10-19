@@ -500,10 +500,14 @@ uses five predictions per page, and includes the shared advanced statistics for
 the selected member. Completed results, correctness, and affected stats retain
 global spoiler protection. Upcoming picks and changes belong in `/vote`.
 
-Without a member, `/votehistory` publicly shows the most recently announced
-completed series' final score, total votes, team split, and voters grouped by
-the team they picked. It stays available until the next results announcement is published.
-Names are plain text; retrieving/paging results never pings anyone.
+Without a member, `/votehistory` publicly shows the most recently completed
+series' final score, total votes, team split, and voters grouped by
+the team they picked. It stays available until the next series has a confirmed result.
+Names are plain text; retrieving/paging results never pings anyone. It builds the
+card directly from saved votes and a confirmed final result, so it also works if
+the automatic announcement was missed, deleted, or skipped on first install.
+Only this server's published polls are eligible. It never shows live scores or
+creates an automatic-announcement receipt, so it does not consume later delivery.
 
 When a published poll's series completes, the bot posts its voting results once
 in the configured reminder channel, mentioning the Worlds role and subscribers
