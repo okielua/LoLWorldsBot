@@ -83,6 +83,8 @@ class PublicVotersButton(discord.ui.DynamicItem[discord.ui.Button],
                 continue
             rows = await asyncio.to_thread(polls.get_poll_participants, self.guild_id, match.id)
             heading = f"\n\n## {matchup(match)}\nThese users cast a vote:\n"
+            if match.round_name and "swiss" in match.stage_id.lower():
+                heading = f"\n\n## {matchup(match)}\n{match.round_name}\nThese users cast a vote:\n"
             if len(current) + len(heading) > 3000:
                 pages.append(current)
                 current = "# Who Has Voted"

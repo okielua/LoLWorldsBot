@@ -56,6 +56,33 @@ def test_swiss_draw_fills_only_exact_matching_ids_without_mutation(seed, unknown
     assert len(merged) == 1  # Other bracket IDs are never guessed onto placeholders.
 
 
+@pytest.mark.parametrize("record,expected", [
+    ("0-0", "Round 1 · 0–0 record"),
+    ("0-1", "Round 2 · 0–1 record"),
+    ("1-0", "Round 2 · 1–0 record"),
+    ("1-1", "Round 3 · 1–1 record"),
+    ("2-0", "Round 3 · 2–0 record · Advancement match"),
+    ("0-2", "Round 3 · 0–2 record · Elimination match"),
+    ("2-1", "Round 4 · 2–1 record · Advancement match"),
+    ("1-2", "Round 4 · 1–2 record · Elimination match"),
+    ("2-2", "Round 5 · 2–2 record · Win to advance, lose to be eliminated"),
+])
+def test_swiss_rounds_come_from_exact_riot_fixture_group(seed, unknown_swiss, bracket, record, expected):
+    fixture = bracket[unknown_swiss[0]["id"]]
+    fixture["description"] = f"M5 ({record})"
+    merged = merge_sources(unknown_swiss, bracket, {})
+    assert normalize_events(merged, seed).matches[0].round_name == expected
+    # The same group remains available for fixtures whose opponents aren't drawn.
+    fixture["matchTeams"] = deepcopy(unknown_swiss[0]["matchTeams"])
+    assert normalize_events(merge_sources(unknown_swiss, bracket, {}), seed).matches[0].round_name == expected
+
+
+def test_unknown_round_is_not_invented_from_order_or_date(seed, unknown_swiss, bracket):
+    fixture = bracket[unknown_swiss[0]["id"]]
+    fixture["description"] = "unannounced"
+    assert normalize_events(merge_sources(unknown_swiss, bracket, {}), seed).matches[0].round_name is None
+
+
 def test_known_opponent_conflict_and_completed_results_keep_primary(unknown_swiss, bracket):
     event = unknown_swiss[0]
     event["matchTeams"] = deepcopy(bracket[event["id"]]["matchTeams"])

@@ -18,9 +18,7 @@ def date_heading(when, timezone_name=TOURNAMENT_TIMEZONE, *, now=None, style="lo
         return "Tomorrow"
     if style == "short":
         return f"{target.strftime('%a')}, {target.day} {target.strftime('%b %Y')}"
-    if style == "weekday":
-        return f"{target.strftime('%A')}, {target.day} {target.strftime('%B %Y')}"
-    return f"{target.day} {target.strftime('%B %Y')}"
+    return f"{target.strftime('%A')}, {target.day} {target.strftime('%B %Y')}"
 
 
 def format_clock_time(local, abbreviation=None, *, time_format="24h"):

@@ -15,6 +15,7 @@ import re
 import aiohttp
 
 from services.lolesports import ENDPOINT, WORLDS_2026_ID, SourceError
+from services.swiss import swiss_round_label
 
 logger = logging.getLogger(__name__)
 TIMETABLE_HASH = "e134ea3594614159596e195260451574b67d8eb9e5a75fc5f044108a64d2988c"
@@ -102,6 +103,11 @@ def merge_sources(events, bracket, times, *, bracket_fresh=True, primary_availab
             continue
         match_id = event.get("match", {}).get("id")
         incoming = bracket.get(match_id)
+        if incoming and usable_match(incoming, event["match"]["strategy"]["count"]):
+            # Round/record is attached by Riot match ID, including TBD fixtures.
+            event["_bracket"] = deepcopy(incoming)
+            if event.get("blockName") == "Swiss" and swiss_round_label(incoming.get("description")):
+                event["_swiss_description"] = incoming["description"]
         original_state = event["state"]
         if (incoming and usable_match(incoming, event["match"]["strategy"]["count"])
                 and original_state != "completed"):

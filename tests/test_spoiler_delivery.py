@@ -144,7 +144,7 @@ def test_public_date_header_updates_across_midnight_without_reposting_or_pinging
     assert http.call_args.kwargs["json"]["content"] == "## __Today__"
     policy.clock = lambda: end + timedelta(days=2)
     asyncio.run(delivery.release_once())
-    assert http.call_args.kwargs["json"]["content"] == "## __19 October 2026__"
+    assert http.call_args.kwargs["json"]["content"] == "## __Monday, 19 October 2026__"
     assert http.call_args.kwargs["json"]["allowed_mentions"] == {"parse": [], "replied_user": False}
     assert all(call.args[0].method == "PATCH" for call in http.call_args_list)
 

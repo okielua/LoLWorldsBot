@@ -68,7 +68,8 @@ def votes_match_details(match, stage_name=None):
     stage_name = stage_name or "Stage to be confirmed"
     if stage_name.lower().replace("-", "").replace(" ", "") in {"playin", "playins"}:
         stage_name = "Play-ins"
-    return f"{discord.utils.escape_markdown(stage_name)} · Bo{match.best_of}\n{format_tournament_date(match.start_time)}"
+    details = " · ".join(filter(None, [stage_name, match.round_name if "swiss" in match.stage_id.lower() else None, f"Bo{match.best_of}"]))
+    return f"{discord.utils.escape_markdown(details)}\n{format_tournament_date(match.start_time)}"
 
 
 def upcoming_votes_embed(match, votes, *, stage_name=None):
@@ -265,7 +266,7 @@ def my_votes_embeds(rows, data, *, now=None, display_name=None, timezone_name=No
             stage_name = stage.name if stage else "Stage to be confirmed"
             if stage_name.lower().replace("-", "").replace(" ", "") in {"playin", "playins"}:
                 stage_name = "Play-ins"
-            stage_line = discord.utils.escape_markdown(stage_name) + (f" · Bo{match.best_of}" if match else "")
+            stage_line = discord.utils.escape_markdown(stage_name + (f" · {match.round_name}" if match and match.round_name and "swiss" in match.stage_id.lower() else "")) + (f" · Bo{match.best_of}" if match else "")
             pick_line = f"Your pick: **{pick}**{outcome}" if pick else ""
             details = "\n".join(line for line in ((result, pick_line) if poll.winner_id else (pick_line, result)) if line)
             embed.add_field(

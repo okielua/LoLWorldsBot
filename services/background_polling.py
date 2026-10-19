@@ -15,7 +15,7 @@ MAX_REMINDER_DATA_AGE = timedelta(minutes=5)
 
 
 class BackgroundPolling:
-    def __init__(self, store, load_users, publish_data, wait_until_ready, *, clock=None, server_delivery=None, voting_manager=None):
+    def __init__(self, store, load_users, publish_data, wait_until_ready, *, clock=None, server_delivery=None, voting_manager=None, pickems_reminder=None):
         self.store = store
         self.load_users = load_users
         self.publish_data = publish_data
@@ -23,6 +23,7 @@ class BackgroundPolling:
         self.clock = clock or (lambda: datetime.now(UTC))
         self.server_delivery = server_delivery
         self.voting_manager = voting_manager
+        self.pickems_reminder = pickems_reminder
         # Preview state is deliberately separate from any future delivery ledger.
         self.preview_tracker = ReminderTracker()
         self.failures = 0
@@ -39,6 +40,8 @@ class BackgroundPolling:
         ]
         if self.voting_manager:
             jobs.append(("pregame-polls", self._poll_loop))
+        if self.pickems_reminder:
+            jobs.append(("pickems-reminder", self._pickems_loop))
         for name, coroutine in jobs:
             task = self._tasks.get(name)
             if task is None or task.done():
@@ -180,6 +183,15 @@ class BackgroundPolling:
             except Exception:
                 logger.exception("Reminder preview iteration failed; will retry")
             await asyncio.sleep(REMINDER_INTERVAL_SECONDS)
+
+    async def _pickems_loop(self):
+        await self.wait_until_ready()
+        while True:
+            try:
+                await self.pickems_reminder.tick()
+            except Exception:
+                logger.exception("Pick'ems reminder failed; will retry")
+            await asyncio.sleep(60)
 
     async def _poll_loop(self):
         await self.wait_until_ready()

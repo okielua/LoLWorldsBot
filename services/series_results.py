@@ -12,6 +12,7 @@ import discord
 from models import MatchStatus
 from services import polls
 from services.match_times import format_tournament_date
+from services.swiss import round_details
 from services.presentation import message_payload
 from services.reminder_engine import get_server_ping_user_ids
 from services.server_settings import get_server_settings
@@ -78,6 +79,7 @@ def result_pages(match, votes, *, test_mode=False):
     """Explicit spoiler exception: completed-series results are fully visible."""
     pair = f"{team_token(match.team1_id)} vs {team_token(match.team2_id)}"
     heading = f"## {'TEST: ' if test_mode else ''}Series Voting Results\n\n## {pair}\n({format_tournament_date(match.start_time)})"
+    heading += round_details(match)
     heading += f"\n\n**Final score:** {match.team1_score}–{match.team2_score}"
     valid = [(uid, team, name) for uid, team, name in votes if team in {match.team1_id, match.team2_id}]
     lines = []

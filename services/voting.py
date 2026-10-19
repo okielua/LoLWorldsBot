@@ -80,6 +80,8 @@ class VoteButton(discord.ui.Button):
             if stage_name.lower().replace("-", "").replace(" ", "") in {"playin", "playins"}:
                 stage_name = "Play-ins"
             stage_name = discord.utils.escape_markdown(stage_name)
+            if match.round_name and "swiss" in match.stage_id.lower():
+                stage_name += " · " + discord.utils.escape_markdown(match.round_name)
             text = (
                 f"Your prediction for **{team1}** vs **{team2}** on {date} ({stage_name}):\n"
                 f"## {team}"
@@ -549,6 +551,8 @@ class VotingManager:
             date = format_tournament_date(match.start_time)
             text = (("🧪 **TEST**\n\n" if self.test_mode else "")
                     + f"🗳️ **@{name}** just cast a vote on:\n\n## {pairing}\n({date})")
+            if match.round_name and "swiss" in match.stage_id.lower():
+                text += "\n" + discord.utils.escape_markdown(match.round_name)
             deadline = match.start_time - timedelta(minutes=5)
             now = self.clock()
             if now < deadline:

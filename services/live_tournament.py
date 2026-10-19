@@ -14,6 +14,7 @@ from models import Match, MatchStatus, Team, TournamentStatus
 from services.lolesports import LoLEsportsClient, SourceError, WORLDS_2026_ID
 from services.tournament_data import TournamentData, parse_datetime, validate_tournament_data
 from services.standings import calculate_swiss_standings
+from services.swiss import swiss_round_label
 
 
 logger = logging.getLogger(__name__)
@@ -119,7 +120,8 @@ def _normalize_events(events, seed):
         matches.append(Match(
             id=match_id, tournament_id=seed.tournament.id, stage_id=stage.id,
             team1_id=ids[0], team2_id=ids[1], start_time=start, best_of=best_of,
-            round_name=original.round_name if original else None, status=state,
+            round_name=(swiss_round_label(event.get("_swiss_description")) if event["blockName"] == "Swiss"
+                        else original.round_name if original else None), status=state,
             team1_score=scores[0] if state != MatchStatus.SCHEDULED else None,
             team2_score=scores[1] if state != MatchStatus.SCHEDULED else None,
             winner_id=winner,

@@ -16,7 +16,7 @@ def test_date_headers_keep_other_dates_and_handle_dst_by_calendar_day():
     now = datetime(2026, 11, 1, 7, 30, tzinfo=UTC)
     assert date_heading(date(2026, 11, 1), "America/Los_Angeles", now=now) == "Today"
     assert date_heading(date(2026, 11, 2), "America/Los_Angeles", now=now) == "Tomorrow"
-    assert date_heading(date(2026, 10, 31), "America/Los_Angeles", now=now) == "31 October 2026"
+    assert date_heading(date(2026, 10, 31), "America/Los_Angeles", now=now) == "Saturday, 31 October 2026"
     assert date_heading(date(2026, 11, 3), "America/Los_Angeles", now=now, style="weekday") == "Tuesday, 3 November 2026"
 
 

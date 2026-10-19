@@ -145,7 +145,8 @@ class ServerReminderDelivery:
                 content = f"## {pairing}\n\n*Starts in {timing}!*"
                 stage = data.stages_by_id.get(match.stage_id)
                 stage_name = discord.utils.escape_markdown(stage.name if stage else "Stage to Be Confirmed")
-                content += f"\n-# *({stage_name} · Bo{match.best_of})*"
+                round_label = f" · {match.round_name}" if match.round_name and "swiss" in match.stage_id.lower() else ""
+                content += f"\n-# *({stage_name}{round_label} · Bo{match.best_of})*"
                 if self.message_prefix:
                     content += f"\n\n{self.message_prefix}"
                 results = results_embed(prediction_results, include_help=False)

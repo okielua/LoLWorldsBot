@@ -14,6 +14,7 @@ from discord import app_commands
 from models import Match, MatchStatus
 from services.delivery_records import initialize_delivery_records
 from services.background_polling import BackgroundPolling
+from services.pickems_reminder import PickemsReminder
 from services.live_tournament import LiveTournamentStore, TBD_TEAM_ID
 from services.tournament_sources import MultiSourceClient
 from services.lolesports import LoLEsportsClient, QUERY_HASH
@@ -33,7 +34,7 @@ from services.status_labels import MATCH_STATUS_LABELS
 from services.standings_display import standings_text
 from services.golgg import GOLGG_FOOTNOTES, team_stats_text
 from services.golgg_players import player_catalog, player_reply, refresh_players_loop
-from services.team_history import TeamHistoryView
+from services.team_history import HistoryPages, TeamHistoryView
 from services.match_browser import show_match_games
 from services.vote_history import voter_autocomplete, show_vote_history
 from services.vote_panel import OpenVotePanel, PublicVotersButton, daily_post_reference
@@ -369,7 +370,7 @@ async def send_long_message(
     interaction: discord.Interaction,
     header: str,
     lines: list[str],
-    *, deferred=False, footer=None, controls=None, max_length=1900, continuation_header=None,
+    *, deferred=False, footer=None, controls=None, max_length=1900, continuation_header=None, paginate=False,
 ):
     chunks = []
     current = header
@@ -396,6 +397,15 @@ async def send_long_message(
 
     if footer:
         chunks = [chunk + "\n\n" + footer for chunk in chunks]
+    if paginate:
+        if len(chunks) > 1:
+            chunks = [chunk.replace(header, header[:-2] + f" (Page {index}/{len(chunks)})__", 1)
+                      if header.endswith("__") else chunk.replace(header, header + f" (Page {index}/{len(chunks)})", 1)
+                      for index, chunk in enumerate(chunks, 1)]
+        payload = message_payload(chunks[0], controls=HistoryPages(chunks))
+        sender = interaction.followup.send if deferred else interaction.response.send_message
+        await sender(**payload, allowed_mentions=discord.AllowedMentions.none())
+        return
     if deferred:
         await interaction.followup.send(**message_payload(chunks[0], controls=controls if len(chunks) == 1 else None))
     else:
@@ -430,6 +440,7 @@ class WorldsBot(discord.Client):
             self.wait_until_ready,
             server_delivery=self.server_delivery,
             voting_manager=self.voting_manager,
+            pickems_reminder=PickemsReminder(self, tournament_store, GUILD_ID),
         )
 
     def publish_tournament_data(self, data):
@@ -1326,6 +1337,7 @@ async def schedule(
         interaction,
         header,
         lines,
+        paginate=True,
     )
 
 

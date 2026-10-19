@@ -386,8 +386,9 @@ def test_full_schedule_header_and_local_date_groups_are_underlined():
     asyncio.run(callback(SimpleNamespace(), "worlds-2026-play-in"))
     header, lines = send_long.call_args.args[1:]
     assert header == "# __2026 Worlds Schedule: Play-Ins Stage__"
-    assert "## __15 October 2026__" in lines
-    assert "## __16 October 2026__" not in lines
+    assert "## __Thursday, 15 October 2026__" in lines
+    assert "## __Friday, 16 October 2026__" not in lines
+    assert send_long.call_args.kwargs["paginate"] is True
     assert lines[1].index("## C9 vs KC") < lines[1].index("20:00")
 
 
@@ -1009,6 +1010,40 @@ def test_long_command_output_preserves_schedule_title_and_date_on_every_page():
         assert embed.title == "__2026 Worlds Schedule: Swiss Stage__"
         assert date in embed.description
         assert len(embed.description) <= 4096
+
+
+def test_stage_schedule_sends_one_message_and_pages_edit_it_in_place():
+    import discord
+    from services.team_history import HistoryPages
+    data = load_tournament_data(PROJECT_ROOT / "data" / "worlds_2026.json")
+    start = datetime(2026, 10, 23, 17, tzinfo=UTC)
+    data = replace(data, matches=[replace(data.matches[0], id=f"swiss-{i}", stage_id="worlds-2026-swiss",
+                                          start_time=start + timedelta(hours=i)) for i in range(30)])
+    sender = load_command("send_long_message", data, discord=discord, HistoryPages=HistoryPages)
+    callback, _ = schedule_callback(data, datetime(2026, 10, 19, tzinfo=UTC))
+    callback.__globals__["send_long_message"] = sender
+    interaction = SimpleNamespace(response=SimpleNamespace(send_message=AsyncMock()),
+                                  followup=SimpleNamespace(send=AsyncMock()))
+
+    async def browse():
+        await callback(interaction, "worlds-2026-swiss")
+        interaction.response.send_message.assert_awaited_once()
+        interaction.followup.send.assert_not_awaited()
+        card = interaction.response.send_message.call_args.kwargs["view"]
+        controls = card.controls
+        assert len(controls.pages) > 1
+        assert "Page 1/" in controls.pages[0]
+        assert "Friday, 23 October 2026" in controls.pages[0]
+        assert all("Page " in page for page in controls.pages)
+        assert sum(page.count(" vs ") for page in controls.pages) == len(get_matches_for_stage(data, "worlds-2026-swiss"))
+        click = SimpleNamespace(response=SimpleNamespace(edit_message=AsyncMock(), send_message=AsyncMock()))
+        await controls.turn(click, 1)
+        click.response.edit_message.assert_awaited_once()
+        click.response.send_message.assert_not_awaited()
+        assert controls.page == 1
+        assert "Page 2/" in rendered_message(click.response.edit_message.call_args).title
+
+    asyncio.run(browse())
 
 
 @pytest.mark.parametrize("open_poll", [True, False])
