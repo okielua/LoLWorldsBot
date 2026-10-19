@@ -65,7 +65,33 @@ credentials. Commands synchronize to the configured guild.
 
 At startup the bot loads `data/worlds_2026_cache.json`, or falls back to
 `data/worlds_2026.json` if no usable cache exists. During Discord setup it refreshes
-from `https://lolesports.com/api/gql` using the website's `homeEvents` query.
+from several independently checked Riot data surfaces:
+
+- `homeEvents` at `https://lolesports.com/api/gql` provides the complete paginated
+  schedule, series formats, lifecycle states and results.
+- `GetSeasonTournamentEvents` provides tournament-specific match start times,
+  joined by exact Riot match ID rather than draw order.
+- The official tournament's rendered stage pages provide the shared structured
+  match map for Play-Ins, all Swiss rounds, quarterfinals, semifinals and the final.
+  Stage URLs are discovered from the tournament overview. This map already named
+  all eight Swiss Round 1 pairings on 19 October while `homeEvents` still said TBD.
+
+The bracket supplements missing opponents and confirmed state advances without
+changing fixture IDs or vote associations. Existing schedule identities and
+completed results win on conflicts. A separately verified timetable can update
+scheduled start times. Enriched identities persist in the cache across restarts
+and temporary bracket outages. If the schedule API fails, a fresh complete bracket
+can refresh a cached schedule skeleton; partial bracket data cannot falsely mark
+stale match/voting state as fresh. Auxiliary outages never discard a working
+primary schedule. Invalid or contradictory results never become finished matches.
+
+Additional sources checked on 19 October: Fandom and Liquipedia returned HTTP 403
+to automated requests; Riot's older standings endpoint also returned 403. Some
+stage GraphQL persisted queries returned 404, so the verified rendered stage data
+is used instead. Gol.gg's match-list page was reachable but had no upcoming event
+times; GGEZ's public schedule was reachable and had structured Round 1 events, but
+no Riot fixture IDs. Those community pages are not silently assigned to unknown
+Riot fixtures by bracket order. No paid API or new credentials are required.
 
 The client follows pagination and includes scheduled, live, and completed matches.
 The adapter filters by the Worlds 2026 tournament ID and validates the snapshot
@@ -78,6 +104,9 @@ appear in schedules but cannot be followed and do not generate reminders.
 Swiss standings are calculated from completed Swiss series results (one series
 win/loss regardless of the Bo1/Bo3 game score), refreshed with each snapshot, and
 corrected when source results change. Only known Swiss participants are listed.
+The `/swiss` command links directly to Riot's visual Swiss bracket rather than
+rendering a duplicate standings table. `/schedule`, `/nextgames` and
+`/previousgames` continue to show matchups using the combined data reader.
 No official rank/tiebreak order is invented. Explicit postponed/cancelled states
 are not verified in this feed.
 
@@ -86,8 +115,9 @@ overrides `LOLESPORTS_CLIENT_VERSION` and `LOLESPORTS_QUERY_HASH` if the site's
 client version or persisted-query hash changes. Defaults were verified on
 14 October 2026. The verified request requires no API key or browser cookies.
 
-After startup, source refresh runs every five minutes, or every minute while a
-match is live or its scheduled time is within one hour of now. Failures back off
+After startup, source refresh runs every minute throughout the tournament,
+including gaps between matchdays when new draws are published. Outside the
+tournament it runs every five minutes, or every minute near/live matches. Failures back off
 from one minute up to 15 minutes away from matches; near/live matches retry every
 minute. Source HTTP 429 responses respect `Retry-After` even when that is longer.
 Access failures identify the client version/query hash to check in the logs. A

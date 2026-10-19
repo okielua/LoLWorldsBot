@@ -150,23 +150,29 @@ def test_simulation_without_scheduled_matches_is_ephemeral():
     assert call.kwargs["ephemeral"] is True
 
 
-def test_standings_uses_current_tournament_year():
+def test_swiss_links_to_the_official_visual_bracket():
+    import discord
     worlds = load_tournament_data(PROJECT_ROOT / "data" / "worlds_2025.json")
     worlds = replace(worlds, tournament=replace(worlds.tournament, year=2026))
 
-    call = run_command("standings", worlds)
-
-    assert rendered_message(call).title == "__Worlds 2026: Swiss Standings__"
+    send = AsyncMock()
+    interaction = SimpleNamespace(response=SimpleNamespace(send_message=send))
+    asyncio.run(load_command("standings", worlds, discord=discord)(interaction))
+    call = send.call_args
+    assert rendered_message(call).title == "__Worlds Swiss Bracket__"
+    assert "https://lolesports.com/en-GB/tournament/115660540725177488/stage/115660540725570706" in rendered_message(call).description
+    assert call.kwargs["allowed_mentions"].to_dict() == {"parse": []}
 
 
 def test_standings_explains_missing_team_data_and_team_selection():
+    import discord
     data = load_tournament_data(PROJECT_ROOT / "data/worlds_2026.json")
-    call = run_command("standings", data)
+    send = AsyncMock()
+    asyncio.run(load_command("standings", data, discord=discord)(SimpleNamespace(response=SimpleNamespace(send_message=send))))
+    call = send.call_args
     text = rendered_message(call).description
-    assert "all Swiss teams' series wins and losses" in text
-    assert "Not enough data yet" in text
-    assert "`/team`" in text and "`/leaderboard`" in text
-    assert "No standings are available" not in text
+    assert "Open the official Swiss bracket and standings" in text
+    assert "Not enough data yet" not in text
 
 
 def test_sample_standings_are_private_and_leave_real_records_unchanged():

@@ -87,12 +87,12 @@ def test_failed_refresh_during_database_read_does_not_generate_preview(monkeypat
 
 
 @pytest.mark.parametrize("status, offset, expected", [
-    (MatchStatus.SCHEDULED, 120, 300),
+    (MatchStatus.SCHEDULED, 120, 60),
     (MatchStatus.SCHEDULED, 60, 60),
     (MatchStatus.SCHEDULED, -30, 60),
     (MatchStatus.LIVE, -120, 60),
-    (MatchStatus.COMPLETED, 30, 300),
-    (MatchStatus.CANCELLED, 30, 300),
+    (MatchStatus.COMPLETED, 30, 60),
+    (MatchStatus.CANCELLED, 30, 60),
 ])
 def test_source_polling_cadence(status, offset, expected):
     poller, store, _, _ = make_poller()

@@ -15,6 +15,7 @@ from models import Match, MatchStatus
 from services.delivery_records import initialize_delivery_records
 from services.background_polling import BackgroundPolling
 from services.live_tournament import LiveTournamentStore, TBD_TEAM_ID
+from services.tournament_sources import MultiSourceClient
 from services.lolesports import LoLEsportsClient, QUERY_HASH
 from services.server_reminders import ServerReminderDelivery
 from services.server_settings import initialize_server_settings
@@ -109,10 +110,10 @@ DATA_FILE = BASE_DIR / "data" / "worlds_2026.json"
 tournament_store = LiveTournamentStore(
     prepare_seed(load_tournament_data(DATA_FILE)),
     runtime_config().cache_path,
-    LoLEsportsClient(
+    MultiSourceClient(LoLEsportsClient(
         client_version=os.getenv("LOLESPORTS_CLIENT_VERSION", "4078aa9"),
         query_hash=os.getenv("LOLESPORTS_QUERY_HASH", QUERY_HASH),
-    ),
+    ), cache_path=runtime_config().cache_path),
 )
 worlds = tournament_store.data
 
@@ -1422,35 +1423,16 @@ async def testteam(interaction: discord.Interaction, team: str):
 
 
 @bot.tree.command(
-    name="swiss-standings",
-    description=("Show all teams' win-loss records in the Worlds Swiss Stage."),
+    name="swiss",
+    description=("Open the official Worlds Swiss bracket and standings."),
 )
 async def standings(
     interaction: discord.Interaction,
 ):
-    swiss_stage = next(
-        (stage for stage in worlds.stages if "swiss" in stage.name.lower()), None
-    )
-
-    table = get_standings(
-        worlds,
-        swiss_stage.id,
-    ) if swiss_stage else []
-
-    if not table:
-        await interaction.response.send_message(**message_payload(
-            f"## Worlds {worlds.tournament.year}: Swiss Standings\n\n"
-            "This table shows all Swiss teams' series wins and losses.\n\n"
-            "Not enough data yet. Team records will appear once the live schedule confirms the Swiss teams, "
-            "and update as their series finish.\n\n"
-            "-# • Use `/team` to choose a team and view its matches.\n"
-            "-# • Use `/leaderboard` for the server's prediction rankings."))
-
-        return
-
-    message = standings_text(worlds, [(row.team_id, row.wins, row.losses) for row in table])
-
-    await interaction.response.send_message(**message_payload(message))
+    await interaction.response.send_message(**message_payload(
+        "## Worlds Swiss Bracket\n\n"
+        "[Open the official Swiss bracket and standings](https://lolesports.com/en-GB/tournament/115660540725177488/stage/115660540725570706)"),
+        allowed_mentions=discord.AllowedMentions.none())
 
 
 @bot.tree.command(name="teststandings", description="Privately preview sample Swiss standings without changing live data.")
@@ -1672,8 +1654,8 @@ See a specific team’s Worlds matches and tournament stats from gol.gg.
 `/player <playername>` (e.g. `/player Zeka`)
 See a player’s Worlds stats from gol.gg. Start typing to find a player.
 
-`/swiss-standings`
-See all teams’ win–loss records for the Worlds Swiss Stage."""
+`/swiss`
+Open the official visual Swiss bracket and standings on LoL Esports."""
     if category is not None:
         sections = message.split("\n\n## ")
         message = sections[0] + "\n\n## " + sections[category]
