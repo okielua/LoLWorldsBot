@@ -13,9 +13,9 @@ def date_heading(when, timezone_name=TOURNAMENT_TIMEZONE, *, now=None, style="lo
     target = when.astimezone(zone).date() if isinstance(when, datetime) else when
     today = (now or datetime.now(UTC)).astimezone(zone).date()
     if target == today:
-        return "Today"
+        return f"Today {target:%d.%m.%Y}"
     if target == today + timedelta(days=1):
-        return "Tomorrow"
+        return f"Tomorrow {target:%d.%m.%Y}"
     if style == "short":
         return f"{target.strftime('%a')}, {target.day} {target.strftime('%b %Y')}"
     return f"{target.strftime('%A')}, {target.day} {target.strftime('%B %Y')}"

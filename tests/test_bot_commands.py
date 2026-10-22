@@ -949,7 +949,7 @@ def test_daily_lookup_is_public_with_all_zones_and_no_vote_results(offset):
     assert call.kwargs["ephemeral"] is False
     assert call.kwargs["allowed_mentions"].to_dict() == {"parse": []}
     text = rendered_message(call).description
-    assert ("__Today__" if offset == 0 else "__Tomorrow__") in text
+    assert ("__Today 15.10.2026__" if offset == 0 else "__Tomorrow 16.10.2026__") in text
     assert all(city in text for city in ("London", "Berlin", "Tokyo"))
     assert "Play-ins" in text and "Opening Round" in text
     assert text.index("19:00") < text.index("21:00") < text.index("22:00")
