@@ -50,6 +50,7 @@ from services.reminder_engine import (
     get_server_ping_user_ids,
 )
 from services.timezones import TIMEZONE_REGIONS
+from services.timezone_search import CitySearchButton
 from services.tournament_data import load_tournament_data
 from services.tournament_queries import (
     get_previous_matches,
@@ -809,7 +810,7 @@ class SetupView(discord.ui.View):
         super().__init__(timeout=600)
 
         self.user_id = user_id
-        self.add_item(SetupTimezoneSelect(user_id, timezone_region))
+        self.add_item(CitySearchButton(user_id, setup_payload))
         self.add_item(TimeFormatSelect(user_id))
         self.add_item(TeamSelect(user_id))
 

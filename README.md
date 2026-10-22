@@ -641,6 +641,12 @@ fixture `data/worlds_2025.json` remains unchanged.
 
 ## Tests
 
+`/mysetup` searches timezones inside the setup UI: choose **Search city**, enter
+a full or partial city name, and choose a matching city/UTC offset. The same
+private card returns to setup after saving. Search supports timezone database
+cities, curated city aliases and accent-insensitive matching. No slash-command
+argument is needed. No-results screens offer another search or Back to setup.
+
 Schedule stage views use one public message with Previous/Next pages and a page
 number in the title. Calendar date headers include the weekday; Today/Tomorrow
 remain relative to the view's calendar. Swiss fixtures show their round and

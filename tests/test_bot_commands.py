@@ -565,7 +565,7 @@ def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeyp
         assert len(view.children) == 5
         assert all("DM" not in item.label for item in view.children if isinstance(item, discord.ui.Button))
         card, = message_payload(content, controls=view)["view"].children
-        for label, picker in (("Timezone:", namespace["SetupTimezoneSelect"]),
+        for label, picker in (("Timezone:", namespace["CitySearchButton"]),
                               ("Time Format:", namespace["TimeFormatSelect"]),
                               ("Teams You Are Following:", namespace["TeamSelect"])):
             position = next(i for i, item in enumerate(card.children)
@@ -620,16 +620,22 @@ def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeyp
         assert followed[123] == set()
         await teams.callback(other)
         assert 456 not in followed
-        timezone = next(item for item in card.walk_children() if isinstance(item, namespace["SetupTimezoneSelect"]))
-        timezone._values = ["Europe"]
+        from services import timezone_search
+        monkeypatch.setattr(timezone_search, "set_user_timezone", lambda uid, zone: timezones.update({uid: zone}))
+        timezone = next(item for item in card.walk_children() if isinstance(item, namespace["CitySearchButton"]))
+        reply.response.send_modal = AsyncMock()
         await timezone.callback(reply)
+        modal = reply.response.send_modal.call_args.args[0]
+        modal.city._value = "London"
+        await modal.on_submit(reply)
         updated = reply.response.edit_message.call_args.kwargs["view"]
-        cities = next(item for item in updated.walk_children() if isinstance(item, namespace["SetupTimezoneSelect"]))
-        assert cities.region == "Europe"
+        cities = next(item for item in updated.walk_children() if isinstance(item, timezone_search.CityResultSelect))
         cities._values = ["Europe/London"]
+        reply.response.defer = AsyncMock()
+        reply.edit_original_response = AsyncMock()
         await cities.callback(reply)
         assert timezones[123] == "Europe/London"
-        assert "Europe/London" in rendered_message(reply.response.edit_message.call_args).description
+        assert "Europe/London" in rendered_message(reply.edit_original_response.call_args).description
         await cities.callback(other)
         assert 456 not in timezones
         view.stop()
