@@ -144,7 +144,7 @@ class ServerSetupView(SetupRequiredView):
         self.test_reminder_with_pings.disabled = self.test_reminder.disabled
         self.publish_daily.disabled = settings.reminder_channel_id is None
         if not development_enabled():
-            for item in (self.test_reminder, self.test_reminder_with_pings, self.test_predictions, self.finish_predictions, self.preview_leaderboard):
+            for item in (self.test_reminder, self.test_reminder_with_pings, self.test_predictions, self.finish_predictions, self.preview_leaderboard, self.preview_swiss):
                 self.remove_item(item)
 
     async def interaction_check(self, interaction):
@@ -245,6 +245,20 @@ class ServerSetupView(SetupRequiredView):
         payload = leaderboard_payload(entries, self.guild_id, interaction.client.voting_manager.store.data.tournament.id,
                                       previous={1: 2, 2: 1, 3: 2, 4: 5, 5: 4, 6: 6}, preview=True)
         await interaction.followup.send(**payload, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
+    @discord.ui.button(label="Preview Swiss Round 1", emoji="👀", row=4)
+    async def preview_swiss(self, interaction, button):
+        if not development_enabled() or not can_manage_server(interaction, self.guild_id):
+            await interaction.response.send_message(**message_payload('This preview is available to test-server administrators only.'), ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True)
+        from services.swiss_preview import SwissRoundPreview
+        try:
+            view = SwissRoundPreview(interaction.client.voting_manager.store.data, self.guild_id, interaction.user.id)
+        except ValueError as error:
+            await interaction.followup.send(**message_payload(str(error)), ephemeral=True)
+            return
+        await interaction.followup.send(view=view, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
     @discord.ui.button(label="Simulate Match Finish", emoji="🏁", row=4)
     async def finish_predictions(self, interaction, button):
