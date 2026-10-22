@@ -137,11 +137,11 @@ def test_public_date_header_updates_across_midnight_without_reposting_or_pinging
     http = AsyncMock(return_value={})
     delivery = SpoilerDelivery(SimpleNamespace(http=SimpleNamespace(request=http)), database)
     draft = {"content": "## __" + date_heading_token(date(2026, 10, 19), "Europe/Berlin") + "__"}
-    assert render_payload(draft)["content"] == "## __Tomorrow 19.10.2026__"
+    assert render_payload(draft)["content"] == "## __Tomorrow, 19.10.2026__"
     delivery.remember({"id": "42", "channel_id": "12"}, draft, render_payload(draft))
     policy.clock = lambda: end + timedelta(days=1)
     asyncio.run(delivery.release_once())
-    assert http.call_args.kwargs["json"]["content"] == "## __Today 19.10.2026__"
+    assert http.call_args.kwargs["json"]["content"] == "## __Today, 19.10.2026__"
     policy.clock = lambda: end + timedelta(days=2)
     asyncio.run(delivery.release_once())
     assert http.call_args.kwargs["json"]["content"] == "## __Monday, 19 October 2026__"

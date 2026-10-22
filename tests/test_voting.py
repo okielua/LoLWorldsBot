@@ -477,7 +477,7 @@ def test_larger_matchday_keeps_pagination_with_buttons_under_matchups(context):
     manager, store, channel, current, _ = context
     first = store.data.matches[0].start_time.replace(day=23, hour=17)
     store.data = replace(store.data, matches=[
-        replace(store.data.matches[0], id=f"swiss-{i}", start_time=first + timedelta(minutes=30*i)) for i in range(8)
+        replace(store.data.matches[0], id=f"swiss-{i}", start_time=first + timedelta(minutes=30*i)) for i in range(12)
     ])
     current[0] = first - timedelta(hours=12)
     store.fetched_at = current[0]
@@ -492,7 +492,7 @@ def test_larger_matchday_keeps_pagination_with_buttons_under_matchups(context):
             assert isinstance(card.children[i + 1], discord.ui.ActionRow)
             assert "Bo5" in card.children[i + 2].content
     assert view.total_children_count <= 40
-    assert "Page 1/2" in card.children[0].content
+    assert "Page 1/3" in card.children[0].content
     manager.client.voting_manager = manager
 
     async def turn_page():
@@ -505,7 +505,7 @@ def test_larger_matchday_keeps_pagination_with_buttons_under_matchups(context):
                                                         next_page.template.fullmatch(next_page.custom_id))
         await restored.callback(interaction)
         updated = channel.get_partial_message.return_value.edit.call_args.kwargs["view"]
-        assert "Page 2/2" in updated.children[0].children[0].content
+        assert "Page 2/3" in updated.children[0].children[0].content
         assert updated.total_children_count <= 40
         assert len([item for item in updated.walk_children() if isinstance(item, discord.ui.Button)]) == 8
         channel.send.assert_awaited_once()
@@ -1095,7 +1095,7 @@ def test_swiss_four_new_pairings_preserve_original_votes_and_do_not_duplicate(co
         store.data = replace(store.data, matches=all_matches)
         await manager.tick()
         updated = message.edit.call_args.kwargs["view"]
-        assert len([item for item in updated.walk_children() if isinstance(item, discord.ui.Button)]) == 8
+        assert len([item for item in updated.walk_children() if isinstance(item, discord.ui.Button)]) == 16
         assert updated.total_children_count <= 40
         assert "@Secret Friend" in str(updated.to_components())
         assert len(get_polls(123, store.data.tournament.id)) == 8

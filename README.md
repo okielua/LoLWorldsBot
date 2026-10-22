@@ -273,15 +273,15 @@ on each line.
 
 One no-ping post contains every match in a Worlds matchday, with a separate pair
 of team buttons directly below each matchup. Discord Components V2 makes the
-interleaved layout possible in one message. Team voting buttons sit immediately
-under each matchup, followed by stage, times, voting status, and public voters.
-Days with more than five matches use Previous/Next Matches controls with four
-games per page, keeping native horizontal dividers and all voting buttons within
-Discord's component limit. Dividers use small, consistent spacing without extra
-blank glyphs around matchups.
+interleaved layout possible in one message. Six-to-eight-game days use one text
+block per game, followed by its voting buttons, with native horizontal dividers
+between games. Eight games fit exactly forty components; redundant footer
+controls are omitted. Longer days or voter lists needing a See All Voters control
+use four-game pages. Smaller boards retain buttons immediately under matchups.
+Dividers use small, consistent spacing without extra blank glyphs around matchups.
 Dates group by the US tournament matchday (`America/Los_Angeles`). Absolute match
 times list every unique timezone saved through `/mysetup` as `City: HH:MM`.
-Date headers use **Today DD.MM.YYYY** or **Tomorrow DD.MM.YYYY** when applicable in that view's existing
+Date headers use **Today, DD.MM.YYYY** or **Tomorrow, DD.MM.YYYY** when applicable in that view's existing
 calendar timezone; other days keep their calendar date. Public message headers
 refresh silently as the day changes, preserving the original dates in stored
 drafts. Private replies refresh when the command is reopened.

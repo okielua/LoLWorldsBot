@@ -332,11 +332,13 @@ class DailyPageButton(discord.ui.DynamicItem[discord.ui.Button],
 
 
 class DailyPredictionsView(SetupRequiredLayoutView):
-    def __init__(self, manager, day, matches, poll_by_id, recap="", role_id=None, user_ids=(), participants=None):
+    def __init__(self, manager, day, matches, poll_by_id, recap="", role_id=None, user_ids=(), participants=None, *, _page_size=None):
         super().__init__(timeout=None)
-        # Four games per page leave room for native dividers, per-game
-        # voting controls, participation, and navigation within Discord's limit.
-        page_size = 4 if len(matches) > 5 else 5
+        # Eight games fit exactly forty components with one text block and
+        # voting row per game, seven dividers, and the outer container.
+        all_matches = matches
+        compact = _page_size is None and 5 < len(matches) <= 8
+        page_size = _page_size or (8 if compact else 4 if len(matches) > 5 else 5)
         page_count = max(1, (len(matches) + page_size - 1) // page_size)
         self.page_count = page_count
         batch = swiss_batch(manager.store.data, matches[0]) if matches else []
@@ -369,14 +371,16 @@ class DailyPredictionsView(SetupRequiredLayoutView):
         title = f"Worlds {data.tournament.year} Day {matchdays.index(day) + 1}/{len(matchdays)} · {stage_label}"
         if page_count > 1:
             title += f" · Page {page + 1}/{page_count}"
-        card.add_item(team_display(
+        header = team_display(
             (f"<@&{role_id}>\n" if role_id and not manager.test_mode else "")
             + ((" ".join(f"<@{user_id}>" for user_id in user_ids) + "\n\n") if user_ids and not manager.test_mode else "")
             + f"# __{'TEST: ' if manager.test_mode else ''}{title}__\n\n"
             + introduction
             + f"## __{date_heading_token(date.date(), MATCHDAY_ZONE.key, now=manager.clock(), style='weekday')}__\n"
             + recap
-        ))
+        )
+        if not compact:
+            card.add_item(header)
         match_texts = []
         for match_index, match in enumerate(matches):
             poll = poll_by_id.get(match.id)
@@ -404,15 +408,22 @@ class DailyPredictionsView(SetupRequiredLayoutView):
             times = "\n".join(f"-# {line}" for line in registered_match_times(match.start_time, timezones).splitlines())
             if match_index:
                 card.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
-            card.add_item(team_display(f"## {matchup(match)}"))
-            card.add_item(discord.ui.ActionRow(VoteButton(manager, poll, 1), VoteButton(manager, poll, 2)))
+            if not compact:
+                card.add_item(team_display(f"## {matchup(match)}"))
+                card.add_item(discord.ui.ActionRow(VoteButton(manager, poll, 1), VoteButton(manager, poll, 2)))
             timing = upcoming_line(match, manager.clock()) + '\n\n' if match.status == MatchStatus.SCHEDULED else ''
             details_text = team_display(f"**{stage_label}**\n\n{timing}{times}\n\n{status}")
+            if compact:
+                prefix = header.content.rstrip() + "\n\n" if match_index == 0 else ""
+                details_text.content = prefix + team_display(f"## {matchup(match)}").content + "\n" + details_text.content
             card.add_item(details_text)
+            if compact:
+                card.add_item(discord.ui.ActionRow(VoteButton(manager, poll, 1), VoteButton(manager, poll, 2)))
             match_texts.append(details_text)
-        card.add_item(team_display(
-            (batch_help(VOTE_CONFIRMATION_HELP) if batch_voting else VOTE_CONFIRMATION_HELP)
-        ))
+        if not compact:
+            card.add_item(team_display(
+                (batch_help(VOTE_CONFIRMATION_HELP) if batch_voting else VOTE_CONFIRMATION_HELP)
+            ))
         # Fit participation into the existing text blocks, preserving the
         # single daily board even on an eight-match day.
         remaining = max(0, 3800 - sum(len(item.content) for item in self.walk_children()
@@ -440,6 +451,16 @@ class DailyPredictionsView(SetupRequiredLayoutView):
                 suffix += f"\n…and {len(names) - len(shown)} more (See All Voters)."
                 overflow = True
             text.content += suffix
+        if compact and overflow and self.total_children_count + 3 > 40:
+            # Keep the complete voter list accessible when a busy board needs
+            # a See All Voters control and therefore exceeds forty components.
+            paged = DailyPredictionsView(manager, day, all_matches, poll_by_id, recap,
+                                         role_id, user_ids, participants, _page_size=4)
+            self.clear_items()
+            self.page_count = paged.page_count
+            for item in paged.children:
+                self.add_item(item)
+            return
         buttons = [OpenVotePanel(manager.guild_id, data.tournament.id)]
         if overflow:
             buttons.append(PublicVotersButton(manager.guild_id, data.tournament.id))
