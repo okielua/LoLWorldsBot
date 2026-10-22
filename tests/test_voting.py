@@ -72,7 +72,7 @@ def test_daily_post_opens_early_without_pings_and_survives_restart(context):
         assert card.accent_colour.value == 0x5865F2
         assert "Play-ins · Opening Round · Bo5" in str(components)
         assert "# __Worlds 2026 Day 1/" in str(components)
-        assert "· Play-ins__" in str(components)
+        assert "## __Play-ins (Opening Round)__" in str(components)
         assert "Here are today's matchups. Voting for each matchup closes 5 minutes before match start." in str(components)
         assert "`/votehistory`" in str(components)
         assert "Communism's Worlds prediction standings" in str(components)

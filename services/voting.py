@@ -343,11 +343,11 @@ class DailyPredictionsView(SetupRequiredLayoutView):
         self.page_count = page_count
         batch = swiss_batch(manager.store.data, matches[0]) if matches else []
         batch_voting = len(batch) > 1
-        introduction = (f"Vote on all {len(batch)} matchups. **Voting for every match closes together, "
-                        "5 minutes before the first match starts.**\n\n" if batch_voting else
-                        "Here are today's matchups. Voting for each matchup closes 5 minutes before match start.\n\n")
         if batch_voting:
-            introduction += f"**All votes lock <t:{int(voting_deadline(batch[0], manager.store.data).timestamp())}:F>.**\n\n"
+            introduction = (f"**All votes lock <t:{int(voting_deadline(batch[0], manager.store.data).timestamp())}:F> "
+                            "(5 minutes before game 1)**\n\n")
+        else:
+            introduction = "Here are today's matchups. Voting for each matchup closes 5 minutes before match start.\n\n"
         page = min(max(0, getattr(manager, "_daily_pages", {}).get(day, 0)), page_count - 1)
         matches = matches[page * page_size:(page + 1) * page_size]
         date = datetime.fromisoformat(day)
@@ -365,16 +365,24 @@ class DailyPredictionsView(SetupRequiredLayoutView):
             name = stage.name if stage else "Stage to Be Confirmed"
             if name.lower().replace("-", "").replace(" ", "") in {"playin", "playins"}:
                 name = "Play-ins"
+            if 'swiss' in match.stage_id.lower():
+                name = "Swiss stage"
+            rounds = list(dict.fromkeys(
+                m.round_name.split(' ·', 1)[0] for m in matches
+                if m.stage_id == match.stage_id and m.round_name
+                and m.round_name.casefold() != name.casefold()))
+            if rounds:
+                name += f" ({' / '.join(rounds)})"
             if name not in stage_names:
                 stage_names.append(name)
         stage_label = discord.utils.escape_markdown(" / ".join(stage_names))
-        title = f"Worlds {data.tournament.year} Day {matchdays.index(day) + 1}/{len(matchdays)} · {stage_label}"
-        if page_count > 1:
-            title += f" · Page {page + 1}/{page_count}"
+        title = f"Worlds {data.tournament.year} Day {matchdays.index(day) + 1}/{len(matchdays)}"
+        page_note = f"-# Page {page + 1}/{page_count}\n\n" if page_count > 1 else ""
         header = team_display(
             (f"<@&{role_id}>\n" if role_id and not manager.test_mode else "")
             + ((" ".join(f"<@{user_id}>" for user_id in user_ids) + "\n\n") if user_ids and not manager.test_mode else "")
             + f"# __{'TEST: ' if manager.test_mode else ''}{title}__\n\n"
+            + f"## __{stage_label}__\n\n" + page_note
             + introduction
             + f"## __{date_heading_token(date.date(), MATCHDAY_ZONE.key, now=manager.clock(), style='weekday')}__\n"
             + recap

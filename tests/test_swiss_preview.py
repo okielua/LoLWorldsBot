@@ -22,7 +22,9 @@ def test_real_round_preview_is_read_only_and_shows_all_eight_games(context):
         text = str(view.to_components())
         assert 'PREVIEW:' in text and 'Page ' not in text
         assert 'Round 1' in text and 'Bo1' in text
-        assert 'Voting for every match closes together' in text
+        assert '## __Swiss stage (Round 1)__' in text
+        assert '**All votes lock <t:' in text and '(5 minutes before game 1)**' in text
+        assert 'Vote on all' not in text and 'Voting for every match' not in text
         assert 'Swiss Pick’ems' not in text and 'First time here?' not in text
         buttons = [item for item in view.walk_children() if isinstance(item, discord.ui.Button)]
         assert len(buttons) == 16  # Two team choices per game.
