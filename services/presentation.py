@@ -2,6 +2,7 @@
 
 import discord
 import logging
+import re
 from services.team_emojis import team_display
 from services.setup_gate import require_setup
 
@@ -27,9 +28,28 @@ class SpacedContainer(discord.ui.Container):
                     item.content = "\u2800\n\n" + item.content.lstrip("\u00a0\u200b\n")
                 else:
                     super().add_item(discord.ui.Separator(
-                        visible=False, spacing=discord.SeparatorSpacing.large,
+                        visible=bool(re.match(r'#{2,3} .+ vs .+', item.content.lstrip('\u00a0\u200b\n'))),
+                        spacing=discord.SeparatorSpacing.large,
                     ))
         return super().add_item(item)
+
+
+def add_match_sections(card, text):
+    """Native dividers between matchups, keeping date headings with their game."""
+    headings = list(re.finditer(r'(?m)^#{2,3} [^\n]+ vs [^\n]+$', text))
+    boundaries = []
+    for heading in headings[1:]:
+        start = heading.start()
+        date = re.search(r'(?m)^## __[^\n]+__\n\s*\Z', text[:start])
+        if date:
+            start = date.start()
+        boundaries.append(start)
+    cursor = 0
+    for boundary in boundaries:
+        card.add_item(team_display(text[cursor:boundary].strip()))
+        card.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.large))
+        cursor = boundary
+    card.add_item(team_display(text[cursor:].strip()))
 
 
 class MessageCard(discord.ui.LayoutView):
@@ -69,13 +89,13 @@ class MessageCard(discord.ui.LayoutView):
             if len(paragraphs) > split_after:
                 text = "\n\n".join(paragraphs[:split_after])
                 after_first_row = paragraphs[split_after]
-        card.add_item(team_display(text))
+        add_match_sections(card, text)
         if controls:
             items = {item.custom_id: item for item in controls.children}
             for index, row in enumerate(controls.to_components()):
                 card.add_item(discord.ui.ActionRow(*(items[item["custom_id"]] for item in row["components"])))
                 if index == 0 and after_first_row:
-                    card.add_item(team_display(after_first_row))
+                    add_match_sections(card, after_first_row)
         self.add_item(card)
 
     async def interaction_check(self, interaction):

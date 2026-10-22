@@ -328,7 +328,7 @@ def test_simulated_daily_buttons_show_the_visible_team_names(context, monkeypatc
                 spacer = card.children[index - 1]
                 assert isinstance(spacer, discord.ui.Separator)
                 assert spacer.spacing == discord.SeparatorSpacing.large
-                assert spacer.visible is False
+                assert spacer.visible is (child.content in match_blocks)
         for index, child in enumerate(card.children):
             if isinstance(child, discord.ui.TextDisplay) and child.content in match_blocks:
                 assert isinstance(card.children[index + 1], discord.ui.ActionRow)

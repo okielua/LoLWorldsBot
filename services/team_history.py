@@ -51,7 +51,7 @@ class TeamHistoryView(SetupRequiredView):
         title = f"## {self.team_name} · All Matches"
         pages, current, stage = [], title, None
         for entry in entries or ["No confirmed matchups are available yet."]:
-            if len(current) + len(entry) + 2 > 3400:
+            if len(current) + len(entry) + 2 > 3400 or " vs " in entry and current.count(" vs ") >= 12:
                 pages.append(current)
                 current = title + (f"\n\n{stage}" if stage and not entry.startswith("## __") else "")
             if entry.startswith("## __"):

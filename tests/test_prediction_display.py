@@ -87,7 +87,8 @@ def test_grouped_history_uses_guild_emojis_and_hides_results_for_both_winning_si
     assert "Result: ||**__C9__** **3–0** **KC**||" in values[0]
     assert "Result: ||**C9** **1–3** **__KC__**||" in values[1]
     assert "__3–0__" not in values[0] and "__1–3__" not in values[1]
-    text = embed_card_payload(embed)["view"].children[0].children[0].content
+    text = '\n\n'.join(item.content for item in embed_card_payload(embed)['view'].walk_children()
+                       if isinstance(item, discord.ui.TextDisplay))
     assert text.index("## __🏁 Past Games__") < text.index("## __🔴 Ongoing Games__") < text.index("## __🕒 Upcoming Games__")
     assert text.count("**C9** vs **KC**") == 4
     visible = re.sub(r"\|\|.*?\|\|", "", text)

@@ -372,7 +372,8 @@ async def send_long_message(
             date_heading = line
         addition = f"\n\n{line}"
 
-        if len(current) + len(addition) > max_length - (len(footer) + 2 if footer else 0):
+        if (len(current) + len(addition) > max_length - (len(footer) + 2 if footer else 0)
+                or " vs " in line and current.count(" vs ") >= 12):
             chunks.append(current)
 
             current = continuation_header or header
@@ -1212,7 +1213,7 @@ async def show_day_schedule(interaction: discord.Interaction, day_offset: int):
     help_size = len(VOTE_CONFIRMATION_HELP) + 2 if day_offset == 0 else 0
     for match in matches:
         text = format_match(match, timezone_name, include_date=False, now=now, timezones=timezones)
-        if len(current) + len(text) + 2 + help_size > 3800 and current != context:
+        if (len(current) + len(text) + 2 + help_size > 3800 or current.count(" vs ") >= 12) and current != context:
             descriptions.append(current)
             current = context
         current += text + "\n\n"

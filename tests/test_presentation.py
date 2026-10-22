@@ -13,6 +13,28 @@ import discord
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.parametrize('date_header', ['', '## __Friday, 23 October 2026__\n'])
+def test_match_lists_have_native_dividers_and_dates_stay_with_their_match(date_header):
+    async def scenario():
+        first = '## **GEN** vs **IG**\n**Swiss Stage · Bo1**\n\n🕒 UPCOMING in 2 hours'
+        second = date_header + '## **AL** vs **KC**\n**Swiss Stage · Bo1**\n\n🕒 UPCOMING in 3 hours'
+        third = '## **G2** vs **DK**\n**Swiss Stage · Bo1**\n\n🕒 UPCOMING in 4 hours'
+        view = message_payload('# Schedule\n\n' + '\n\n'.join([first, second, third]))['view']
+        card, = view.children
+        lines = [item for item in card.children if isinstance(item, discord.ui.Separator)]
+        assert len(lines) == 2
+        assert all(item.visible and item.spacing == discord.SeparatorSpacing.large for item in lines)
+        text = [item.content for item in card.children if isinstance(item, discord.ui.TextDisplay)]
+        assert text[0].startswith('## __Schedule__')
+        assert first in text[0]
+        assert text[1] == second
+        assert text[2] == third
+        assert view.total_children_count <= 40
+        view.stop()
+
+    asyncio.run(scenario())
+
+
 def test_footnotes_after_buttons_have_a_real_large_spacer():
     async def scenario():
         controls = discord.ui.View()
