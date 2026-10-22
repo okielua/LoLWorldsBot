@@ -71,7 +71,7 @@ def votes_match_details(match, stage_name=None):
     if stage_name.lower().replace("-", "").replace(" ", "") in {"playin", "playins"}:
         stage_name = "Play-ins"
     details = " · ".join(filter(None, [stage_name, match.round_name if "swiss" in match.stage_id.lower() else None, f"Bo{match.best_of}"]))
-    return f"{discord.utils.escape_markdown(details)}\n{format_tournament_date(match.start_time)}"
+    return f"{discord.utils.escape_markdown(details)}\n\n{format_tournament_date(match.start_time)}"
 
 
 def upcoming_votes_embed(match, votes, *, stage_name=None):
@@ -273,7 +273,7 @@ def my_votes_embeds(rows, data, *, now=None, display_name=None, timezone_name=No
             details = "\n".join(line for line in ((result, pick_line) if poll.winner_id else (pick_line, result)) if line)
             embed.add_field(
                 name=f"__{label}__",
-                value=f"{stage_line}\n{date}\n-# {time}\n\n"
+                value=f"{stage_line}\n\n{date}\n-# {time}\n\n"
                       + (f"{state}\n" if state else "")
                       + details,
                 inline=False,

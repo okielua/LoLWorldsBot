@@ -102,7 +102,7 @@ def test_unvoted_match_only_has_remaining_time_and_deadline_is_exact():
     poll = Poll(123, match.id, match.tournament_id, match.team1_id, match.team2_id, match.start_time, False, None)
     cutoff = match.start_time - timedelta(minutes=5)
     embed, = my_votes_embeds([(poll, None)], data, now=cutoff - timedelta(seconds=30))
-    assert history_values(embed)[0] == "Play-ins · Bo5\nThu, 15 Oct 2026\n-# 11:00h (PT)\n\n🗳️ Voting open\n-# (Voting closes in less than a minute)"
+    assert history_values(embed)[0] == "Play-ins · Bo5\n\nThu, 15 Oct 2026\n-# 11:00h (PT)\n\n🗳️ Voting open\n-# (Voting closes in less than a minute)"
     assert len(history_values(embed)) == 1
     closed, = my_votes_embeds([(poll, match.team1_id)], data, now=cutoff)
     assert "Awaiting result" in history_values(closed)[0]
@@ -116,7 +116,7 @@ def test_upcoming_votes_only_command_hint_is_small_grey():
     match = data.matches[0]
     payload = hidden_votes_payload(match, now=match.start_time - timedelta(hours=2, minutes=20), stage_name="Play-In")
     text = payload["view"].children[0].children[0].content
-    assert text.startswith("## Votes: **C9** vs **KC**\n\nPlay-ins · Bo5\nThu, 15 Oct 2026\n\n")
+    assert text.startswith("## Votes: **C9** vs **KC**\n\nPlay-ins · Bo5\n\nThu, 15 Oct 2026\n\n")
     assert "\n\n**🗳️ Voting for this match closes in 2 hours and 15 minutes**\n\n" in text
     assert "**UTC:**" not in text
     assert [line for line in text.splitlines() if line.startswith("-# ")] == [
@@ -175,7 +175,7 @@ def test_personal_history_uses_one_zone_and_currentvotes_omits_city_times(monkey
     history = first_history_value(my_votes_embeds([(poll, match.team1_id)], data, timezone_name="Europe/Berlin"))
     public_embed = upcoming_votes_embed(match, [], stage_name="Play-In")
     assert public_embed.title is None
-    assert public_embed.description == "## Votes: **C9** vs **KC**\n\nPlay-ins · Bo5\nThu, 15 Oct 2026\n\nNo votes were made."
+    assert public_embed.description == "## Votes: **C9** vs **KC**\n\nPlay-ins · Bo5\n\nThu, 15 Oct 2026\n\nNo votes were made."
     assert all(field.inline for field in public_embed.fields[:2])
     assert public_embed.fields[2].inline is False
     public = public_embed.fields[2].value
@@ -186,7 +186,7 @@ def test_personal_history_uses_one_zone_and_currentvotes_omits_city_times(monkey
     assert public_embed.fields[-1].inline is False
     assert public_embed.footer.text is None
     assert "**" not in help_block
-    assert history.startswith("Play-ins · Bo5\nThu, 15 Oct 2026\n-# 20:00h (CEST)\n\n🔒 Voting closed\nYour pick:")
+    assert history.startswith("Play-ins · Bo5\n\nThu, 15 Oct 2026\n-# 20:00h (CEST)\n\n🔒 Voting closed\nYour pick:")
     assert all(city not in history for city in ("London", "Berlin", "Tokyo"))
     assert all(city not in public for city in ("London", "Berlin", "Tokyo"))
 

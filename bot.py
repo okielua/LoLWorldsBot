@@ -249,12 +249,12 @@ def format_match(
 
     stage_line = ""
     if not (include_date and not date_as_heading):
-        stage_line = ('-# ' if small_details else '') + ' · '.join(stage_details) + '\n'
+        stage_line = ('-# ' if small_details else '') + ' · '.join(stage_details) + '\n\n'
     times = format_timezone_times(match.start_time, timezones or [timezone_name])
     if small_details:
         times = "\n".join(f"-# {line}" for line in times.splitlines())
     countdown = f"-# {relative_time.strip()}\n" if relative_time else ""
-    date_detail = f"-# {local_date} · Bo{match.best_of}\n" if include_date and not date_as_heading else ""
+    date_detail = f"-# {local_date} · Bo{match.best_of}\n\n" if include_date and not date_as_heading else ""
     pairing = matchup(match) if current_policy() else f"{team1.short_name} vs {team2.short_name}"
     parts.append(f"## {pairing}\n{stage_line}{date_detail}{countdown}{times}")
 
