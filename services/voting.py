@@ -553,7 +553,8 @@ class VotingManager:
             match = self.store.data.matches_by_id.get(match_id)
             if match is None:
                 return
-            if len(swiss_batch(self.store.data, match)) > 1:
+            stage = self.store.data.stages_by_id.get(match.stage_id)
+            if 'swiss' in match.stage_id.lower() or stage and 'swiss' in stage.name.lower():
                 return  # Participation stays visible on the daily post.
             settings = await asyncio.to_thread(get_server_settings, self.guild_id)
             if settings.reminder_channel_id is None:

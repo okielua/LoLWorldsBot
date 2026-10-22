@@ -130,3 +130,18 @@ def test_source_polling_is_fifteen_seconds_during_swiss_bo1_session(context):
     assert poller.refresh_interval_seconds() == 60
     current[0] = matches[0].start_time
     assert poller.refresh_interval_seconds() == 15
+
+
+@pytest.mark.parametrize('best_of', [1, 3])
+@pytest.mark.parametrize('single_match', [True, False])
+def test_all_swiss_votes_suppress_participation_announcements(context, best_of, single_match):
+    manager, store, channel, _, matches = prepare(context)
+    store.data = replace(store.data, matches=[replace(match, best_of=best_of)
+                                             for match in (matches[:1] if single_match else matches)])
+
+    async def run():
+        for match in store.data.matches:
+            await manager.announce_vote(match.id, 'Lua')
+        channel.send.assert_not_awaited()
+
+    asyncio.run(run())

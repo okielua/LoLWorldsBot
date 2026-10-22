@@ -657,7 +657,7 @@ cutoff or repeat the reminder. Other series retain individual five-minute cutoff
 
 The opening Swiss daily post also contains the Riot Pick'ems lock notice and
 link; it does not generate an extra pregame message. Individual vote celebration
-posts are suppressed on Swiss Bo1 matchdays, while the public voter list still
+posts are suppressed for all Swiss-stage votes, including Bo3s, while the public voter list still
 updates. Every completed Bo1 receives its own result post. During Swiss Bo1
 sessions Riot is checked every 15 seconds; announcements require a confirmed
 completed status and valid final winner/score. Source delays and Discord limits
