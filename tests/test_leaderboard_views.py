@@ -49,7 +49,7 @@ def interaction_for(data, user_id):
     )
 
 
-def test_playin_result_does_not_spoiler_empty_swiss_advanced_stats(stats_data, monkeypatch):
+def test_playin_votes_count_in_leaderboard_and_personal_stats_with_result_protection(stats_data, monkeypatch):
     from services import spoilers
     from services.prediction_stats import get_competition_snapshot
     from services.spoiler_delivery import render_payload
@@ -60,22 +60,26 @@ def test_playin_result_does_not_spoiler_empty_swiss_advanced_stats(stats_data, m
     now = completed.start_time + timedelta(minutes=30)
     policy = spoilers.SpoilerPolicy(data, ended_at={completed.id: now}, clock=lambda: now)
     monkeypatch.setattr(spoilers, "_current", policy)
-    snapshot = get_competition_snapshot(123, data.tournament.id, data=data, from_swiss=True)
-    assert snapshot.result_match_ids == () and snapshot.eligible == 0
+    snapshot = get_competition_snapshot(123, data.tournament.id, data=data)
+    assert snapshot.result_match_ids == (completed.id,) and snapshot.eligible == 1
     assert policy.protected(completed)
 
     async def scenario():
         interaction = interaction_for(data, 7)
+        from services.leaderboard_views import leaderboard_context
+        _, entries, _ = await leaderboard_context(interaction, data.tournament.id, data=data)
+        assert {row.user_id: (row.correct, row.submitted, row.eligible) for row, _ in entries} == {
+            7: (1, 1, 1), 8: (0, 1, 1)}
         await show_personal_stats(interaction, 123, data.tournament.id, data=data, target_user=interaction.user)
         reply = interaction.followup.send.call_args.kwargs
         assert reply["ephemeral"] is True
         rendered = render_payload({"components": reply["view"].to_components()})
         text = "\n".join(child["content"] for card in rendered["components"] for child in card["components"]
                          if child.get("type") == 10)
-        assert "||" not in text
+        assert "**My correct predictions: ||1||**" in text
         assert "__Check Your PayPal__" in text
         assert text.count("Not enough data") == 4
-        assert "**My correct predictions: 0**" in text
+        assert 'including Play-Ins' in text
     asyncio.run(scenario())
 
 

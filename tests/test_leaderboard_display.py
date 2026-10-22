@@ -70,7 +70,7 @@ def test_personal_stats_use_requested_summary_and_four_explained_sections():
     assert "My incorrect predictions: **6**\nMy missed votes: **10**" in text
     assert "My current streak: **2**\nMy best streak: **5**" in text
     assert text.index("## :PeyzPal: __Check Your PayPal__") < text.index("## :PepeKMS: __Can’t Read These Frauds__") < text.index("## :Copium: __Hopium Supplier__") < text.index("## :Discheesed: __Democracy Was a Mistake__")
-    assert text.startswith("-# *(All stats cover completed series from Swiss Stage onward.)*")
+    assert text.startswith("-# *(All stats cover completed series across Worlds, including Play-Ins.)*")
     assert not any(label in text for label in ("Recent predictions", "Pending votes", "Boldest correct call", "Ranked by", "Rank movement", "behind the leader"))
     notes = [line for line in text.splitlines() if line.startswith("-# ")]
     assert len(notes) == 5 and all(line.startswith("-# *") and line.endswith("*") for line in notes)

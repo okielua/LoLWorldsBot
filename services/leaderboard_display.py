@@ -87,7 +87,7 @@ def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous
         return aggregate_token(str(text), personal_scope)
 
     body = (
-        "-# (All stats cover completed series from Swiss Stage onward.)\n\n"
+        "-# (All stats cover completed series across Worlds, including Play-Ins.)\n\n"
         f"**My rank: {aggregate_token(standing, rank_scope) if rank else standing}**\n"
         f"**My correct predictions: {value(row.correct)}**\n\n"
         f"My votes: **{value(f'{row.submitted} of {row.eligible} past matches')}**\n"

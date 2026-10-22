@@ -11,7 +11,7 @@ from services.setup_gate import require_setup, SetupRequiredView
 
 
 async def leaderboard_context(interaction, tournament_id, *, data=None):
-    snapshot = await asyncio.to_thread(get_competition_snapshot, interaction.guild_id, tournament_id, data=data, from_swiss=True)
+    snapshot = await asyncio.to_thread(get_competition_snapshot, interaction.guild_id, tournament_id, data=data)
     names = {}
     for row in snapshot.rows + (snapshot.previous_rows or []):
         if row.user_id in names:

@@ -451,7 +451,7 @@ def test_personal_stats_protect_values_but_keep_labels_and_explanations_readable
     assert "__Check Your PayPal__" in text
     assert "__Can’t Read These Frauds__" in text
     assert "Requires at least 3 scored predictions" in text
-    assert "completed series from Swiss Stage onward" in text
+    assert "completed series across Worlds, including Play-Ins" in text
     assert not text.startswith("||")
     policy.clock = lambda: end + timedelta(hours=12)
     assert "||" not in render_payload(draft)["embeds"][0]["description"]

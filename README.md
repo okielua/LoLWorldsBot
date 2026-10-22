@@ -427,7 +427,7 @@ Four second-level section headings use the server's PeyzPal, PepeKMS, Copium,
 and Discheesed custom emojis in that order, without an Advanced stats heading.
 Explanations are italic grey subtext; the introductory scope note is also in
 parentheses. A muted scope note states that these stats
-cover completed series from Swiss Stage onward. The leaderboard uses that same
+cover completed series across Worlds, including Play-Ins. The leaderboard uses that same
 stage filter for totals, ranks, movement, team insights, and crowd statistics.
 Play-ins and unknown stages are excluded; stored votes are preserved. Missing
 rank/accuracy use the explicitly approved dash, with clear no-data values under
