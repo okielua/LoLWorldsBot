@@ -334,10 +334,9 @@ class DailyPageButton(discord.ui.DynamicItem[discord.ui.Button],
 class DailyPredictionsView(SetupRequiredLayoutView):
     def __init__(self, manager, day, matches, poll_by_id, recap="", role_id=None, user_ids=(), participants=None):
         super().__init__(timeout=None)
-        # On six-to-eight-game boards, join each game's details and the next
-        # matchup heading in one text component. Buttons still follow headings.
-        compact = 5 < len(matches) <= 8
-        page_size = 8 if compact else 5
+        # Four games per page leave room for native dividers, per-game
+        # voting controls, participation, and navigation within Discord's limit.
+        page_size = 4 if len(matches) > 5 else 5
         page_count = max(1, (len(matches) + page_size - 1) // page_size)
         self.page_count = page_count
         batch = swiss_batch(manager.store.data, matches[0]) if matches else []
@@ -351,7 +350,7 @@ class DailyPredictionsView(SetupRequiredLayoutView):
         matches = matches[page * page_size:(page + 1) * page_size]
         date = datetime.fromisoformat(day)
         timezones = get_registered_timezones()
-        card = SpacedContainer(accent_colour=discord.Colour(PREDICTION_BLUE))
+        card = discord.ui.Container(accent_colour=discord.Colour(PREDICTION_BLUE))
         self.add_item(card)
         data = manager.store.data
         matchdays = sorted({
@@ -379,7 +378,6 @@ class DailyPredictionsView(SetupRequiredLayoutView):
             + recap
         ))
         match_texts = []
-        compact_headings = []
         for match_index, match in enumerate(matches):
             poll = poll_by_id.get(match.id)
             if poll is None:
@@ -403,15 +401,10 @@ class DailyPredictionsView(SetupRequiredLayoutView):
                 details.append(match.round_name)
             details.append(f"Bo{match.best_of}")
             stage_label = discord.utils.escape_markdown(" · ".join(details))
-            # The container turns this boundary into a structural spacer, or a
-            # retained blank glyph line for boards at the component limit.
-            gap = MATCH_GAP if match_index else ""
             times = "\n".join(f"-# {line}" for line in registered_match_times(match.start_time, timezones).splitlines())
-            if compact:
-                target = match_texts[-1] if match_texts else card.children[0]
-                compact_headings.append((target, team_display(f"## {matchup(match)}").content))
-            else:
-                card.add_item(team_display(f"{gap}## {matchup(match)}"))
+            if match_index:
+                card.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+            card.add_item(team_display(f"## {matchup(match)}"))
             card.add_item(discord.ui.ActionRow(VoteButton(manager, poll, 1), VoteButton(manager, poll, 2)))
             timing = upcoming_line(match, manager.clock()) + '\n\n' if match.status == MatchStatus.SCHEDULED else ''
             details_text = team_display(f"**{stage_label}**\n\n{timing}{times}\n\n{status}")
@@ -423,8 +416,7 @@ class DailyPredictionsView(SetupRequiredLayoutView):
         # Fit participation into the existing text blocks, preserving the
         # single daily board even on an eight-match day.
         remaining = max(0, 3800 - sum(len(item.content) for item in self.walk_children()
-                                     if isinstance(item, discord.ui.TextDisplay))
-                        - sum(len(heading) + 5 for _, heading in compact_headings))
+                                     if isinstance(item, discord.ui.TextDisplay)))
         allowance = remaining // max(1, len(matches))
         overflow = False
         for match, text in zip(matches, match_texts):
@@ -448,8 +440,6 @@ class DailyPredictionsView(SetupRequiredLayoutView):
                 suffix += f"\n…and {len(names) - len(shown)} more (See All Voters)."
                 overflow = True
             text.content += suffix
-        for target, heading in compact_headings:
-            target.content += "\n\n\u2800\n\n" + heading
         buttons = [OpenVotePanel(manager.guild_id, data.tournament.id)]
         if overflow:
             buttons.append(PublicVotersButton(manager.guild_id, data.tournament.id))

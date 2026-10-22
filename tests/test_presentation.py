@@ -127,7 +127,7 @@ def test_shared_embed_has_one_underlined_title_and_keeps_times_normal():
         assert payload["embeds"] == []
         card, = payload["view"].children
         assert card.accent_colour.value == BLUE
-        assert card.children[0].content == "## __Worlds Schedule__\n\n-# *Berlin: 20:00*\n\n-# • *Use `/votehistory` for picks.*"
+        assert card.children[0].content == "## __Worlds Schedule__\n\n-# ***Berlin:** 20:00*\n\n-# • *Use `/votehistory` for picks.*"
     asyncio.run(scenario())
 
 

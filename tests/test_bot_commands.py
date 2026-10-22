@@ -1172,9 +1172,8 @@ def test_previous_is_public_and_does_not_leak_results_outside_spoilers(count, mo
         assert "No completed" in card.description
         return
     assert card.description.count("**C9** vs **KC**") == min(count, 3)
-    assert "-# *Berlin:" in card.description
-    assert "-# *Seoul:" in card.description
-    assert "-# **Berlin:**" not in card.description and "-# **Seoul:**" not in card.description
+    assert "-# ***Berlin:**" in card.description
+    assert "-# ***Seoul:**" in card.description
     assert "-# Play-ins" not in card.description
     assert card.description.count("🏁 FINISHED\n### Result: ||") == min(count, 3)
     assert "FINAL" not in card.description

@@ -322,13 +322,11 @@ def test_simulated_daily_buttons_show_the_visible_team_names(context, monkeypatc
                         if isinstance(child, discord.ui.TextDisplay) and " vs " in child.content]
         assert len(match_blocks) == 2
         assert not match_blocks[0].startswith("\u00a0\n\n")
-        assert match_blocks[1].startswith("\u00a0\n\n## ")
-        for index, child in enumerate(card.children):
-            if isinstance(child, discord.ui.TextDisplay) and child.content.startswith("\u00a0\n\n"):
-                spacer = card.children[index - 1]
-                assert isinstance(spacer, discord.ui.Separator)
-                assert spacer.spacing == discord.SeparatorSpacing.large
-                assert spacer.visible is (child.content in match_blocks)
+        assert match_blocks[1].startswith("## ")
+        assert any(isinstance(item, discord.ui.Separator) and item.visible
+                   and item.spacing == discord.SeparatorSpacing.small
+                   for item in view.children[0].children)
+        assert all(not block.startswith("\u00a0\n\n") for block in match_blocks)
         for index, child in enumerate(card.children):
             if isinstance(child, discord.ui.TextDisplay) and child.content in match_blocks:
                 assert isinstance(card.children[index + 1], discord.ui.ActionRow)
@@ -479,14 +477,14 @@ def test_larger_matchday_keeps_pagination_with_buttons_under_matchups(context):
     manager, store, channel, current, _ = context
     first = store.data.matches[0].start_time.replace(day=23, hour=17)
     store.data = replace(store.data, matches=[
-        replace(store.data.matches[0], id=f"swiss-{i}", start_time=first + timedelta(minutes=30*i)) for i in range(9)
+        replace(store.data.matches[0], id=f"swiss-{i}", start_time=first + timedelta(minutes=30*i)) for i in range(8)
     ])
     current[0] = first - timedelta(hours=12)
     store.fetched_at = current[0]
     asyncio.run(manager.tick())
     channel.send.assert_awaited_once()
     view = channel.send.call_args.kwargs["view"]
-    assert len([item for item in view.walk_children() if isinstance(item, discord.ui.Button)]) == 10
+    assert len([item for item in view.walk_children() if isinstance(item, discord.ui.Button)]) == 8
     assert len(manager.match_days()) == 1
     card, = view.children
     for i, item in enumerate(card.children):
@@ -1097,7 +1095,7 @@ def test_swiss_four_new_pairings_preserve_original_votes_and_do_not_duplicate(co
         store.data = replace(store.data, matches=all_matches)
         await manager.tick()
         updated = message.edit.call_args.kwargs["view"]
-        assert len([item for item in updated.walk_children() if isinstance(item, discord.ui.Button)]) == 16
+        assert len([item for item in updated.walk_children() if isinstance(item, discord.ui.Button)]) == 8
         assert updated.total_children_count <= 40
         assert "@Secret Friend" in str(updated.to_components())
         assert len(get_polls(123, store.data.tournament.id)) == 8

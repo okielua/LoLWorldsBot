@@ -10,8 +10,12 @@ def format_footnotes(text):
         body = re.sub(r"^(?:[•-]\s+)+", "", body)
         if body.startswith("*") and body.endswith("*") and (not body.startswith("**") or body.startswith("***")):
             body = body[1:-1]
-        body = re.sub(r"(?<!\\)\*\*(.+?)(?<!\\)\*\*",
-                      lambda bold: bold.group() if re.fullmatch(r"\d+(?:\.\d+)?% correct", bold.group(1)) else bold.group(1), body)
+        def keep_emphasis(bold):
+            city_time = (bold.start() == 0 and bold.group(1).endswith(":")
+                         and re.match(r"\s+\d{1,2}:\d{2}", body[bold.end():]))
+            return bold.group() if city_time or re.fullmatch(r"\d+(?:\.\d+)?% correct", bold.group(1)) else bold.group(1)
+
+        body = re.sub(r"(?<!\\)\*\*(.+?)(?<!\\)\*\*", keep_emphasis, body)
         body = re.sub(r"(?<![\\*])\*([^*]+)\*(?!\*)", r"\1", body)
         return "-# " + ("• " if bullet else "") + "*" + body + "*"
     text = re.sub(r"(?m)^-#\s+([^\n]*)", replace, text)

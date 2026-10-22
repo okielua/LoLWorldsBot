@@ -32,6 +32,14 @@ def test_footnote_spacing_is_consistent_inside_text_and_after_controls():
     assert team_display(displayed).content == displayed
 
 
+def test_city_labels_keep_bold_through_repeated_shared_rendering():
+    source = '-# **Berlin:** 19:00h\n-# **Los Angeles:** 10:00h\n-# **Dubai:** 9:00 pm'
+    expected = '-# ***Berlin:** 19:00h*\n-# ***Los Angeles:** 10:00h*\n-# ***Dubai:** 9:00 pm*'
+    assert format_footnotes(source) == expected
+    assert format_footnotes(expected) == expected
+    assert team_display(team_display(source).content).content == team_display(source).content
+
+
 def test_footnote_gap_survives_active_spoiler_rendering(monkeypatch):
     from services import spoilers
     from services.spoilers import SpoilerPolicy
