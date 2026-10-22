@@ -5,7 +5,7 @@ import pytest
 from services.match_times import date_heading, format_timezone_times, private_match_details
 
 
-@pytest.mark.parametrize("zone,expected", [("Europe/Berlin", "Today, 18.10.2026"), ("America/Los_Angeles", "Tomorrow, 18.10.2026")])
+@pytest.mark.parametrize("zone,expected", [("Europe/Berlin", "Today (Sunday, 18.10.2026)"), ("America/Los_Angeles", "Tomorrow (Sunday, 18.10.2026)")])
 def test_relative_date_headers_follow_the_views_calendar(zone, expected):
     now = datetime(2026, 10, 18, 0, 30, tzinfo=UTC)
     match = datetime(2026, 10, 18, 18, tzinfo=UTC)
@@ -14,8 +14,8 @@ def test_relative_date_headers_follow_the_views_calendar(zone, expected):
 
 def test_date_headers_keep_other_dates_and_handle_dst_by_calendar_day():
     now = datetime(2026, 11, 1, 7, 30, tzinfo=UTC)
-    assert date_heading(date(2026, 11, 1), "America/Los_Angeles", now=now) == "Today, 01.11.2026"
-    assert date_heading(date(2026, 11, 2), "America/Los_Angeles", now=now) == "Tomorrow, 02.11.2026"
+    assert date_heading(date(2026, 11, 1), "America/Los_Angeles", now=now) == "Today (Sunday, 01.11.2026)"
+    assert date_heading(date(2026, 11, 2), "America/Los_Angeles", now=now) == "Tomorrow (Monday, 02.11.2026)"
     assert date_heading(date(2026, 10, 31), "America/Los_Angeles", now=now) == "Saturday, 31 October 2026"
     assert date_heading(date(2026, 11, 3), "America/Los_Angeles", now=now, style="weekday") == "Tuesday, 3 November 2026"
 

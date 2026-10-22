@@ -281,7 +281,7 @@ use four-game pages. Smaller boards retain buttons immediately under matchups.
 Dividers use small, consistent spacing without extra blank glyphs around matchups.
 Dates group by the US tournament matchday (`America/Los_Angeles`). Absolute match
 times list every unique timezone saved through `/mysetup` as `City: HH:MM`.
-Date headers use **Today, DD.MM.YYYY** or **Tomorrow, DD.MM.YYYY** when applicable in that view's existing
+Date headers use **Today (Weekday, DD.MM.YYYY)** or **Tomorrow (Weekday, DD.MM.YYYY)** when applicable in that view's existing
 calendar timezone; other days keep their calendar date. Public message headers
 refresh silently as the day changes, preserving the original dates in stored
 drafts. Private replies refresh when the command is reopened.
