@@ -1,3 +1,4 @@
+from presentation_assertions import walk_items
 import asyncio
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -61,7 +62,7 @@ def test_round_one_publishes_at_1900_berlin_with_worlds_role_ping_once(context):
         assert '## __Swiss stage (Round 1)__' in text
         assert 'Page ' not in text
         assert payload['view'].total_children_count == 40
-        assert len([item for item in payload['view'].walk_children()
+        assert len([item for item in walk_items(payload['view'])
                     if isinstance(item, discord.ui.Button)]) == 16
         await manager.vote(matches[0].id, 7, matches[0].team1_id, 'Lua')
         await manager.refresh_participation(matches[0].id)
@@ -74,7 +75,8 @@ def test_round_one_publishes_at_1900_berlin_with_worlds_role_ping_once(context):
 
 
 @pytest.mark.parametrize('legacy', [False, True])
-def test_daily_vote_dispatches_after_restart_without_registering_message_view(context, legacy):
+@pytest.mark.parametrize('registered', [False, True])
+def test_daily_vote_dispatches_exactly_once_before_and_after_registration(context, legacy, registered):
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
     from discord.components import _component_factory
@@ -86,13 +88,15 @@ def test_daily_vote_dispatches_after_restart_without_registering_message_view(co
     async def run():
         await manager.tick()
         original = channel.send.call_args.kwargs['view']
-        button = next(item for item in original.walk_children() if isinstance(item, discord.ui.Button))
+        button = next(item for item in walk_items(original) if isinstance(item, discord.ui.Button))
         if legacy:
             button.custom_id = f'worldsvote:123:{matches[0].id}:1'
         restarted = VotingManager(manager.client, store, 123, clock=manager.clock)
         manager.client.voting_manager = restarted
         dispatcher = ViewStore(SimpleNamespace())
         dispatcher.add_dynamic_items(ScheduleVoteButton, LegacyDailyVoteButton)
+        if registered:
+            dispatcher.add_view(original, 789)
         tasks = []
         dispatcher.add_task = tasks.append
         click = SimpleNamespace(
@@ -103,7 +107,7 @@ def test_daily_vote_dispatches_after_restart_without_registering_message_view(co
                                     components=[_component_factory(c) for c in original.to_components()]),
             data={'component_type': 2, 'custom_id': button.custom_id})
         dispatcher.dispatch_view(2, button.custom_id, click)
-        assert tasks, 'Daily voting button must be globally dispatchable after restart'
+        assert len(tasks) == 1, 'Each click must dispatch exactly once'
         await tasks.pop()
         click.response.defer.assert_awaited_once()
         click.followup.send.assert_awaited_once()

@@ -18,3 +18,13 @@ def rendered_payload(payload):
 
 def rendered_message(call):
     return rendered_payload(call.kwargs)
+
+
+def walk_items(view):
+    """Expose inner vote buttons for assertions without double-dispatching them."""
+    import discord
+    for item in view.walk_children():
+        if isinstance(item, discord.ui.DynamicItem) and hasattr(item.item, 'team_id'):
+            yield item.item
+        else:
+            yield item

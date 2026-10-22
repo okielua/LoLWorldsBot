@@ -1,3 +1,4 @@
+from presentation_assertions import walk_items
 from presentation_assertions import rendered_message, rendered_payload
 import asyncio
 from dataclasses import replace
@@ -86,7 +87,7 @@ def test_daily_post_opens_early_without_pings_and_survives_restart(context):
         assert "stay private" not in str(components)
         assert call.kwargs["allowed_mentions"].to_dict() == {"parse": []}
         assert call.kwargs["view"].is_persistent()
-        assert len([item for item in call.kwargs["view"].walk_children() if isinstance(item, discord.ui.Button)]) == 4
+        assert len([item for item in walk_items(call.kwargs["view"]) if isinstance(item, discord.ui.Button)]) == 4
         restarted = VotingManager(manager.client, store, 123, clock=lambda: current[0])
         await restarted.tick()
         channel.send.assert_awaited_once()
@@ -220,7 +221,7 @@ def test_first_timer_cannot_vote_on_daily_or_restored_buttons_until_mysetup(cont
                                followup=SimpleNamespace(send=AsyncMock()))
     async def scenario():
         await manager.tick()
-        button = next(item for item in channel.send.call_args.kwargs["view"].walk_children() if isinstance(item, discord.ui.Button))
+        button = next(item for item in walk_items(channel.send.call_args.kwargs["view"]) if isinstance(item, discord.ui.Button))
         first = caller()
         await button.callback(first)
         assert "Run `/mysetup`" in rendered_message(first.response.send_message.call_args).description
@@ -332,7 +333,7 @@ def test_simulated_daily_buttons_show_the_visible_team_names(context, monkeypatc
                 assert isinstance(card.children[index + 1], discord.ui.ActionRow)
                 assert "Bo5" in card.children[index + 2].content
         assert view.total_children_count <= 40
-        buttons = [child for child in view.walk_children() if isinstance(child, discord.ui.Button)]
+        buttons = [child for child in walk_items(view) if isinstance(child, discord.ui.Button)]
         for button in buttons:
             rendered = render_payload({"components": [button.to_component_dict()]})["components"][0]
             assert rendered["label"].strip("\xa0") == button.team_id
@@ -399,7 +400,7 @@ def test_each_prediction_closes_at_its_five_minute_reminder_and_scores_once(cont
         store.fetched_at = current[0]
         await manager.tick()
         assert get_polls(123, store.data.tournament.id)[0].closed
-        buttons = [item for item in message.edit.call_args.kwargs["view"].walk_children() if isinstance(item, discord.ui.Button)]
+        buttons = [item for item in walk_items(message.edit.call_args.kwargs["view"]) if isinstance(item, discord.ui.Button)]
         assert all(button.disabled for button in buttons[:2])
         assert all(not button.disabled for button in buttons[2:])
         with pytest.raises(ValueError, match="closed"):
@@ -485,7 +486,7 @@ def test_larger_matchday_keeps_pagination_with_buttons_under_matchups(context):
     asyncio.run(manager.tick())
     channel.send.assert_awaited_once()
     view = channel.send.call_args.kwargs["view"]
-    assert len([item for item in view.walk_children() if isinstance(item, discord.ui.Button)]) == 8
+    assert len([item for item in walk_items(view) if isinstance(item, discord.ui.Button)]) == 8
     assert len(manager.match_days()) == 1
     card, = view.children
     for i, item in enumerate(card.children):
@@ -498,21 +499,26 @@ def test_larger_matchday_keeps_pagination_with_buttons_under_matchups(context):
 
     async def turn_page():
         from services.voting import DailyPageButton
-        next_page = next(item for item in view.walk_children()
+        next_page = next(item for item in walk_items(view)
                          if isinstance(item, DailyPageButton) and item.item.label == "Next Matches")
         interaction = SimpleNamespace(guild_id=123, user=SimpleNamespace(id=7), client=manager.client,
                                       extras={}, response=SimpleNamespace(defer=AsyncMock()))
         restored = await DailyPageButton.from_custom_id(interaction, next_page.item,
                                                         next_page.template.fullmatch(next_page.custom_id))
+        manager._retry_at['2026-10-23'] = manager.clock() + timedelta(seconds=60)
         await restored.callback(interaction)
         updated = channel.get_partial_message.return_value.edit.call_args.kwargs["view"]
         assert "Page 2/3" in updated.children[0].children[0].content
         assert updated.total_children_count <= 40
-        assert len([item for item in updated.walk_children() if isinstance(item, discord.ui.Button)]) == 8
+        assert len([item for item in walk_items(updated) if isinstance(item, discord.ui.Button)]) == 8
         channel.send.assert_awaited_once()
         assert channel.get_partial_message.return_value.edit.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
+        previous = next(item for item in updated.walk_children()
+                        if isinstance(item, DailyPageButton) and item.item.label == 'Previous Matches')
+        await previous.callback(interaction)
+        assert 'Page 1/3' in str(channel.get_partial_message.return_value.edit.call_args.kwargs['view'].to_components())
         await manager.tick()
-        assert manager._daily_pages["2026-10-23"] == 1
+        assert manager._daily_pages["2026-10-23"] == 0
     asyncio.run(turn_page())
 
 
@@ -536,7 +542,7 @@ def test_private_vote_confirmation_and_changed_confirmation(context):
     manager, store, channel, _, _ = context
     async def scenario():
         await manager.tick()
-        buttons = [item for item in channel.send.call_args.kwargs["view"].walk_children() if isinstance(item, discord.ui.Button)]
+        buttons = [item for item in walk_items(channel.send.call_args.kwargs["view"]) if isinstance(item, discord.ui.Button)]
         interaction = SimpleNamespace(
             guild_id=123, user=SimpleNamespace(id=7, display_name="Lua"),
             response=SimpleNamespace(defer=AsyncMock()), followup=SimpleNamespace(send=AsyncMock()),
@@ -565,7 +571,7 @@ def test_vote_refreshes_public_board_before_confirmation_or_announcement(context
 
     async def scenario():
         await manager.tick()
-        button = next(item for item in channel.send.call_args.kwargs["view"].walk_children()
+        button = next(item for item in walk_items(channel.send.call_args.kwargs["view"])
                       if isinstance(item, discord.ui.Button))
         # A previous transient board failure must not postpone a new vote's update.
         day = next(iter(manager._posted))
@@ -619,7 +625,7 @@ def test_successful_private_confirmation_reveals_all_teams_even_when_pick_was_hi
     async def scenario():
         assert policy.participant_protected(match, 2)
         await manager.tick()
-        buttons = [item for item in channel.send.call_args.kwargs["view"].walk_children() if isinstance(item, discord.ui.Button)]
+        buttons = [item for item in walk_items(channel.send.call_args.kwargs["view"]) if isinstance(item, discord.ui.Button)]
         public = render_payload({"components": channel.send.call_args.kwargs["view"].to_components()})
         assert "beeQuestion" in json.dumps(public)
         interaction = SimpleNamespace(guild_id=123, user=SimpleNamespace(id=7, display_name="Lua"),
@@ -654,7 +660,7 @@ def test_announcement_failure_does_not_undo_vote_or_private_confirmation(context
 
     async def scenario():
         await manager.tick()
-        button = next(item for item in channel.send.call_args.kwargs["view"].walk_children()
+        button = next(item for item in walk_items(channel.send.call_args.kwargs["view"])
                       if isinstance(item, discord.ui.Button))
         channel.send.side_effect = discord.Forbidden(SimpleNamespace(status=403, reason="Forbidden"), "Missing Permissions")
         interaction = SimpleNamespace(guild_id=123, user=SimpleNamespace(id=7, display_name="Lua"),
@@ -710,7 +716,7 @@ def test_failed_vote_does_not_send_participation_message(context):
 
     async def scenario():
         await manager.tick()
-        button = next(item for item in channel.send.call_args.kwargs["view"].walk_children()
+        button = next(item for item in walk_items(channel.send.call_args.kwargs["view"])
                       if isinstance(item, discord.ui.Button))
         now[0] = store.data.matches[0].start_time
         store.fetched_at = now[0]
@@ -731,7 +737,7 @@ def test_daily_post_shows_registered_zones_but_confirmation_keeps_single_date(co
         components = str(channel.send.call_args.kwargs["view"].to_components())
         for label in ("London", "Berlin", "Tokyo", "19:00", "20:00", "3:00"):
             assert label in components
-        buttons = [item for item in channel.send.call_args.kwargs["view"].walk_children() if isinstance(item, discord.ui.Button)]
+        buttons = [item for item in walk_items(channel.send.call_args.kwargs["view"]) if isinstance(item, discord.ui.Button)]
         interaction = SimpleNamespace(guild_id=123, user=SimpleNamespace(id=7, display_name="Lua"),
             response=SimpleNamespace(defer=AsyncMock()), followup=SimpleNamespace(send=AsyncMock()))
         await buttons[0].callback(interaction)
@@ -802,7 +808,7 @@ def test_all_open_votes_can_be_changed_independently_and_selections_update(conte
         else:
             payload, = personal_vote_payloads(manager, available, 7, saved, timezone_name="Europe/Berlin", time_format="12h")
         view = payload["view"]
-        buttons = [item for item in view.walk_children() if isinstance(item, discord.ui.Button)]
+        buttons = [item for item in walk_items(view) if isinstance(item, discord.ui.Button)]
         assert len(buttons) == 4
         assert [button.style for button in buttons] == [discord.ButtonStyle.success, discord.ButtonStyle.primary] * 2
         other = SimpleNamespace(user=SimpleNamespace(id=8), response=SimpleNamespace(send_message=AsyncMock()))
@@ -832,7 +838,7 @@ def test_all_open_votes_can_be_changed_independently_and_selections_update(conte
         if history:
             payload, = my_vote_payloads(manager, get_user_votes(123, store.data.tournament.id, 7),
                                         await manager.personal_vote_targets(7), 7, store.data, now=manager.clock())
-            remaining = [item for item in payload["view"].walk_children() if isinstance(item, discord.ui.Button)]
+            remaining = [item for item in walk_items(payload["view"]) if isinstance(item, discord.ui.Button)]
             assert len(remaining) == 2
             assert all(button.poll.match_id == second.id for button in remaining)
     asyncio.run(scenario())
@@ -850,13 +856,13 @@ def test_many_private_predictions_are_split_without_losing_matches(context):
     async def scenario():
         pages = personal_vote_payloads(manager, available, 7, [(poll, poll.team1_id) for poll in available])
         assert len(pages) == 2
-        buttons = [item for page in pages for item in page["view"].walk_children() if isinstance(item, discord.ui.Button)]
+        buttons = [item for page in pages for item in walk_items(page["view"]) if isinstance(item, discord.ui.Button)]
         assert len(buttons) == 24
         assert {button.poll.match_id for button in buttons} == {match.id for match in matches}
         for page in pages:
             view = page["view"]
             assert view.total_children_count <= 40
-            texts = [item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)]
+            texts = [item.content for item in walk_items(view) if isinstance(item, discord.ui.TextDisplay)]
             assert sum(map(len, texts)) <= 4000
             assert sum("Your Currently Active Predictions" in text for text in texts) == 1
     asyncio.run(scenario())
@@ -880,7 +886,7 @@ def test_myvotes_buttons_preserve_history_and_paginate_within_discord_limits(con
     async def scenario():
         pages = list(my_vote_payloads(manager, rows, available, 7, store.data, now=manager.clock()))
         assert len(pages) == 3
-        buttons = [item for page in pages for item in page["view"].walk_children() if isinstance(item, discord.ui.Button)]
+        buttons = [item for page in pages for item in walk_items(page["view"]) if isinstance(item, discord.ui.Button)]
         assert len(buttons) == 24
         assert {button.poll.match_id for button in buttons} == {match.id for match in matches}
         history = rendered_payload(pages[0]).description
@@ -889,7 +895,7 @@ def test_myvotes_buttons_preserve_history_and_paginate_within_discord_limits(con
         for page in pages:
             view = page["view"]
             assert view.total_children_count <= 40
-            assert sum(len(item.content) for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)) <= 4000
+            assert sum(len(item.content) for item in walk_items(view) if isinstance(item, discord.ui.TextDisplay)) <= 4000
     asyncio.run(scenario())
 
 
@@ -917,10 +923,10 @@ def test_today_lookup_publishes_reusable_polls_and_private_vote_confirmations(co
         assert "%" not in text and "votes)" not in text
         view = payload["view"]
         assert view.is_persistent() and view.total_children_count <= 40
-        assert sum(isinstance(item, OpenVotePanel) for item in view.walk_children()) == 1
+        assert sum(isinstance(item, OpenVotePanel) for item in walk_items(view)) == 1
         available = await manager.personal_vote_targets(7)
         private = personal_vote_payloads(manager, available, 7, [])
-        buttons = [item for item in private[0]["view"].walk_children() if isinstance(item, VoteButton)]
+        buttons = [item for item in walk_items(private[0]["view"]) if isinstance(item, VoteButton)]
         assert len(buttons) == 4
         assert len(get_polls(123, store.data.tournament.id)) == 2
         assert get_published_match_ids(123, store.data.tournament.id) == {match.id for match in store.data.matches}
@@ -980,7 +986,7 @@ def test_today_voting_excludes_ineligible_matches_and_pages_within_discord_limit
         for page in pages:
             view = page["view"]
             assert view.total_children_count <= 40
-            assert sum(len(item.content) for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)) <= 4000
+            assert sum(len(item.content) for item in walk_items(view) if isinstance(item, discord.ui.TextDisplay)) <= 4000
         await manager.acknowledge_schedule_opportunities(pages[0]["view"].matches, prepared)
         assert get_published_match_ids(123, store.data.tournament.id) == {match.id for match in pages[0]["view"].matches if match.id in prepared}
         store.last_error = "offline"
@@ -1068,7 +1074,7 @@ def test_confirmed_pairing_updates_existing_daily_post_without_reposting(context
     async def scenario():
         await manager.tick()
         view = channel.send.call_args.kwargs["view"]
-        buttons = [item for item in view.walk_children() if isinstance(item, discord.ui.Button)]
+        buttons = [item for item in walk_items(view) if isinstance(item, discord.ui.Button)]
         assert len(buttons) == 2
         assert "TBD" not in str(view.to_components())
         await manager.vote(store.data.matches[0].id, 7, "C9", "Lua")
@@ -1076,7 +1082,7 @@ def test_confirmed_pairing_updates_existing_daily_post_without_reposting(context
         await manager.tick()
         channel.send.assert_awaited_once()
         updated = message.edit.call_args.kwargs["view"]
-        buttons = [item for item in updated.walk_children() if isinstance(item, discord.ui.Button)]
+        buttons = [item for item in walk_items(updated) if isinstance(item, discord.ui.Button)]
         assert len(buttons) == 4
         assert all(not button.disabled for button in buttons)
         from services.polls import get_user_votes
@@ -1096,7 +1102,7 @@ def test_swiss_four_new_pairings_preserve_original_votes_and_do_not_duplicate(co
         store.data = replace(store.data, matches=all_matches)
         await manager.tick()
         updated = message.edit.call_args.kwargs["view"]
-        assert len([item for item in updated.walk_children() if isinstance(item, discord.ui.Button)]) == 16
+        assert len([item for item in walk_items(updated) if isinstance(item, discord.ui.Button)]) == 16
         assert updated.total_children_count <= 40
         assert "@Secret Friend" in str(updated.to_components())
         assert len(get_polls(123, store.data.tournament.id)) == 8
@@ -1120,7 +1126,7 @@ def test_match_discovered_at_cutoff_does_not_receive_an_open_poll(context):
         store.data = replace(store.data, matches=[first, second])
         await manager.tick()
         assert {p.match_id for p in get_polls(123, store.data.tournament.id)} == {first.id}
-        assert all(item.disabled for item in message.edit.call_args.kwargs["view"].walk_children() if isinstance(item, discord.ui.Button))
+        assert all(item.disabled for item in walk_items(message.edit.call_args.kwargs["view"]) if isinstance(item, discord.ui.Button))
         assert await manager.personal_vote_target(7) is None
         channel.send.assert_awaited_once()
     asyncio.run(scenario())
@@ -1170,7 +1176,7 @@ def test_stale_button_cannot_vote_for_a_changed_matchup_even_if_team_remains(con
     manager, store, channel, _, _ = context
     async def scenario():
         await manager.tick()
-        button = next(item for item in channel.send.call_args.kwargs["view"].walk_children() if isinstance(item, discord.ui.Button))
+        button = next(item for item in walk_items(channel.send.call_args.kwargs["view"]) if isinstance(item, discord.ui.Button))
         store.data = replace(store.data, matches=[replace(store.data.matches[0], team2_id="FUR"), store.data.matches[1]])
         interaction = SimpleNamespace(guild_id=123, user=SimpleNamespace(id=7, display_name="Lua"),
             response=SimpleNamespace(defer=AsyncMock()), followup=SimpleNamespace(send=AsyncMock()))
@@ -1303,7 +1309,7 @@ def test_reschedule_moves_match_between_boards_without_duplicate_poll(context):
         await manager.tick()
         assert channel.send.await_count == 2
         old_view = message.edit.call_args.kwargs["view"]
-        assert not any(isinstance(item, discord.ui.Button) for item in old_view.walk_children())
+        assert not any(isinstance(item, discord.ui.Button) for item in walk_items(old_view))
         assert len(get_polls(123, store.data.tournament.id)) == 1
         from services.polls import get_user_votes
         assert get_user_votes(123, store.data.tournament.id, 7)[0][1] == first.team1_id

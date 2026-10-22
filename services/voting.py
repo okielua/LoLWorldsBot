@@ -38,13 +38,12 @@ VOTING_WINDOW_TARGET = timedelta(hours=8)
 
 
 class VoteButton(discord.ui.Button):
-    def __init__(self, manager, poll, index, *, public=False):
+    def __init__(self, manager, poll, index):
         self.manager, self.poll = manager, poll
         self.team_id = poll.team1_id if index == 1 else poll.team2_id
         super().__init__(
             label=self.team_label(), emoji=team_emoji(self.team_id), style=discord.ButtonStyle.primary, disabled=poll.closed,
-            custom_id=(f"worldsday:{poll.guild_id}:{poll.match_id}:{poll.team1_id}:{poll.team2_id}:{index}"
-                       if public else f"worldsvote:{poll.guild_id}:{poll.match_id}:{index}"),
+            custom_id=f"worldsprivatevote:{poll.guild_id}:{poll.match_id}:{index}",
         )
 
     def team_label(self):
@@ -163,7 +162,9 @@ class LegacyDailyVoteButton(ScheduleVoteButton,
                           template=r"worldsvote:(?P<guild>\d+):(?P<match>.+):(?P<index>[12])"):
     """Keep already published daily buttons usable before a view is restored."""
     def __init__(self, manager, poll, index):
-        discord.ui.DynamicItem.__init__(self, VoteButton(manager, poll, index))
+        button = VoteButton(manager, poll, index)
+        button.custom_id = f"worldsvote:{poll.guild_id}:{poll.match_id}:{index}"
+        discord.ui.DynamicItem.__init__(self, button)
 
     @classmethod
     async def from_custom_id(cls, interaction, item, match):
@@ -347,7 +348,7 @@ class DailyPageButton(discord.ui.DynamicItem[discord.ui.Button],
             return
         await interaction.response.defer()
         manager._daily_pages[self.day] = self.page
-        await manager._sync_day(self.day, manager.match_days()[self.day])
+        await manager._sync_day(self.day, manager.match_days()[self.day], participation=True)
 
 
 class DailyPredictionsView(SetupRequiredLayoutView):
@@ -437,7 +438,7 @@ class DailyPredictionsView(SetupRequiredLayoutView):
                 card.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
             if not compact:
                 card.add_item(team_display(f"## {matchup(match)}"))
-                card.add_item(discord.ui.ActionRow(VoteButton(manager, poll, 1, public=True), VoteButton(manager, poll, 2, public=True)))
+                card.add_item(discord.ui.ActionRow(ScheduleVoteButton(manager, poll, 1), ScheduleVoteButton(manager, poll, 2)))
             timing = upcoming_line(match, manager.clock()) + '\n\n' if match.status == MatchStatus.SCHEDULED else ''
             details_text = team_display(f"**{stage_label}**\n\n{timing}{times}\n\n{status}")
             if compact:
@@ -445,7 +446,7 @@ class DailyPredictionsView(SetupRequiredLayoutView):
                 details_text.content = prefix + team_display(f"## {matchup(match)}").content + "\n" + details_text.content
             card.add_item(details_text)
             if compact:
-                card.add_item(discord.ui.ActionRow(VoteButton(manager, poll, 1, public=True), VoteButton(manager, poll, 2, public=True)))
+                card.add_item(discord.ui.ActionRow(ScheduleVoteButton(manager, poll, 1), ScheduleVoteButton(manager, poll, 2)))
             match_texts.append(details_text)
         if not compact:
             card.add_item(team_display(
@@ -457,8 +458,14 @@ class DailyPredictionsView(SetupRequiredLayoutView):
                                      if isinstance(item, discord.ui.TextDisplay)))
         allowance = remaining // max(1, len(matches))
         overflow = False
-        for match, text in zip(matches, match_texts):
-            names = voter_lines((participants or {}).get(match.id, []))
+        names_by_match = [voter_lines((participants or {}).get(match.id, [])) for match in matches]
+        complete_lists = ["\n\n**These users cast a vote:**\n" + ("\n".join(names) if names else "No votes yet.")
+                          for names in names_by_match]
+        all_voters_fit = sum(map(len, complete_lists)) <= remaining
+        for names, text, complete in zip(names_by_match, match_texts, complete_lists):
+            if all_voters_fit or len(complete) <= allowance:
+                text.content += complete
+                continue
             if allowance < 120:
                 suffix = (f"\n\n**Voters: {len(names)}** (See All Voters)." if names else "\n\nNo votes yet.")
                 if len(suffix) <= allowance:
