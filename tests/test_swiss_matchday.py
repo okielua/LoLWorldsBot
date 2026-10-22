@@ -44,8 +44,9 @@ def test_eight_bo1_day_has_two_pregame_posts_and_eight_immediate_result_posts(co
         channel.send.assert_awaited_once()
         text = str(channel.send.call_args.kwargs['view'].to_components())
         assert 'Voting for every match closes together' in text
-        assert 'Swiss Pick’ems also lock' in text
-        assert 'Page 1/2' in text
+        assert 'Swiss Pick’ems also lock' not in text
+        assert 'First time here?' not in text
+        assert 'Page 1/2' not in text
         assert len(polls.get_published_match_ids(123, store.data.tournament.id)) == 8
         for match in matches:
             await manager.vote(match.id, 7, match.team1_id, 'Lua')

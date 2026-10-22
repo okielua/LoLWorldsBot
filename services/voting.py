@@ -334,9 +334,12 @@ class DailyPageButton(discord.ui.DynamicItem[discord.ui.Button],
 class DailyPredictionsView(SetupRequiredLayoutView):
     def __init__(self, manager, day, matches, poll_by_id, recap="", role_id=None, user_ids=(), participants=None):
         super().__init__(timeout=None)
-        # Separate matchup / buttons / details blocks require five components
-        # per match. Pages keep even a full Swiss day inside one Discord post.
-        page_count = max(1, (len(matches) + 4) // 5)
+        # On six-to-eight-game boards, join each game's details and the next
+        # matchup heading in one text component. Buttons still follow headings.
+        compact = 5 < len(matches) <= 8
+        page_size = 8 if compact else 5
+        page_count = max(1, (len(matches) + page_size - 1) // page_size)
+        self.page_count = page_count
         batch = swiss_batch(manager.store.data, matches[0]) if matches else []
         batch_voting = len(batch) > 1
         introduction = (f"Vote on all {len(batch)} matchups. **Voting for every match closes together, "
@@ -344,12 +347,8 @@ class DailyPredictionsView(SetupRequiredLayoutView):
                         "Here are today's matchups. Voting for each matchup closes 5 minutes before match start.\n\n")
         if batch_voting:
             introduction += f"**All votes lock <t:{int(voting_deadline(batch[0], manager.store.data).timestamp())}:F>.**\n\n"
-            first_swiss = min((m.start_time for m in manager.store.data.matches if 'swiss' in m.stage_id.lower()), default=None)
-            if batch[0].start_time == first_swiss:
-                introduction += (f"Swiss Pick’ems also lock <t:{int(first_swiss.timestamp())}:R>. "
-                                 "[Submit your Riot picks](https://lolesports.com/en-GB/pickems).\n\n")
         page = min(max(0, getattr(manager, "_daily_pages", {}).get(day, 0)), page_count - 1)
-        matches = matches[page * 5:(page + 1) * 5]
+        matches = matches[page * page_size:(page + 1) * page_size]
         date = datetime.fromisoformat(day)
         timezones = get_registered_timezones()
         card = SpacedContainer(accent_colour=discord.Colour(PREDICTION_BLUE))
@@ -375,11 +374,12 @@ class DailyPredictionsView(SetupRequiredLayoutView):
             (f"<@&{role_id}>\n" if role_id and not manager.test_mode else "")
             + ((" ".join(f"<@{user_id}>" for user_id in user_ids) + "\n\n") if user_ids and not manager.test_mode else "")
             + f"# __{'TEST: ' if manager.test_mode else ''}{title}__\n\n"
-            + introduction + "First time here? Run `/mysetup` before voting.\n\n"
+            + introduction
             + f"## __{date_heading_token(date.date(), MATCHDAY_ZONE.key, now=manager.clock(), style='weekday')}__\n"
             + recap
         ))
         match_texts = []
+        compact_headings = []
         for match_index, match in enumerate(matches):
             poll = poll_by_id.get(match.id)
             if poll is None:
@@ -407,7 +407,11 @@ class DailyPredictionsView(SetupRequiredLayoutView):
             # retained blank glyph line for boards at the component limit.
             gap = MATCH_GAP if match_index else ""
             times = "\n".join(f"-# {line}" for line in registered_match_times(match.start_time, timezones).splitlines())
-            card.add_item(team_display(f"{gap}## {matchup(match)}"))
+            if compact:
+                target = match_texts[-1] if match_texts else card.children[0]
+                compact_headings.append((target, team_display(f"## {matchup(match)}").content))
+            else:
+                card.add_item(team_display(f"{gap}## {matchup(match)}"))
             card.add_item(discord.ui.ActionRow(VoteButton(manager, poll, 1), VoteButton(manager, poll, 2)))
             timing = upcoming_line(match, manager.clock()) + '\n\n' if match.status == MatchStatus.SCHEDULED else ''
             details_text = team_display(f"**{stage_label}**\n\n{timing}{times}\n\n{status}")
@@ -419,7 +423,8 @@ class DailyPredictionsView(SetupRequiredLayoutView):
         # Fit participation into the existing text blocks, preserving the
         # single daily board even on an eight-match day.
         remaining = max(0, 3800 - sum(len(item.content) for item in self.walk_children()
-                                     if isinstance(item, discord.ui.TextDisplay)))
+                                     if isinstance(item, discord.ui.TextDisplay))
+                        - sum(len(heading) + 5 for _, heading in compact_headings))
         allowance = remaining // max(1, len(matches))
         overflow = False
         for match, text in zip(matches, match_texts):
@@ -443,6 +448,8 @@ class DailyPredictionsView(SetupRequiredLayoutView):
                 suffix += f"\n…and {len(names) - len(shown)} more (See All Voters)."
                 overflow = True
             text.content += suffix
+        for target, heading in compact_headings:
+            target.content += "\n\n\u2800\n\n" + heading
         buttons = [OpenVotePanel(manager.guild_id, data.tournament.id)]
         if overflow:
             buttons.append(PublicVotersButton(manager.guild_id, data.tournament.id))

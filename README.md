@@ -275,8 +275,9 @@ One no-ping post contains every match in a Worlds matchday, with a separate pair
 of team buttons directly below each matchup. Discord Components V2 makes the
 interleaved layout possible in one message. Team voting buttons sit immediately
 under each matchup, followed by stage, times, voting status, and public voters.
-Days with more than five matches use Previous/Next Matches controls in the same
-daily post, keeping an eight-match Swiss day inside Discord's component limit.
+Six-to-eight-match days fit on one page by sharing text components between
+adjacent games, keeping all voting buttons within Discord's component limit.
+Larger days use Previous/Next Matches controls with five matches per page.
 Blank spacing separates each match block from the preceding match's buttons.
 Dates group by the US tournament matchday (`America/Los_Angeles`). Absolute match
 times list every unique timezone saved through `/mysetup` as `City: HH:MM`.
@@ -669,8 +670,8 @@ followers of any team playing that day. SQLite stores the shared deadline and
 the matchday reminder receipt, so old buttons and restarts cannot bypass the
 cutoff or repeat the reminder. Other series retain individual five-minute cutoffs.
 
-The opening Swiss daily post also contains the Riot Pick'ems lock notice and
-link; it does not generate an extra pregame message. Individual vote celebration
+Daily posts omit the Riot Pick'ems lock notice and first-time setup prompt.
+Individual vote celebration
 posts are suppressed for all Swiss-stage votes, including Bo3s, while the public voter list still
 updates. Every completed Bo1 receives its own result post. During Swiss Bo1
 sessions Riot is checked every 15 seconds; announcements require a confirmed

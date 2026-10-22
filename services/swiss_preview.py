@@ -33,6 +33,7 @@ class SwissRoundPreview(SetupRequiredLayoutView):
                             m.start_time, self.clock() >= voting_deadline(m, self.data), m.winner_id)
                  for m in self.matches}
         original = DailyPredictionsView(manager, self.day, self.matches, polls, participants={})
+        self.page_count = original.page_count
         card, = original.children
         header = next(item for item in card.children if isinstance(item, discord.ui.TextDisplay))
         header.content = header.content.replace('# __', '# __PREVIEW: ', 1)
@@ -43,7 +44,7 @@ class SwissRoundPreview(SetupRequiredLayoutView):
                 previous = discord.ui.Button(label='Previous Matches', style=discord.ButtonStyle.secondary,
                                               disabled=self.page == 0)
                 following = discord.ui.Button(label='Next Matches', style=discord.ButtonStyle.primary,
-                                               disabled=self.page == (len(self.matches) - 1) // 5)
+                                               disabled=self.page == self.page_count - 1)
                 previous.callback = self.previous_page
                 following.callback = self.next_page
                 row.add_item(previous)
@@ -64,7 +65,7 @@ class SwissRoundPreview(SetupRequiredLayoutView):
 
     async def turn(self, interaction, amount):
         await interaction.response.defer()
-        self.page = min(max(0, self.page + amount), (len(self.matches) - 1) // 5)
+        self.page = min(max(0, self.page + amount), self.page_count - 1)
         self.render()
         await interaction.edit_original_response(view=self, allowed_mentions=discord.AllowedMentions.none())
 
