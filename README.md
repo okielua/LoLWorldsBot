@@ -648,6 +648,13 @@ private card returns to setup after saving. Search supports timezone database
 cities, curated city aliases and accent-insensitive matching. No slash-command
 argument is needed. No-results screens offer another search or Back to setup.
 
+Administrators with Manage Server can use `/serversetup` → **Set Member
+Timezone** to choose a member and search for their city. It saves that member's
+timezone into the normal match-time list without completing their personal
+setup or changing notification/team preferences. The flow and confirmation are
+private to the initiating admin; it sends no DM, public post, or member ping.
+Permission and current server membership are checked again before saving.
+
 Schedule stage views use one public message with Previous/Next pages and a page
 number in the title. Calendar date headers include the weekday; Today/Tomorrow
 remain relative to the view's calendar. Swiss fixtures show their round and

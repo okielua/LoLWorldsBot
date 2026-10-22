@@ -217,6 +217,18 @@ class ServerSetupView(SetupRequiredView):
     async def set_pickems_link(self, interaction, button):
         await interaction.response.send_modal(PickemsLinkModal(self.guild_id))
 
+    @discord.ui.button(label="Set Member Timezone", emoji="🌍", row=4)
+    async def set_member_timezone(self, interaction, button):
+        if not can_manage_server(interaction, self.guild_id):
+            await interaction.response.send_message(**message_payload("You need the Manage Server permission."), ephemeral=True)
+            return
+        from services.member_timezone import MemberTimezoneView
+        payload = message_payload('## Set Member Timezone\n\nChoose a member, then search for their city. '
+                                  'Their timezone will appear in match-time lists. No notification is sent to them.',
+                                  controls=MemberTimezoneView(self.guild_id, interaction.user.id))
+        payload['view'].expire_with(interaction)
+        await interaction.response.send_message(**payload, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
     @discord.ui.button(label="Test Daily Predictions (No Pings)", emoji="🧪", row=3)
     async def test_predictions(self, interaction, button):
         await interaction.response.defer(ephemeral=True, thinking=True)

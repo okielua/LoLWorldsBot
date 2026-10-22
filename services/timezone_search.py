@@ -54,14 +54,22 @@ async def owner_check(interaction, user_id):
     return False
 
 
+async def search_allowed(interaction, user_id, options):
+    if not await owner_check(interaction, user_id):
+        return False
+    authorize = options.get('authorize')
+    return await authorize(interaction) if authorize else True
+
+
 class CitySearchButton(discord.ui.Button):
-    def __init__(self, user_id, setup_payload, *, row=0):
+    def __init__(self, user_id, setup_payload, *, row=0, **search_options):
         super().__init__(label='Search city', emoji='🔍', style=discord.ButtonStyle.primary, row=row)
         self.user_id, self.setup_payload = user_id, setup_payload
+        self.search_options = search_options
 
     async def callback(self, interaction):
-        if await owner_check(interaction, self.user_id):
-            modal = CitySearchModal(self.user_id, self.setup_payload)
+        if await search_allowed(interaction, self.user_id, self.search_options):
+            modal = CitySearchModal(self.user_id, self.setup_payload, **self.search_options)
             modal.previous_card = getattr(interaction, 'extras', {}).get('expiring_message_card')
             await interaction.response.send_modal(modal)
 
@@ -69,13 +77,14 @@ class CitySearchButton(discord.ui.Button):
 class CitySearchModal(discord.ui.Modal, title='Find Your Timezone City'):
     city = discord.ui.TextInput(label='City', placeholder='Dubai, London, Berlin…', min_length=2, max_length=80)
 
-    def __init__(self, user_id, setup_payload):
+    def __init__(self, user_id, setup_payload, **search_options):
         super().__init__(timeout=600)
         self.user_id, self.setup_payload = user_id, setup_payload
         self.previous_card = None
+        self.search_options = search_options
 
     async def on_submit(self, interaction):
-        if not await owner_check(interaction, self.user_id):
+        if not await search_allowed(interaction, self.user_id, self.search_options):
             return
         query = str(self.city)
         results = city_matches(query)
@@ -86,20 +95,20 @@ class CitySearchModal(discord.ui.Modal, title='Find Your Timezone City'):
         selected = exact[0] if len(exact) == 1 else results[0][1] if len(results) == 1 else None
         if selected:
             await interaction.response.defer()
-            set_user_timezone(self.user_id, selected)
+            set_user_timezone(self.search_options.get('target_user_id', self.user_id), selected)
             payload = self.setup_payload(interaction)
             payload['view'].expire_with(interaction)
             await interaction.edit_original_response(**payload, allowed_mentions=discord.AllowedMentions.none())
             return
         text = ('## Choose Your Timezone City\n\nSelect your city below.' if results else
                 '## No Cities Found\n\nTry a nearby major city or a different spelling.')
-        payload = message_payload(text, controls=CityMatchesView(self.user_id, self.setup_payload, results))
+        payload = message_payload(text, controls=CityMatchesView(self.user_id, self.setup_payload, results, **self.search_options))
         payload['view'].expire_with(interaction)
         await interaction.response.edit_message(**payload, allowed_mentions=discord.AllowedMentions.none())
 
 
 class CityResultSelect(discord.ui.Select):
-    def __init__(self, user_id, setup_payload, results):
+    def __init__(self, user_id, setup_payload, results, **search_options):
         options = []
         now = datetime.now(UTC)
         for city, zone in results:
@@ -111,14 +120,15 @@ class CityResultSelect(discord.ui.Select):
         super().__init__(placeholder='Choose your city…', options=options, row=0)
         self.user_id, self.setup_payload = user_id, setup_payload
         self.allowed_zones = {zone for _, zone in results}
+        self.search_options = search_options
 
     async def callback(self, interaction):
-        if not await owner_check(interaction, self.user_id):
+        if not await search_allowed(interaction, self.user_id, self.search_options):
             return
         if self.values[0] not in self.allowed_zones:
             return
         await interaction.response.defer()
-        set_user_timezone(self.user_id, self.values[0])
+        set_user_timezone(self.search_options.get('target_user_id', self.user_id), self.values[0])
         await interaction.edit_original_response(**self.setup_payload(interaction),
                                                  allowed_mentions=discord.AllowedMentions.none())
 
@@ -126,15 +136,16 @@ class CityResultSelect(discord.ui.Select):
 class CityMatchesView(discord.ui.View):
     setup_controls = True
 
-    def __init__(self, user_id, setup_payload, results):
+    def __init__(self, user_id, setup_payload, results, **search_options):
         super().__init__(timeout=600)
         self.user_id, self.setup_payload = user_id, setup_payload
+        self.search_options = search_options
         if results:
-            self.add_item(CityResultSelect(user_id, setup_payload, results))
-        self.add_item(CitySearchButton(user_id, setup_payload, row=1))
+            self.add_item(CityResultSelect(user_id, setup_payload, results, **search_options))
+        self.add_item(CitySearchButton(user_id, setup_payload, row=1, **search_options))
 
     @discord.ui.button(label='Back to setup', style=discord.ButtonStyle.secondary, row=1)
     async def back(self, interaction, button):
-        if await owner_check(interaction, self.user_id):
+        if await search_allowed(interaction, self.user_id, self.search_options):
             await interaction.response.edit_message(**self.setup_payload(interaction),
                                                     allowed_mentions=discord.AllowedMentions.none())
