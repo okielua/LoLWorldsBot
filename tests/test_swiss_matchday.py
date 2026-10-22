@@ -35,6 +35,42 @@ def prepare(context):
     return manager, store, channel, current, matches
 
 
+def test_round_one_publishes_at_1900_berlin_with_worlds_role_ping_once(context):
+    from zoneinfo import ZoneInfo
+
+    manager, store, channel, current, matches = prepare(context)
+    opening = matches[0].start_time - timedelta(hours=24)
+    assert opening.astimezone(ZoneInfo('Europe/Berlin')).isoformat() == '2026-10-22T19:00:00+02:00'
+
+    async def run():
+        current[0] = opening - timedelta(microseconds=1)
+        store.fetched_at = current[0]
+        await manager.tick()
+        channel.send.assert_not_awaited()
+        current[0] = opening
+        store.fetched_at = current[0]
+        await manager.tick()
+        channel.send.assert_awaited_once()
+        payload = channel.send.call_args.kwargs
+        assert [role.id for role in payload['allowed_mentions'].roles] == [88]
+        assert not payload['allowed_mentions'].everyone
+        text = str(payload['view'].to_components())
+        assert '<@&88>' in text
+        assert '## __Swiss stage (Round 1)__' in text
+        assert 'Page ' not in text
+        assert payload['view'].total_children_count == 40
+        assert len([item for item in payload['view'].walk_children()
+                    if isinstance(item, discord.ui.Button)]) == 16
+        await manager.vote(matches[0].id, 7, matches[0].team1_id, 'Lua')
+        await manager.refresh_participation(matches[0].id)
+        assert '@Lua' in str(channel.get_partial_message.return_value.edit.call_args.kwargs['view'].to_components())
+        assert channel.get_partial_message.return_value.edit.call_args.kwargs['allowed_mentions'].to_dict() == {'parse': []}
+        await manager.tick()
+        channel.send.assert_awaited_once()
+
+    asyncio.run(run())
+
+
 def test_eight_bo1_day_has_two_pregame_posts_and_eight_immediate_result_posts(context):
     manager, store, channel, current, matches = prepare(context)
 
