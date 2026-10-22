@@ -1036,12 +1036,12 @@ def test_stage_schedule_sends_one_message_and_pages_edit_it_in_place():
         assert "Friday, 23 October 2026" in controls.pages[0]
         assert all("Page " in page for page in controls.pages)
         assert sum(page.count(" vs ") for page in controls.pages) == len(get_matches_for_stage(data, "worlds-2026-swiss"))
-        click = SimpleNamespace(response=SimpleNamespace(edit_message=AsyncMock(), send_message=AsyncMock()))
+        click = SimpleNamespace(response=SimpleNamespace(defer=AsyncMock(), send_message=AsyncMock()), edit_original_response=AsyncMock())
         await controls.turn(click, 1)
-        click.response.edit_message.assert_awaited_once()
+        click.edit_original_response.assert_awaited_once()
         click.response.send_message.assert_not_awaited()
         assert controls.page == 1
-        assert "Page 2/" in rendered_message(click.response.edit_message.call_args).title
+        assert "Page 2/" in rendered_message(click.edit_original_response.call_args).title
 
     asyncio.run(browse())
 

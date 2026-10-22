@@ -28,10 +28,11 @@ class MatchPages(HistoryPages):
 
     @discord.ui.button(label="See 3 More Matches", style=discord.ButtonStyle.primary)
     async def more(self, interaction, button):
+        await interaction.response.defer()
         if self.has_more and self.extend is not None:
             self.pages, self.page, self.has_more = self.extend()
         self.update_buttons()
-        await interaction.response.edit_message(**message_payload(self.pages[self.page], controls=self),
+        await interaction.edit_original_response(**message_payload(self.pages[self.page], controls=self),
                                                 allowed_mentions=discord.AllowedMentions.none())
 
     async def interaction_check(self, interaction):

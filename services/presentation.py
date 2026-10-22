@@ -38,6 +38,12 @@ class MessageCard(discord.ui.LayoutView):
         super().__init__(timeout=controls.timeout if controls else 900)
         self.controls = controls
         self.expiry_interaction = None
+        self.set_content(text)
+
+    def set_content(self, text):
+        """Update a reusable card without replacing its callback owner/timer."""
+        controls = self.controls
+        self.clear_items()
         card = SpacedContainer(accent_colour=discord.Colour(BLUE))
         positions = getattr(controls, "control_after_paragraphs", None)
         if positions:
@@ -114,7 +120,14 @@ def message_payload(text, *, controls=None, title_level=2):
             title = f"__{title}__"
     description = "\n".join(lines).strip()
     body = f"{'#' * title_level} {title}\n\n{description}" if title else description
-    return {"content": None, "embeds": [], "view": MessageCard(body, controls)}
+    card = getattr(controls, "_message_card", None) if getattr(controls, "reuse_message_card", False) else None
+    if card is None:
+        card = MessageCard(body, controls)
+        if getattr(controls, "reuse_message_card", False):
+            controls._message_card = card
+    else:
+        card.set_content(body)
+    return {"content": None, "embeds": [], "view": card}
 
 
 def embed_card_payload(embed, *, controls=None, title_level=2):

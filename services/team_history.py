@@ -7,6 +7,8 @@ from services.setup_gate import SetupRequiredView
 
 
 class HistoryPages(SetupRequiredView):
+    reuse_message_card = True
+
     def __init__(self, pages):
         super().__init__(timeout=900)
         self.pages, self.page = pages, 0
@@ -20,9 +22,13 @@ class HistoryPages(SetupRequiredView):
         self.next_page.disabled = self.page == len(self.pages) - 1
 
     async def turn(self, interaction, amount):
+        # Rendering/transport may wait behind rate limits or spoiler updates.
+        # Acknowledge first so Discord's three-second deadline cannot expire.
+        await interaction.response.defer()
         self.page = max(0, min(len(self.pages) - 1, self.page + amount))
         self.update_buttons()
-        await interaction.response.edit_message(**message_payload(self.pages[self.page], controls=self))
+        await interaction.edit_original_response(**message_payload(self.pages[self.page], controls=self),
+                                                 allowed_mentions=discord.AllowedMentions.none())
 
     @discord.ui.button(label="Previous", style=discord.ButtonStyle.secondary)
     async def previous(self, interaction, button):

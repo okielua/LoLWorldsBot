@@ -58,7 +58,7 @@ def test_clamps_to_available_matches_and_pages_in_correct_order(browser, upcomin
         assert (note in controls.pages[0]) is (requested > 12)
         if requested > 12:
             assert controls.previous.disabled and not controls.next_page.disabled
-            click = SimpleNamespace(response=SimpleNamespace(edit_message=AsyncMock()))
+            click = SimpleNamespace(response=SimpleNamespace(defer=AsyncMock()), edit_original_response=AsyncMock())
             for _ in range(10):
                 await controls.turn(click, 1)
             assert controls.page == 3 and controls.next_page.disabled
@@ -87,7 +87,7 @@ def test_see_more_extends_three_at_a_time_updates_title_and_stops(browser, upcom
                                count=initial, upcoming=upcoming, now=now)
         controls = interaction.response.send_message.call_args.kwargs["view"].controls
         shown = initial
-        click = SimpleNamespace(response=SimpleNamespace(edit_message=AsyncMock()))
+        click = SimpleNamespace(response=SimpleNamespace(defer=AsyncMock()), edit_original_response=AsyncMock())
         while controls.has_more:
             await controls.more.callback(click)
             first_new_page = shown // 3
@@ -98,7 +98,7 @@ def test_see_more_extends_three_at_a_time_updates_title_and_stops(browser, upcom
             text = "\n".join(controls.pages)
             assert text.count("Match fixture-") == shown
             assert len(controls.pages) == (shown + 2) // 3
-            assert click.response.edit_message.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
+            assert click.edit_original_response.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
         assert shown == min(available, 100)
         assert controls.more not in controls.children
         assert controls.next_page.disabled
