@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from models import Match, MatchStatus
-from services.status_labels import MATCH_STATUS_LABELS
+from services.status_labels import MATCH_STATUS_LABELS, upcoming_line
 from services.reminder_engine import ReminderTracker
 from services.reminder_scheduler import check_reminders
 from services.tournament_data import load_tournament_data
@@ -241,7 +241,7 @@ def load_formatters(worlds):
     }
     functions = [node for node in source.body if isinstance(node, ast.FunctionDef) and node.name in names]
     namespace = {
-        "worlds": worlds, "datetime": datetime, "UTC": UTC, "MATCH_STATUS_LABELS": MATCH_STATUS_LABELS,
+        "worlds": worlds, "datetime": datetime, "UTC": UTC, "MATCH_STATUS_LABELS": MATCH_STATUS_LABELS, "upcoming_line": upcoming_line,
         "ZoneInfo": ZoneInfo, "MatchStatus": MatchStatus, "ceil": ceil,
         "format_timezone_times": format_timezone_times,
         "format_clock_time": format_clock_time,
@@ -295,7 +295,7 @@ def test_team_history_groups_by_stage_and_keeps_dates_as_small_match_details():
     lines = load_formatters(data)["format_team_matches"](matches, ["Europe/Berlin"])
     headings = [line for line in lines if line.startswith("## __")]
     assert headings == ["## __Play-ins__", "## __Swiss Stage__"]
-    assert lines[1].index("## C9 vs KC") < lines[1].index("-# 15 October 2026")
+    assert lines[1].index("## C9 vs KC") < lines[1].index("**15 October 2026")
     assert "17 October 2026" in lines[2]
     assert "14 October 2026" in lines[4]
     assert all("Play-ins ·" not in line for line in lines[1:])
@@ -355,11 +355,11 @@ def test_match_countdown_is_only_shown_for_upcoming_scheduled_matches(status):
 
     if status == MatchStatus.SCHEDULED:
         assert "**Berlin:** 20:00" in result
-        assert "-# (in 2 hours 15 minutes)" in result
+        assert "🕒 UPCOMING in 2 hours 15 minutes\n\n-# **Berlin:**" in result
         assert "**20:00" not in result
-        assert "(in " not in formatter(match, "Europe/Berlin", now=match.start_time)
+        assert "UPCOMING in " not in formatter(match, "Europe/Berlin", now=match.start_time)
     else:
-        assert "(in " not in result
+        assert "UPCOMING in " not in result
 
 
 def schedule_callback(worlds, now):
@@ -410,7 +410,7 @@ def test_next_five_schedule_filters_and_sorts_across_stages():
     match_lines = [line for line in lines if "vs" in line]
     assert len(match_lines) == 5
     for i, line in enumerate(match_lines, start=1):
-        assert f"(in {i} hour{'s' if i != 1 else ''})" in line
+        assert f"UPCOMING in {i} hour{'s' if i != 1 else ''}" in line
 
 
 def test_next_five_schedule_handles_no_upcoming_matches():
@@ -435,13 +435,13 @@ def test_schedule_and_next_show_all_setup_zones_with_only_one_countdown():
     assert "London" in match_text and "19:00" in match_text
     assert "Berlin" in match_text and "20:00" in match_text
     assert "**Tokyo:** 3:00h (Fri, 16 Oct 2026)" in match_text
-    assert match_text.count("(in ") == 1
-    assert match_text.index("(in ") < match_text.index("**London:**")
+    assert match_text.count("UPCOMING in ") == 1
+    assert match_text.index("UPCOMING in ") < match_text.index("**London:**")
     assert "**London:** 19:00" in match_text and "**19:00" not in match_text
     next_text = load_formatters(data)["format_next_match"](match, "Europe/Berlin", now, zones)
     assert all(line in next_text for line in format_timezone_times(match.start_time, zones).splitlines())
-    assert next_text.count("(in ") == 1
-    assert next_text.index("(in ") < next_text.index("**London:**")
+    assert next_text.count("UPCOMING in ") == 1
+    assert next_text.index("UPCOMING in ") < next_text.index("**London:**")
 
 
 def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeypatch):
@@ -1172,8 +1172,8 @@ def test_previous_is_public_and_does_not_leak_results_outside_spoilers(count, mo
         assert "No completed" in card.description
         return
     assert card.description.count("**C9** vs **KC**") == min(count, 3)
-    assert "**Berlin:**" in card.description
-    assert "**Seoul:**" in card.description
+    assert "-# *Berlin:" in card.description
+    assert "-# *Seoul:" in card.description
     assert "-# **Berlin:**" not in card.description and "-# **Seoul:**" not in card.description
     assert "-# Play-ins" not in card.description
     assert card.description.count("🏁 FINISHED\n### Result: ||") == min(count, 3)

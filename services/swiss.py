@@ -22,4 +22,4 @@ def swiss_round_label(description):
 
 def round_details(match):
     """Already includes the round and group; does not reveal match outcomes."""
-    return f"\n{match.round_name}" if match.round_name and "swiss" in match.stage_id.lower() else ""
+    return f"\n**Swiss Stage · {match.round_name} · Bo{match.best_of}**" if match.round_name and "swiss" in match.stage_id.lower() else ""

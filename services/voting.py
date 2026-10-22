@@ -1,6 +1,7 @@
 """One private-prediction post per Worlds matchday, with five-minute cutoffs."""
 
 from services.voting_rules import voting_deadline, swiss_batch, batch_help
+from services.status_labels import upcoming_line
 
 import asyncio
 from datetime import UTC, datetime, timedelta
@@ -408,7 +409,8 @@ class DailyPredictionsView(SetupRequiredLayoutView):
             times = "\n".join(f"-# {line}" for line in registered_match_times(match.start_time, timezones).splitlines())
             card.add_item(team_display(f"{gap}## {matchup(match)}"))
             card.add_item(discord.ui.ActionRow(VoteButton(manager, poll, 1), VoteButton(manager, poll, 2)))
-            details_text = team_display(f"{stage_label}\n\n{times}\n\n{status}")
+            timing = upcoming_line(match, manager.clock()) + '\n\n' if match.status == MatchStatus.SCHEDULED else ''
+            details_text = team_display(f"**{stage_label}**\n\n{timing}{times}\n\n{status}")
             card.add_item(details_text)
             match_texts.append(details_text)
         card.add_item(team_display(

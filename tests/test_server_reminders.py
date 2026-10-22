@@ -67,7 +67,7 @@ def test_public_message_has_only_team_names_bold_and_explicit_deduplicated_menti
     assert "### __Subscribers:__" in text
     match = store.data.matches[0]
     stage = store.data.stages_by_id[match.stage_id]
-    assert f"*Starts in 5 minutes!*\n\n-# *({stage.name} · Bo{match.best_of})*" in text
+    assert f"**{stage.name} · Bo{match.best_of}**\n\n🕒 UPCOMING in 5 minutes" in text
     assert "### __Subscribers:__\n\n<@1> <@2>\n\n-#" in text
     assert call.kwargs["allowed_mentions"].to_dict() == {"users": [1, 2], "parse": []}
     assert not asyncio.run(delivery.deliver(match_id))
@@ -80,7 +80,7 @@ def test_results_card_preserves_only_opted_in_pings_and_groups_voters_by_team():
     assert asyncio.run(delivery.deliver(store.data.matches[0].id))
     call = channel.send.call_args
     text = rendered_message(call).description
-    assert "*Starts in 5 minutes!*" in text
+    assert "🕒 UPCOMING in 5 minutes" in text
     assert "### __Voting Results__" in text
     assert "### **C9**\n100%\n(1 vote)\n\n@lua" in text
     assert "### **KC**\n0%\n(0 votes)" in text
@@ -150,7 +150,7 @@ def test_public_message_is_sent_even_without_ping_recipients():
     users.return_value = []
     assert asyncio.run(delivery.deliver(store.data.matches[0].id))
     assert channel.send.call_args.kwargs["content"] is None
-    assert "Starts in 5 minutes!" in rendered_message(channel.send.call_args).description
+    assert "🕒 UPCOMING in 5 minutes" in rendered_message(channel.send.call_args).description
 
 
 def test_failed_send_retries_and_only_success_consumes_key():
@@ -487,7 +487,7 @@ def test_restart_catches_up_before_start_with_correct_wording(elapsed, expected)
     delivery, store, channel, _, _ = make_delivery()
     delivery.clock = lambda: NOW + timedelta(seconds=elapsed)
     assert asyncio.run(delivery.deliver(store.data.matches[0].id))
-    assert f"Starts in {expected}!" in rendered_message(channel.send.call_args).description
+    assert f"🕒 UPCOMING in {expected}" in rendered_message(channel.send.call_args).description
     assert get_delivery_record(123, store.data.matches[0].id) is not None
 
 
@@ -584,7 +584,7 @@ def test_five_minute_test_uses_saved_personal_settings_and_never_pings_roles():
     channel.send.assert_awaited_once()
     call = channel.send.call_args
     text = rendered_message(call).description
-    assert "Starts in 5 minutes!" in text
+    assert "🕒 UPCOMING in 5 minutes" in text
     assert "<@1>" in text and "<@4>" not in text
     assert "<@2>" not in text and "<@3>" not in text
     assert call.kwargs["allowed_mentions"].to_dict() == {"users": [1], "parse": []}

@@ -3,7 +3,6 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
 import logging
-from math import ceil
 import sqlite3
 
 import discord
@@ -19,6 +18,7 @@ from services.server_settings import get_server_settings
 from services.prediction_display import results_embed, format_prediction_results, VOTING_FOOTER
 from services.user_settings import get_all_user_reminder_preferences
 from services.voting_rules import swiss_batch, reminder_receipt_key
+from services.status_labels import upcoming_line
 
 
 logger = logging.getLogger(__name__)
@@ -145,15 +145,13 @@ class ServerReminderDelivery:
                 remaining = (match.start_time - self.clock()).total_seconds()
                 if remaining <= 0:
                     return False
-                minutes = ceil(remaining / 60)
-                timing = "less than a minute" if remaining < 60 else f"{minutes} minute{'s' if minutes != 1 else ''}"
                 from services.spoilers import current_policy, matchup
                 pairing = matchup(match) if current_policy() else f"{team1} vs {team2}"
-                content = f"## {pairing}\n\n*Starts in {timing}!*"
                 stage = data.stages_by_id.get(match.stage_id)
                 stage_name = discord.utils.escape_markdown(stage.name if stage else "Stage to Be Confirmed")
                 round_label = f" · {match.round_name}" if match.round_name and "swiss" in match.stage_id.lower() else ""
-                content += f"\n-# *({stage_name}{round_label} · Bo{match.best_of})*"
+                content = (f"## {pairing}\n**{stage_name}{round_label} · Bo{match.best_of}**\n\n"
+                           + upcoming_line(match, self.clock()))
                 if self.message_prefix:
                     content += f"\n\n{self.message_prefix}"
                 results = results_embed(prediction_results, include_help=False)
@@ -165,7 +163,8 @@ class ServerReminderDelivery:
                         content += f"\n\n### {field.name}\n{field.value.rstrip(chr(0x200b)).strip()}"
                 if len(batch) > 1:
                     pairings = "\n".join(f"### {matchup(m)}" for m in batch)
-                    content = (f"## Swiss Matchday Starts in {timing}\n\n"
+                    content = (f"## Swiss Matchday\n**{stage_name}{round_label} · Bo{match.best_of}**\n\n"
+                               + upcoming_line(match, self.clock()) + '\n\n'
                                f"Voting is now closed for **all {len(batch)} matches**.\n\n{pairings}")
                     if self.message_prefix:
                         content += "\n\n" + self.message_prefix

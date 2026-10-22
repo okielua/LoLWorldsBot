@@ -432,7 +432,7 @@ def test_five_minute_reminder_reveals_results_instead_of_linking_to_an_open_poll
         content = card.description
         assert call.kwargs["content"] is None
         assert call.kwargs["embeds"] == []
-        assert "*Starts in 5 minutes!*" in content
+        assert "🕒 UPCOMING in 5 minutes" in content
         assert "### __Voting Results__" in content
         assert "### **C9**\n67%\n(2 votes)\n\n@Lua, @Jerry" in content
         assert "### **KC**\n33%\n(1 vote)\n\n@Chris" in content

@@ -1,6 +1,7 @@
 """Shared icons and labels for match and prediction states."""
 
 from models import MatchStatus
+from math import ceil
 
 VOTING_OPEN = "🗳️ Voting open"
 VOTING_CLOSED = "🔒 Voting closed"
@@ -17,3 +18,19 @@ MATCH_STATUS_LABELS = {
     MatchStatus.POSTPONED: "⚠️ POSTPONED",
     MatchStatus.CANCELLED: "⛔ CANCELLED",
 }
+
+
+def upcoming_line(match, now):
+    label = MATCH_STATUS_LABELS[MatchStatus.SCHEDULED]
+    seconds = (match.start_time - now).total_seconds()
+    if seconds <= 0:
+        return label
+    if seconds < 60:
+        return label + ' in less than a minute'
+    hours, minutes = divmod(ceil(seconds / 60), 60)
+    parts = []
+    if hours:
+        parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
+    if minutes:
+        parts.append(f"{minutes} minute{'s' if minutes != 1 else ''}")
+    return label + ' in ' + ' '.join(parts)

@@ -14,6 +14,7 @@ from services.presentation import message_payload
 from services.status_labels import (MATCH_STATUS_LABELS, MATCHUP_CHANGED, VOTING_CLOSED, VOTING_OPEN, VOTING_PENDING)
 from services.setup_gate import SetupRequiredLayoutView
 from services.spoilers import current_policy, matchup, score_token, team_token, result_token
+from services.status_labels import upcoming_line
 
 
 PREDICTION_BLUE = 0x5865F2
@@ -71,7 +72,7 @@ def votes_match_details(match, stage_name=None):
     if stage_name.lower().replace("-", "").replace(" ", "") in {"playin", "playins"}:
         stage_name = "Play-ins"
     details = " · ".join(filter(None, [stage_name, match.round_name if "swiss" in match.stage_id.lower() else None, f"Bo{match.best_of}"]))
-    return f"{discord.utils.escape_markdown(details)}\n\n{format_tournament_date(match.start_time)}"
+    return f"**{discord.utils.escape_markdown(details)}**\n\n{format_tournament_date(match.start_time)}"
 
 
 def upcoming_votes_embed(match, votes, *, stage_name=None):
@@ -273,7 +274,9 @@ def my_votes_embeds(rows, data, *, now=None, display_name=None, timezone_name=No
             details = "\n".join(line for line in ((result, pick_line) if poll.winner_id else (pick_line, result)) if line)
             embed.add_field(
                 name=f"__{label}__",
-                value=f"{stage_line}\n\n{date}\n-# {time}\n\n"
+                value=f"**{stage_line}**\n\n"
+                      + (upcoming_line(match, now) + '\n\n' if match and match.status == MatchStatus.SCHEDULED else '')
+                      + f"{date}\n-# {time}\n\n"
                       + (f"{state}\n" if state else "")
                       + details,
                 inline=False,

@@ -30,7 +30,7 @@ from services.server_settings import get_server_settings
 from services.voting import DailyPageButton, ScheduleVoteButton, VotingManager, personal_vote_payloads, schedule_vote_payloads, my_vote_payloads, current_votes_controls
 from services.prediction_stats import get_competition_stats
 from services.leaderboard_views import MyStatsButton, leaderboard_context, leaderboard_payload, show_personal_stats
-from services.status_labels import MATCH_STATUS_LABELS
+from services.status_labels import MATCH_STATUS_LABELS, upcoming_line
 from services.standings_display import standings_text
 from services.golgg import GOLGG_FOOTNOTES, team_stats_text
 from services.golgg_players import player_catalog, player_reply, refresh_players_loop
@@ -226,12 +226,6 @@ def format_match(
         TOURNAMENT_TIMEZONE,
     )
 
-    relative_time = ""
-    if match.status == MatchStatus.SCHEDULED:
-        relative = format_relative_time(match.start_time, now or datetime.now(UTC))
-        if relative:
-            relative_time = f" ({relative})"
-
     parts = []
 
     if include_date and date_as_heading:
@@ -249,12 +243,11 @@ def format_match(
 
     stage_line = ""
     if not (include_date and not date_as_heading):
-        stage_line = ('-# ' if small_details else '') + ' · '.join(stage_details) + '\n\n'
+        stage_line = '**' + ' · '.join(stage_details) + '**\n\n'
     times = format_timezone_times(match.start_time, timezones or [timezone_name])
-    if small_details:
-        times = "\n".join(f"-# {line}" for line in times.splitlines())
-    countdown = f"-# {relative_time.strip()}\n" if relative_time else ""
-    date_detail = f"-# {local_date} · Bo{match.best_of}\n\n" if include_date and not date_as_heading else ""
+    times = "\n".join(f"-# {line}" for line in times.splitlines())
+    countdown = upcoming_line(match, now or datetime.now(UTC)) + '\n\n' if match.status == MatchStatus.SCHEDULED else ''
+    date_detail = f"**{local_date} · Bo{match.best_of}**\n\n" if include_date and not date_as_heading else ""
     pairing = matchup(match) if current_policy() else f"{team1.short_name} vs {team2.short_name}"
     parts.append(f"## {pairing}\n{stage_line}{date_detail}{countdown}{times}")
 
@@ -298,7 +291,7 @@ def format_match(
     elif match.status.value == "cancelled":
         parts.append(MATCH_STATUS_LABELS[match.status])
 
-    else:
+    elif match.status != MatchStatus.SCHEDULED:
         parts.append(MATCH_STATUS_LABELS[match.status])
 
     return "\n".join(parts)
@@ -336,17 +329,14 @@ def format_next_match(match, timezone_name: str, now: datetime, timezones=None) 
     stage_details = stage_name
     if match.round_name and not labels_are_duplicate(stage.name, match.round_name):
         stage_details += f" · {match.round_name}"
-    relative = format_relative_time(match.start_time, now)
-    official = local_datetime(match.start_time, TOURNAMENT_TIMEZONE)
     date_time_label = f"__{date_heading_token(match.start_time, TOURNAMENT_TIMEZONE, now=now, style='short')}__\n"
-    if relative:
-        date_time_label += f"\n-# ({relative})"
-    date_time_label += "\n" + "\n".join(f"-# {line}" for line in format_timezone_times(match.start_time, timezones or [timezone_name]).splitlines())
+    times = "\n".join(f"-# {line}" for line in format_timezone_times(match.start_time, timezones or [timezone_name]).splitlines())
     return (
         f"# __Next Worlds Match:__\n"
-        f"-# {stage_details} (Bo{match.best_of})\n"
-        f"## {matchup(match) if current_policy() else f'{team1.short_name} vs {team2.short_name}'}\n\n"
-        f"{date_time_label}"
+        f"{date_time_label}\n"
+        f"## {matchup(match) if current_policy() else f'{team1.short_name} vs {team2.short_name}'}\n"
+        f"**{stage_details} · Bo{match.best_of}**\n\n"
+        f"{upcoming_line(match, now)}\n\n{times}"
     )
 
 
