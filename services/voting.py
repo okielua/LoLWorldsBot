@@ -38,12 +38,13 @@ VOTING_WINDOW_TARGET = timedelta(hours=8)
 
 
 class VoteButton(discord.ui.Button):
-    def __init__(self, manager, poll, index):
+    def __init__(self, manager, poll, index, *, public=False):
         self.manager, self.poll = manager, poll
         self.team_id = poll.team1_id if index == 1 else poll.team2_id
         super().__init__(
             label=self.team_label(), emoji=team_emoji(self.team_id), style=discord.ButtonStyle.primary, disabled=poll.closed,
-            custom_id=f"worldsvote:{poll.guild_id}:{poll.match_id}:{index}",
+            custom_id=(f"worldsday:{poll.guild_id}:{poll.match_id}:{poll.team1_id}:{poll.team2_id}:{index}"
+                       if public else f"worldsvote:{poll.guild_id}:{poll.match_id}:{index}"),
         )
 
     def team_label(self):
@@ -156,6 +157,24 @@ class ScheduleVoteButton(discord.ui.DynamicItem[discord.ui.Button],
         poll = polls.Poll(int(match["guild"]), match_id, manager.store.data.tournament.id,
                           match["first"], match["second"], current.start_time if current else manager.clock(), False, None)
         return cls(manager, poll, int(match["index"]))
+
+
+class LegacyDailyVoteButton(ScheduleVoteButton,
+                          template=r"worldsvote:(?P<guild>\d+):(?P<match>.+):(?P<index>[12])"):
+    """Keep already published daily buttons usable before a view is restored."""
+    def __init__(self, manager, poll, index):
+        discord.ui.DynamicItem.__init__(self, VoteButton(manager, poll, index))
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match):
+        manager = interaction.client.voting_manager
+        saved = await asyncio.to_thread(polls.get_polls, int(match['guild']), manager.store.data.tournament.id)
+        poll = next((poll for poll in saved if poll.match_id == match['match']), None)
+        if poll is None:
+            current = manager.store.data.matches_by_id[match['match']]
+            poll = polls.Poll(int(match['guild']), current.id, current.tournament_id,
+                              current.team1_id, current.team2_id, current.start_time, True, None)
+        return cls(manager, poll, int(match['index']))
 
 
 class ScheduleVotesView(SetupRequiredLayoutView):
@@ -418,7 +437,7 @@ class DailyPredictionsView(SetupRequiredLayoutView):
                 card.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
             if not compact:
                 card.add_item(team_display(f"## {matchup(match)}"))
-                card.add_item(discord.ui.ActionRow(VoteButton(manager, poll, 1), VoteButton(manager, poll, 2)))
+                card.add_item(discord.ui.ActionRow(VoteButton(manager, poll, 1, public=True), VoteButton(manager, poll, 2, public=True)))
             timing = upcoming_line(match, manager.clock()) + '\n\n' if match.status == MatchStatus.SCHEDULED else ''
             details_text = team_display(f"**{stage_label}**\n\n{timing}{times}\n\n{status}")
             if compact:
@@ -426,7 +445,7 @@ class DailyPredictionsView(SetupRequiredLayoutView):
                 details_text.content = prefix + team_display(f"## {matchup(match)}").content + "\n" + details_text.content
             card.add_item(details_text)
             if compact:
-                card.add_item(discord.ui.ActionRow(VoteButton(manager, poll, 1), VoteButton(manager, poll, 2)))
+                card.add_item(discord.ui.ActionRow(VoteButton(manager, poll, 1, public=True), VoteButton(manager, poll, 2, public=True)))
             match_texts.append(details_text)
         if not compact:
             card.add_item(team_display(

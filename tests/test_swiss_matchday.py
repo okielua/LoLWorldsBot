@@ -73,6 +73,45 @@ def test_round_one_publishes_at_1900_berlin_with_worlds_role_ping_once(context):
     asyncio.run(run())
 
 
+@pytest.mark.parametrize('legacy', [False, True])
+def test_daily_vote_dispatches_after_restart_without_registering_message_view(context, legacy):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from discord.components import _component_factory
+    from discord.ui.view import ViewStore
+    from services.voting import ScheduleVoteButton, LegacyDailyVoteButton
+
+    manager, store, channel, _, matches = prepare(context)
+
+    async def run():
+        await manager.tick()
+        original = channel.send.call_args.kwargs['view']
+        button = next(item for item in original.walk_children() if isinstance(item, discord.ui.Button))
+        if legacy:
+            button.custom_id = f'worldsvote:123:{matches[0].id}:1'
+        restarted = VotingManager(manager.client, store, 123, clock=manager.clock)
+        manager.client.voting_manager = restarted
+        dispatcher = ViewStore(SimpleNamespace())
+        dispatcher.add_dynamic_items(ScheduleVoteButton, LegacyDailyVoteButton)
+        tasks = []
+        dispatcher.add_task = tasks.append
+        click = SimpleNamespace(
+            guild_id=123, client=manager.client, extras={'setup_verified': True},
+            user=SimpleNamespace(id=7, display_name='Lua'),
+            response=SimpleNamespace(defer=AsyncMock()), followup=SimpleNamespace(send=AsyncMock()),
+            message=SimpleNamespace(id=789, flags=SimpleNamespace(components_v2=True),
+                                    components=[_component_factory(c) for c in original.to_components()]),
+            data={'component_type': 2, 'custom_id': button.custom_id})
+        dispatcher.dispatch_view(2, button.custom_id, click)
+        assert tasks, 'Daily voting button must be globally dispatchable after restart'
+        await tasks.pop()
+        click.response.defer.assert_awaited_once()
+        click.followup.send.assert_awaited_once()
+        assert polls.get_user_votes(123, store.data.tournament.id, 7)[0][1] == matches[0].team1_id
+
+    asyncio.run(run())
+
+
 def test_eight_bo1_day_has_two_pregame_posts_and_eight_immediate_result_posts(context):
     manager, store, channel, current, matches = prepare(context)
 
