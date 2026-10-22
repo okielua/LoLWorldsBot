@@ -1194,6 +1194,12 @@ async def show_day_schedule(interaction: discord.Interaction, day_offset: int):
     timezones = get_registered_timezones() or [timezone_name]
     label = "Today" if day_offset == 0 else "Tomorrow"
     title = f"__{worlds.tournament.year} Worlds: {label}__"
+    if not matches:
+        await interaction.response.send_message(
+            **message_payload(f"## {title}\n\nNo games {label.lower()}."),
+            ephemeral=False, allowed_mentions=discord.AllowedMentions.none(),
+        )
+        return
     date_label = date_heading_token(target_date, timezone_name, now=now, style="short")
     context = f"__{date_label}__\n\n"
     manager = getattr(getattr(interaction, "client", None), "voting_manager", None)
@@ -1219,7 +1225,7 @@ async def show_day_schedule(interaction: discord.Interaction, day_offset: int):
             descriptions.append(current)
             current = context
         current += text + "\n\n"
-    descriptions.append(current if matches else context + "No Worlds matches scheduled for this day.")
+    descriptions.append(current)
     for index, description in enumerate(descriptions):
         if day_offset == 0 and matches:
             description = description.rstrip() + "\n\n" + VOTE_CONFIRMATION_HELP

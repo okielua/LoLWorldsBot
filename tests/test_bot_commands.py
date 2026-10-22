@@ -958,12 +958,13 @@ def test_daily_lookup_is_public_with_all_zones_and_no_vote_results(offset):
         assert VOTE_CONFIRMATION_HELP in text
 
 
-def test_daily_lookup_no_matches_is_public():
+@pytest.mark.parametrize("offset", [0, 1])
+def test_daily_lookup_no_matches_is_public(offset):
     data = load_tournament_data(PROJECT_ROOT / "data" / "worlds_2026.json")
     send = AsyncMock()
     interaction = SimpleNamespace(response=SimpleNamespace(send_message=send))
-    asyncio.run(day_callback(data, datetime(2027, 1, 1, tzinfo=UTC))(interaction, 0))
-    assert "No Worlds matches" in rendered_message(send.call_args).description
+    asyncio.run(day_callback(data, datetime(2027, 1, 1, tzinfo=UTC))(interaction, offset))
+    assert rendered_message(send.call_args).description == f"No games {'today' if offset == 0 else 'tomorrow'}."
     assert send.call_args.kwargs["ephemeral"] is False
 
 
@@ -988,7 +989,8 @@ def test_daily_lookup_uses_official_day_without_requiring_user_setup():
     interaction = SimpleNamespace(user=SimpleNamespace(id=7), response=SimpleNamespace(send_message=send))
     asyncio.run(callback(interaction, 0))
     send.assert_awaited_once()
-    assert "__Today__" in rendered_message(send.call_args).description
+    assert rendered_message(send.call_args).description == "No games today."
+    assert "Worlds: Today" in rendered_message(send.call_args).title
     assert "Europe/Berlin" not in rendered_message(send.call_args).description
     assert send.call_args.kwargs["ephemeral"] is False
     prompt.assert_not_awaited()
