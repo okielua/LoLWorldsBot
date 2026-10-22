@@ -642,7 +642,8 @@ fixture `data/worlds_2025.json` remains unchanged.
 ## Tests
 
 `/mysetup` searches timezones inside the setup UI: choose **Search city**, enter
-a full or partial city name, and choose a matching city/UTC offset. The same
+a full or partial city name. A unique or exact city match saves immediately;
+ambiguous searches offer matching cities/UTC offsets to choose from. The same
 private card returns to setup after saving. Search supports timezone database
 cities, curated city aliases and accent-insensitive matching. No slash-command
 argument is needed. No-results screens offer another search or Back to setup.

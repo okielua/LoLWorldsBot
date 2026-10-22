@@ -627,16 +627,12 @@ def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeyp
         await timezone.callback(reply)
         modal = reply.response.send_modal.call_args.args[0]
         modal.city._value = "London"
-        await modal.on_submit(reply)
-        updated = reply.response.edit_message.call_args.kwargs["view"]
-        cities = next(item for item in updated.walk_children() if isinstance(item, timezone_search.CityResultSelect))
-        cities._values = ["Europe/London"]
         reply.response.defer = AsyncMock()
         reply.edit_original_response = AsyncMock()
-        await cities.callback(reply)
+        await modal.on_submit(reply)
         assert timezones[123] == "Europe/London"
         assert "Europe/London" in rendered_message(reply.edit_original_response.call_args).description
-        await cities.callback(other)
+        await timezone.callback(other)
         assert 456 not in timezones
         view.stop()
     asyncio.run(check_setup())

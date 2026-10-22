@@ -77,12 +77,23 @@ class CitySearchModal(discord.ui.Modal, title='Find Your Timezone City'):
     async def on_submit(self, interaction):
         if not await owner_check(interaction, self.user_id):
             return
-        results = city_matches(str(self.city))
+        query = str(self.city)
+        results = city_matches(query)
+        if self.previous_card:
+            interaction.extras['expiring_message_card'] = self.previous_card
+        exact = [zone for city, zone in results if normalize(query) in
+                 {normalize(zone), *(normalize(alias) for alias in city.split(' / '))}]
+        selected = exact[0] if len(exact) == 1 else results[0][1] if len(results) == 1 else None
+        if selected:
+            await interaction.response.defer()
+            set_user_timezone(self.user_id, selected)
+            payload = self.setup_payload(interaction)
+            payload['view'].expire_with(interaction)
+            await interaction.edit_original_response(**payload, allowed_mentions=discord.AllowedMentions.none())
+            return
         text = ('## Choose Your Timezone City\n\nSelect your city below.' if results else
                 '## No Cities Found\n\nTry a nearby major city or a different spelling.')
         payload = message_payload(text, controls=CityMatchesView(self.user_id, self.setup_payload, results))
-        if self.previous_card:
-            interaction.extras['expiring_message_card'] = self.previous_card
         payload['view'].expire_with(interaction)
         await interaction.response.edit_message(**payload, allowed_mentions=discord.AllowedMentions.none())
 
