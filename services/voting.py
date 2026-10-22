@@ -842,17 +842,11 @@ class VotingManager:
                     if latest != settings or not self.fresh():
                         return None
                     open_matches = [match for match in matches if match.id in open_ids]
-                    recipients = await self._followers(channel, open_matches, role_id) if not self.test_mode and not manual else []
-                    # Large recipient lists use the bounded follow-up path below.
-                    inline_followers = len(recipients) <= 90
-                    if not inline_followers:
-                        recipients = []
-                    view = DailyPredictionsView(self, day, matches, poll_by_id, recap, role_id=role_id, user_ids=recipients, participants=participants)
-                    if recipients and sum(len(item.content) for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)) > 3900:
-                        recipients, inline_followers = [], False
-                        view = DailyPredictionsView(self, day, matches, poll_by_id, recap, role_id=role_id, participants=participants)
+                    # Daily voting announcements notify only the Worlds role.
+                    view = DailyPredictionsView(self, day, matches, poll_by_id, recap,
+                                                role_id=role_id, participants=participants)
                     signature = hashlib.sha256(json.dumps(view.to_components(), sort_keys=True).encode()).hexdigest()
-                    mentions = discord.AllowedMentions(everyone=False, users=[discord.Object(user_id) for user_id in recipients] if recipients else False, replied_user=False,
+                    mentions = discord.AllowedMentions(everyone=False, users=False, replied_user=False,
                                                        roles=[discord.Object(role_id)] if role_id else False)
                     if not self.fresh() or not any(self.clock() < voting_deadline(match, self.store.data) for match in open_matches):
                         return None
@@ -860,7 +854,7 @@ class VotingManager:
                     voting_time = min(match.start_time for match in open_matches) - timedelta(minutes=5) - self.clock()
                     if voting_time < VOTING_WINDOW_TARGET:
                         logger.info("Published matchday %s immediately with %s voting time; eight-hour target could not be met", day, voting_time)
-                    if inline_followers and not self.test_mode:
+                    if not self.test_mode:
                         self._notice_pairs.update((match.id, match.team1_id, match.team2_id) for match in open_matches)
                 self._posted[day] = (channel_id, message.id, signature)
                 self._checked_at[day] = self.clock()

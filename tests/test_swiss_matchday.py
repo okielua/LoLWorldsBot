@@ -54,6 +54,8 @@ def test_round_one_publishes_at_1900_berlin_with_worlds_role_ping_once(context):
         payload = channel.send.call_args.kwargs
         assert [role.id for role in payload['allowed_mentions'].roles] == [88]
         assert not payload['allowed_mentions'].everyone
+        assert payload['allowed_mentions'].users is False
+        assert '<@99>' not in str(payload['view'].to_components())
         text = str(payload['view'].to_components())
         assert '<@&88>' in text
         assert '## __Swiss stage (Round 1)__' in text

@@ -157,10 +157,10 @@ is retained for compatibility but no longer targets notifications.
 New daily prediction posts (including manual publications and replacements of deleted posts) and five-minute match reminders mention
 this role. Edits and restarts do not ping it. The role is
 required to be mentionable unless the bot has Mention Everyone permission.
-Followed-team subscribers outside this role receive individual daily voting
-and five-minute match pings for their teams;
-role members are not also individually mentioned. With no configured role,
-only followed-team subscribers are individually pinged.
+Daily prediction posts ping only this role, with no individual subscriber pings.
+With no configured role, daily posts do not ping anyone. Followed-team subscribers
+outside this role still receive five-minute match pings for their teams;
+role members are not also individually mentioned in those reminders.
 Newly confirmed matchups added to an existing board send a short follower
 notification linking back to that board. These later notices target matching
 followers even if they already have the Worlds role, since the role itself is

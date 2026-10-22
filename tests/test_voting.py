@@ -344,7 +344,7 @@ def test_simulated_daily_buttons_show_the_visible_team_names(context, monkeypatc
     asyncio.run(scenario())
 
 
-def test_daily_post_pings_matching_followers_once_and_excludes_role_members(context):
+def test_daily_post_pings_only_worlds_role_once_even_with_team_followers(context):
     manager, store, channel, current, _ = context
     set_worlds_role(123, 987)
     team = store.data.matches[0].team1_id
@@ -356,9 +356,10 @@ def test_daily_post_pings_matching_followers_once_and_excludes_role_members(cont
     async def scenario():
         await manager.tick()
         call = channel.send.call_args
-        assert call.kwargs["allowed_mentions"].to_dict() == {"roles": [987], "users": [1], "parse": []}
+        assert call.kwargs["allowed_mentions"].to_dict() == {"roles": [987], "parse": []}
         text = str(call.kwargs["view"].to_components())
-        assert "<@1>" in text and "<@4>" not in text and "<@2>" not in text and "<@3>" not in text
+        assert "<@&987>" in text
+        assert all(f"<@{user_id}>" not in text for user_id in (1, 2, 3, 4))
         restarted = VotingManager(manager.client, store, 123, clock=lambda: current[0])
         await restarted.tick()
         channel.send.assert_awaited_once()
