@@ -162,7 +162,7 @@ def test_daily_vote_dispatches_exactly_once_before_and_after_registration(contex
     asyncio.run(run())
 
 
-def test_eight_bo1_day_has_two_pregame_posts_and_eight_immediate_result_posts(context):
+def test_eight_bo1_day_has_two_pregame_posts_and_one_complete_round_result(context):
     manager, store, channel, current, matches = prepare(context)
 
     async def run():
@@ -218,13 +218,19 @@ def test_eight_bo1_day_has_two_pregame_posts_and_eight_immediate_result_posts(co
             match.winner_id = match.team1_id
             match.team1_score, match.team2_score = 1, 0
             await manager.tick()
-            assert channel.send.await_count == index + 3
-            result = str(channel.send.call_args.kwargs['view'].to_components())
-            assert 'Series Voting Results' in result and '1–0' in result
-            assert channel.send.call_args.kwargs['allowed_mentions'].roles[0].id == 88
+            assert channel.send.await_count == (3 if index == 7 else 2)
             await manager.tick()
-            assert channel.send.await_count == index + 3
-        assert channel.send.await_count == 10
+            assert channel.send.await_count == (3 if index == 7 else 2)
+        result = str(channel.send.call_args.kwargs['view'].to_components())
+        assert 'Swiss stage (Round 1)' in result and result.count('Final score: 1–0') == 8
+        assert '✅ @Lua' in result and '❌ @Lua' in result
+        assert channel.send.call_args.kwargs['allowed_mentions'].roles[0].id == 88
+        from services.series_results import latest_result
+        receipt = latest_result(123, store.data.tournament.id, match_id=matches[0].id)
+        assert receipt and 'Swiss stage (Round 1)' in receipt[2][0]
+        restarted = VotingManager(manager.client, store, 123, clock=lambda: current[0])
+        await restarted.tick()
+        assert channel.send.await_count == 3
 
     asyncio.run(run())
 
@@ -240,6 +246,61 @@ def test_batch_deadline_survives_stale_data_and_restart(context):
     for match in matches:
         with pytest.raises(ValueError):
             polls.cast_vote(123, match.id, 7, match.team1_id, current[0])
+
+
+def test_combined_results_wait_for_eighth_match_and_ignore_old_single_receipt(context):
+    from services.series_results import initialize, latest_result
+    manager, store, channel, current, matches = prepare(context)
+    async def run():
+        await manager.tick()
+        initialize()
+        with user_settings.get_connection() as db:
+            db.execute('INSERT INTO series_result_posts VALUES (?, ?, ?, NULL, NULL, NULL, NULL)',
+                       (123, store.data.tournament.id, matches[1].id))
+        channel.send.reset_mock()
+        current[0] = matches[-1].start_time + timedelta(hours=1)
+        store.fetched_at = current[0]
+        for match in matches:
+            match.status = MatchStatus.COMPLETED
+            match.winner_id = match.team1_id
+            match.team1_score, match.team2_score = 1, 0
+        matches[-1].team1_score = None  # An incomplete result cannot release the round.
+        await manager.tick()
+        channel.send.assert_not_awaited()
+        matches[-1].team1_score = 1
+        removed = store.data.matches.pop()
+        await manager.tick()
+        channel.send.assert_not_awaited()  # Seven source fixtures are not a complete Round 1.
+        store.data.matches.append(removed)
+        await manager.tick()
+        channel.send.assert_awaited_once()
+        assert latest_result(123, store.data.tournament.id, match_id=matches[1].id)
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('voter_count', [5, 100])
+def test_combined_round_keeps_all_eight_results_in_first_page(context, monkeypatch, voter_count):
+    from services import spoilers
+    from services.series_results import swiss_result_pages
+    from services.presentation import message_payload
+    _, store, _, current, matches = prepare(context)
+    for match in matches:
+        match.status = MatchStatus.COMPLETED
+        match.winner_id = match.team1_id
+        match.team1_score, match.team2_score = 1, 0
+    policy = spoilers.SpoilerPolicy(store.data, clock=lambda: current[0])
+    monkeypatch.setattr(spoilers, '_current', policy)
+    votes = {m.id: [(i, m.team1_id if i % 2 else m.team2_id,
+                    f'Player {i}' + ('x' * 55 if voter_count > 5 else '')) for i in range(voter_count)] for m in matches}
+    pages = swiss_result_pages(matches, votes)
+    assert pages[0].count('Final score: 1–0') == 8
+    assert len(pages) == 1 if voter_count == 5 else len(pages) > 1
+    for page in pages:
+        rendered = spoilers.render_text(page)
+        assert len(rendered) < 4000
+        assert '||' not in rendered
+        payload = message_payload(page)
+        assert payload['view'].total_children_count <= 40
 
 
 def test_swiss_bo3_keeps_individual_cutoffs_and_other_days_are_independent(context):
