@@ -249,6 +249,17 @@ def test_slow_member_lookup_cannot_send_reminder_after_kickoff():
     channel.send.assert_not_awaited()
 
 
+def test_reminder_without_retry_sends_with_an_advancing_clock():
+    delivery, store, channel, _, _ = make_delivery()
+    current = [NOW]
+    def advancing_clock():
+        current[0] += timedelta(microseconds=1)
+        return current[0]
+    delivery.clock = advancing_clock
+    assert asyncio.run(delivery.deliver(store.data.matches[0].id))
+    channel.send.assert_awaited_once()
+
+
 def test_server_settings_survive_reinitialization_and_keep_guilds_separate(database):
     assert get_server_settings(123) == ServerSettings(123)
     set_reminder_channel(123, 456)

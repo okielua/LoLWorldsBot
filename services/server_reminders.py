@@ -106,7 +106,8 @@ class ServerReminderDelivery:
         async with self._lock:
             if self.tracker.has_sent(key) or self._eligible_match(match_id) is None:
                 return False
-            if self.clock() < self._retry_after.get(match_id, self.clock()):
+            retry_at = self._retry_after.get(match_id)
+            if retry_at is not None and self.clock() < retry_at:
                 return False
             logger.info("Preparing public reminder for %s", match_id)
             try:

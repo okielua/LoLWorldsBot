@@ -62,6 +62,27 @@ def test_initial_install_does_not_announce_historical_results(context):
     assert latest_result(123, store.data.tournament.id) is None
 
 
+def test_result_without_retry_sends_with_an_advancing_clock(context):
+    manager, store, channel, now, _ = context
+    async def scenario():
+        await manager.tick()
+        first = store.data.matches[0]
+        await manager.vote(first.id, 7, first.team1_id, 'Lua')
+        complete(store, now, first)
+        polls.reconcile_polls(manager.guild_id, store.data, now[0])
+        def advancing_clock():
+            now[0] += timedelta(microseconds=1)
+            return now[0]
+        manager.clock = advancing_clock
+        channel.send.reset_mock()
+        await manager.series_results.tick()
+        channel.send.assert_awaited_once()
+        assert latest_result(123, store.data.tournament.id)
+        await manager.series_results.tick()
+        channel.send.assert_awaited_once()
+    asyncio.run(scenario())
+
+
 def test_role_and_both_team_subscribers_are_deduplicated(context, monkeypatch):
     manager, store, channel, now, _ = context
     set_worlds_role(123, 88)

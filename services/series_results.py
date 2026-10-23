@@ -244,7 +244,8 @@ class SeriesResults:
                 for match in sorted(manager.store.data.matches, key=lambda item: item.start_time):
                     if (match.id in seen or match.id in self._pending or match.id not in published
                             or not confirmed_result(match)
-                            or manager.clock() < self._retry_at.get(match.id, manager.clock())):
+                            or ((retry_at := self._retry_at.get(match.id)) is not None
+                                and manager.clock() < retry_at)):
                         continue
                     try:
                         channel = manager.client.get_channel(settings.reminder_channel_id) or await manager.client.fetch_channel(settings.reminder_channel_id)

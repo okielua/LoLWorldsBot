@@ -759,7 +759,8 @@ class VotingManager:
 
     async def _sync_day(self, day, matches, *, manual=False, participation=False):
         async with self._lock:
-            if not manual and not participation and self.clock() < self._retry_at.get(day, self.clock()):
+            retry_at = self._retry_at.get(day)
+            if not manual and not participation and retry_at is not None and self.clock() < retry_at:
                 return None
             tournament_id = self.store.data.tournament.id
             if not manual and await asyncio.to_thread(polls.daily_post_suppressed, self.guild_id, tournament_id, day):

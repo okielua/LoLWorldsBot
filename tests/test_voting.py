@@ -97,6 +97,16 @@ def test_daily_post_opens_early_without_pings_and_survives_restart(context):
     asyncio.run(scenario())
 
 
+def test_daily_post_without_retry_sends_with_an_advancing_clock(context):
+    manager, store, channel, current, _ = context
+    def advancing_clock():
+        current[0] += timedelta(microseconds=1)
+        return current[0]
+    manager.clock = advancing_clock
+    asyncio.run(manager.tick())
+    channel.send.assert_awaited_once()
+
+
 def test_admin_delete_pauses_day_across_restarts_and_preserves_votes(context):
     from services import polls
     manager, store, channel, current, message = context
