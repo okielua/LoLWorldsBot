@@ -4,7 +4,6 @@ from datetime import datetime
 from models import Match, MatchStatus
 from services.reminder_engine import (
     DM_REMINDER_OPTIONS,
-    SERVER_REMINDER_MINUTES,
     ReminderKey,
     ReminderTracker,
     ReminderType,
@@ -12,6 +11,7 @@ from services.reminder_engine import (
     get_dm_user_ids,
     get_server_ping_user_ids,
     is_reminder_due,
+    public_reminder_due,
 )
 
 
@@ -50,7 +50,7 @@ def check_reminders(
     dm_reminders = []
 
     for match in matches:
-        if match.status != MatchStatus.SCHEDULED:
+        if match.status not in {MatchStatus.SCHEDULED, MatchStatus.LIVE}:
             continue
         if "TBD" in {match.team1_id, match.team2_id}:
             continue
@@ -60,12 +60,7 @@ def check_reminders(
             reminder_type=ReminderType.SERVER,
         )
 
-        if not tracker.has_sent(server_key) and is_reminder_due(
-            match.start_time,
-            now,
-            SERVER_REMINDER_MINUTES,
-            window_seconds=server_window_seconds,
-        ):
+        if not tracker.has_sent(server_key) and public_reminder_due(match, now, server_window_seconds):
             ping_user_ids = get_server_ping_user_ids(
                 users,
                 match.team1_id,
@@ -84,7 +79,7 @@ def check_reminders(
             if mark_sent:
                 tracker.mark_sent(server_key)
 
-        if not include_dm:
+        if not include_dm or match.status != MatchStatus.SCHEDULED:
             continue
 
         for reminder_minutes in DM_REMINDER_OPTIONS:

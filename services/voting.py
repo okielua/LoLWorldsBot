@@ -918,11 +918,8 @@ class VotingManager:
         match = self.store.data.matches_by_id.get(match_id)
         if match is None:
             return ""
-        day = match.start_time.astimezone(MATCHDAY_ZONE).date().isoformat()
-        try:
-            await self._sync_day(day, self.match_days()[day])
-        except (discord.DiscordException, OSError, sqlite3.Error, ValueError):
-            logger.exception("Could not update daily controls before reminder")
+        # The poll loop updates the board independently. A slow Discord edit or
+        # busy board lock must not hold up the time-sensitive reminder.
         existing = {p.match_id: p for p in polls.get_polls(self.guild_id, self.store.data.tournament.id)}
         votes = await asyncio.to_thread(polls.get_poll_results, self.guild_id, match_id) if match_id in existing else []
         guild = getattr(self.client, "get_guild", lambda _: None)(self.guild_id)

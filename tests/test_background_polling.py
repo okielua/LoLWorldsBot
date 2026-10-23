@@ -30,6 +30,41 @@ def make_poller():
     return poller, store, users, publish
 
 
+def test_source_worker_reports_stalled_reminder_without_cancelling_send(caplog):
+    poller, _, _, _ = make_poller()
+    async def run():
+        task = asyncio.create_task(asyncio.Event().wait())
+        poller._tasks['reminder-preview'] = task
+        poller._reminder_started_at = NOW - timedelta(seconds=61)
+        try:
+            poller._check_reminder_worker()
+            poller._check_reminder_worker()
+            assert caplog.text.count('still waiting after') == 1
+            assert not task.done()
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+    asyncio.run(run())
+
+
+def test_source_worker_restarts_stopped_reminder_worker(caplog):
+    poller, _, _, _ = make_poller()
+    async def run():
+        async def finished():
+            pass
+        stopped = asyncio.create_task(finished())
+        await stopped
+        poller._tasks['reminder-preview'] = stopped
+        poller._preview_loop = AsyncMock()
+        poller._check_reminder_worker()
+        restarted = poller._tasks['reminder-preview']
+        assert restarted is not stopped
+        await restarted
+        poller._preview_loop.assert_awaited_once()
+        assert 'stopped unexpectedly; restarting' in caplog.text
+    asyncio.run(run())
+
+
 def test_preview_checks_current_preferences_and_deduplicates_without_delivery():
     poller, store, users, _ = make_poller()
     first = asyncio.run(poller.preview_once())

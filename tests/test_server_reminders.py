@@ -207,16 +207,18 @@ def test_invalid_channel_or_missing_permissions_never_send(invalid):
     channel.send.assert_not_awaited()
 
 
-def test_channel_fetch_rechecks_schedule_before_sending():
+@pytest.mark.parametrize("status, expected", [(MatchStatus.LIVE, True), (MatchStatus.COMPLETED, False),
+                                             (MatchStatus.POSTPONED, False), (MatchStatus.CANCELLED, False)])
+def test_channel_fetch_rechecks_schedule_before_sending(status, expected):
     delivery, store, channel, _, _ = make_delivery()
     match_id = store.data.matches[0].id
     delivery.client.get_channel.return_value = None
     async def fetch(channel_id):
-        store.data = replace(store.data, matches=[replace(store.data.matches[0], status=MatchStatus.LIVE)])
+        store.data = replace(store.data, matches=[replace(store.data.matches[0], status=status)])
         return channel
     delivery.client.fetch_channel.side_effect = fetch
-    assert not asyncio.run(delivery.deliver(match_id))
-    channel.send.assert_not_awaited()
+    assert asyncio.run(delivery.deliver(match_id)) is expected
+    assert channel.send.await_count == int(expected)
 
 
 def test_setting_changes_during_io_cancel_send():
@@ -232,6 +234,19 @@ def test_concurrent_checks_send_one_public_message():
         return await asyncio.gather(*[delivery.deliver(store.data.matches[0].id) for _ in range(2)])
     assert asyncio.run(scenario()) == [True, False]
     channel.send.assert_awaited_once()
+
+
+def test_slow_member_lookup_cannot_send_reminder_after_kickoff():
+    delivery, store, channel, settings, _ = make_delivery()
+    settings.return_value = replace(settings.return_value, worlds_role_id=444)
+    channel.guild.get_member = lambda user_id: None
+    async def fetch_member(user_id):
+        delivery.clock = lambda: NOW + timedelta(minutes=5)
+        store.fetched_at = delivery.clock()
+        return SimpleNamespace(roles=[])
+    channel.guild.fetch_member = fetch_member
+    assert not asyncio.run(delivery.deliver(store.data.matches[0].id))
+    channel.send.assert_not_awaited()
 
 
 def test_server_settings_survive_reinitialization_and_keep_guilds_separate(database):

@@ -50,6 +50,10 @@ def test_non_scheduled_matches_never_generate_reminders(status, minutes):
 
     result = check_reminders([match], [user], now, tracker)
 
+    if status == MatchStatus.LIVE and minutes == 5:
+        assert len(result.server_reminders) == 1
+        assert result.dm_reminders == ()
+        return
     assert result.server_reminders == ()
     assert result.dm_reminders == ()
     # Skipping an ineligible match must not consume its reminder keys.

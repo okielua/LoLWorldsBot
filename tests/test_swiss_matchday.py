@@ -36,6 +36,52 @@ def prepare(context):
     return manager, store, channel, current, matches
 
 
+@pytest.mark.parametrize('early_live', [False, True])
+def test_swiss_scheduler_delivers_once_even_when_board_edit_is_blocked(context, early_live):
+    from unittest.mock import AsyncMock
+    from services.delivery_records import get_delivery_record
+    from services.voting_rules import reminder_receipt_key
+
+    manager, store, channel, current, matches = prepare(context)
+
+    async def run():
+        await manager.tick()
+        await manager.vote(matches[0].id, 7, matches[0].team1_id, 'Lua')
+        channel.send.reset_mock()
+        if early_live:
+            matches[0].status = MatchStatus.LIVE
+        current[0] = matches[0].start_time - timedelta(minutes=5)
+        store.fetched_at = current[0]
+        async def blocked_edit(*args, **kwargs):
+            await asyncio.Event().wait()
+        manager._sync_day = AsyncMock(side_effect=blocked_edit)
+        delivery = ServerReminderDelivery(manager.client, store, 123, clock=manager.clock,
+                                          load_users=lambda: [], poll_manager=manager)
+        poller = BackgroundPolling(store, lambda: [], lambda data: None, AsyncMock(),
+                                  clock=manager.clock, server_delivery=delivery)
+        await asyncio.wait_for(poller.preview_once(), timeout=2)
+        channel.send.assert_awaited_once()
+        manager._sync_day.assert_not_awaited()
+        assert all(p.closed for p in polls.get_polls(123, store.data.tournament.id))
+        assert get_delivery_record(123, reminder_receipt_key(store.data, matches[0])) is not None
+        assert [role.id for role in channel.send.call_args.kwargs['allowed_mentions'].roles] == [88]
+        # A new worker and delivery object must still honor the persisted receipt.
+        poller.server_delivery = ServerReminderDelivery(manager.client, store, 123,
+            clock=manager.clock, load_users=lambda: [], poll_manager=manager)
+        await poller.preview_once()
+        current[0] = matches[0].start_time
+        store.fetched_at = current[0]
+        await poller.preview_once()
+        # Later games on the same Swiss matchday cannot generate another reminder.
+        for match in matches[1:]:
+            current[0] = match.start_time - timedelta(minutes=5)
+            store.fetched_at = current[0]
+            await poller.preview_once()
+        channel.send.assert_awaited_once()
+
+    asyncio.run(run())
+
+
 def test_round_one_publishes_at_1900_berlin_with_worlds_role_ping_once(context):
     from zoneinfo import ZoneInfo
 

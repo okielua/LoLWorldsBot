@@ -32,6 +32,9 @@ class BackgroundPolling:
         self.prediction_test_running = False
         self._paused = False
         self._prediction_refresh = asyncio.Event()
+        self._reminder_started_at = None
+        self._reminder_health_logged_at = None
+        self._observed_reminder_windows = set()
 
     def start(self):
         jobs = [
@@ -93,6 +96,7 @@ class BackgroundPolling:
         return delay
 
     async def refresh_once(self):
+        self._check_reminder_worker()
         old_matches = self.store.data.matches_by_id
         try:
             success = await self.store.refresh()
@@ -145,6 +149,12 @@ class BackgroundPolling:
         now = self.clock()
         if not self._can_preview(now):
             return ReminderCheckResult((), ())
+        for match in self.store.data.matches:
+            if (match.id not in self._observed_reminder_windows
+                    and timedelta(0) < match.start_time - now <= timedelta(minutes=5)):
+                self._observed_reminder_windows.add(match.id)
+                logger.info("Public reminder window reached for %s: source status=%s, scheduled start=%s",
+                            match.id, match.status.value, match.start_time.isoformat())
         result = check_reminders(
             self.store.data.matches, users, now, self.preview_tracker, include_dm=False,
             server_window_seconds=SERVER_RECOVERY_WINDOW_SECONDS,
@@ -178,13 +188,33 @@ class BackgroundPolling:
                 self.failures += 1
                 logger.exception("Source polling iteration failed; will retry")
 
+    def _check_reminder_worker(self):
+        task = self._tasks.get("reminder-preview")
+        if task is None:
+            return
+        now = self.clock()
+        if self._reminder_health_logged_at and now - self._reminder_health_logged_at < timedelta(minutes=1):
+            return
+        if task.done():
+            logger.error("Public reminder worker stopped unexpectedly; restarting")
+            self._tasks["reminder-preview"] = asyncio.create_task(self._preview_loop(), name="reminder-preview")
+            self._reminder_health_logged_at = now
+        elif self._reminder_started_at and now - self._reminder_started_at >= timedelta(seconds=60):
+            logger.error("Public reminder check still waiting after %.0f seconds; delivery may be delayed",
+                         (now - self._reminder_started_at).total_seconds())
+            self._reminder_health_logged_at = now
+
     async def _preview_loop(self):
         await self.wait_until_ready()
+        logger.info("Public reminder worker ready; checking every %ss", REMINDER_INTERVAL_SECONDS)
         while True:
             try:
+                self._reminder_started_at = self.clock()
                 await self.preview_once()
             except Exception:
                 logger.exception("Reminder preview iteration failed; will retry")
+            finally:
+                self._reminder_started_at = None
             await asyncio.sleep(REMINDER_INTERVAL_SECONDS)
 
     async def _pickems_loop(self):

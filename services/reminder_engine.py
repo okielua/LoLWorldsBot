@@ -2,9 +2,21 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 
+from models import Match, MatchStatus
+
 SERVER_REMINDER_MINUTES = 5
 SERVER_RECOVERY_WINDOW_SECONDS = SERVER_REMINDER_MINUTES * 60
 DM_REMINDER_OPTIONS = {0, 15, 30, 60}
+
+
+def public_reminder_due(match: Match, now: datetime, window_seconds: int) -> bool:
+    # Sources can switch to live during the pregame broadcast. Keep the scheduled
+    # reminder until kickoff, but never send it after the scheduled start.
+    return (
+        match.status in {MatchStatus.SCHEDULED, MatchStatus.LIVE}
+        and now < match.start_time
+        and is_reminder_due(match.start_time, now, SERVER_REMINDER_MINUTES, window_seconds)
+    )
 
 
 class ReminderType(str, Enum):

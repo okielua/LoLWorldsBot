@@ -8,11 +8,10 @@ import sqlite3
 import discord
 from services.presentation import message_payload
 
-from models import MatchStatus
 from services.delivery_records import DeliveryRecord, get_delivery_record, record_delivery
 from services.reminder_engine import (
     ReminderKey, ReminderTracker, ReminderType, SERVER_RECOVERY_WINDOW_SECONDS,
-    get_server_ping_user_ids, is_reminder_due,
+    get_server_ping_user_ids, public_reminder_due,
 )
 from services.server_settings import get_server_settings
 from services.prediction_display import results_embed, format_prediction_results, VOTING_FOOTER
@@ -96,9 +95,9 @@ class ServerReminderDelivery:
         match = self.store.data.matches_by_id.get(match_id)
         if match and swiss_batch(self.store.data, match)[0].id != match_id:
             return None  # One reminder for the entire Swiss Bo1 matchday.
-        if (match is None or match.status != MatchStatus.SCHEDULED
+        if (match is None
                 or "TBD" in {match.team1_id, match.team2_id}
-                or not is_reminder_due(match.start_time, now, 5, SERVER_RECOVERY_WINDOW_SECONDS)):
+                or not public_reminder_due(match, now, SERVER_RECOVERY_WINDOW_SECONDS)):
             return None
         return match
 
@@ -109,14 +108,17 @@ class ServerReminderDelivery:
                 return False
             if self.clock() < self._retry_after.get(match_id, self.clock()):
                 return False
+            logger.info("Preparing public reminder for %s", match_id)
             try:
                 receipt_key = reminder_receipt_key(self.store.data, self.store.data.matches_by_id[match_id])
                 existing = await asyncio.to_thread(get_delivery_record, self.guild_id, receipt_key)
                 if existing is not None:
+                    logger.info("Public reminder for %s already recorded as message %s", match_id, existing.message_id)
                     self.tracker.mark_sent(key)
                     return False
                 settings = await asyncio.to_thread(self.load_settings, self.guild_id)
                 if not settings.public_reminders_enabled or settings.reminder_channel_id is None:
+                    logger.warning("Public reminder for %s skipped: reminders disabled or channel unset", match_id)
                     return False
                 channel = self.client.get_channel(settings.reminder_channel_id)
                 if channel is None:
@@ -129,9 +131,11 @@ class ServerReminderDelivery:
                 # Recheck after I/O: an admin or refreshed source may have changed things.
                 current = await asyncio.to_thread(self.load_settings, self.guild_id)
                 if current != settings:
+                    logger.warning("Public reminder for %s deferred: settings changed during preparation", match_id)
                     return False
                 match = self._eligible_match(match_id)
                 if match is None:
+                    logger.warning("Public reminder for %s skipped: no longer eligible after preparation", match_id)
                     return False
                 data = self.store.data
                 batch = swiss_batch(data, match)
@@ -192,6 +196,10 @@ class ServerReminderDelivery:
                                 if isinstance(item, discord.ui.TextDisplay))
                 if len(recipients) > 100 or text_size > 4000:
                     raise ValueError("Reminder exceeds Discord's single-message mention/content limits.")
+                if self._eligible_match(match_id) is None:
+                    logger.warning("Public reminder for %s skipped: eligibility expired before send", match_id)
+                    return False
+                logger.info("Sending public reminder for %s to channel %s", match_id, channel.id)
                 message = await channel.send(
                     **payload,
                     allowed_mentions=discord.AllowedMentions(
