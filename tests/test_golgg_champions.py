@@ -30,8 +30,8 @@ def test_reply_fetches_again_on_each_command_and_shows_two_decimals(monkeypatch)
     fetch = AsyncMock(side_effect=[{'rumble': (1, 3)}, {'rumble': (2, 4)}])
     monkeypatch.setattr(champions, 'fetch_champion_winrates', fetch)
     async def run():
-        assert await champions.champion_winrate_reply('Rumble') == "## Worlds 2026\\* winrate for Rumble: __33.33%__\n\n-# \\*excluding play-ins"
-        assert '__50.00%__' in await champions.champion_winrate_reply('rumble')
+        assert await champions.champion_winrate_reply('Rumble') == "## Worlds 2026\\* winrate for Rumble: __33.33%__ (1W | 2L)\n\n-# \\*excluding play-ins"
+        assert '__50.00%__ (2W | 2L)' in await champions.champion_winrate_reply('rumble')
     asyncio.run(run())
     assert fetch.await_count == 2
 
@@ -45,7 +45,7 @@ def test_unplayed_champions_are_not_given_a_zero_percent_winrate(monkeypatch):
 
 def test_champion_name_difference_and_source_failure(monkeypatch):
     monkeypatch.setattr(champions, 'fetch_champion_winrates', AsyncMock(return_value={'nunu': (0, 1)}))
-    assert '__0.00%__' in asyncio.run(champions.champion_winrate_reply('Nunu & Willump'))
+    assert '__0.00%__ (0W | 1L)' in asyncio.run(champions.champion_winrate_reply('Nunu & Willump'))
     monkeypatch.setattr(champions, 'fetch_champion_winrates', AsyncMock(side_effect=TimeoutError))
     assert 'temporarily unavailable' in asyncio.run(champions.champion_winrate_reply('Rumble'))
 
@@ -60,7 +60,7 @@ def test_autocomplete_includes_entire_roster_and_normalizes_punctuation():
 
 def test_command_defers_before_fetch_and_returns_only_the_requested_sentence():
     from test_bot_commands import load_command
-    expected = "## Worlds 2026\\* winrate for Rumble: __33.33%__\n\n-# \\*excluding play-ins"
+    expected = "## Worlds 2026\\* winrate for Rumble: __33.33%__ (1W | 2L)\n\n-# \\*excluding play-ins"
     caller = SimpleNamespace(response=SimpleNamespace(defer=AsyncMock()), followup=SimpleNamespace(send=AsyncMock()))
     async def reply(name):
         caller.response.defer.assert_awaited_once()
@@ -71,6 +71,6 @@ def test_command_defers_before_fetch_and_returns_only_the_requested_sentence():
     asyncio.run(callback(caller, 'Rumble'))
     from presentation_assertions import rendered_message
     card = rendered_message(caller.followup.send.call_args)
-    assert card.title == 'Worlds 2026\\* winrate for Rumble: __33.33%__'
+    assert card.title == 'Worlds 2026\\* winrate for Rumble: __33.33%__ (1W | 2L)'
     assert '-# ' in card.description and '\\*excluding play-ins' in card.description
     assert caller.followup.send.call_args.kwargs['allowed_mentions'].to_dict() == {'parse': []}

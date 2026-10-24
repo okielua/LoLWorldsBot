@@ -109,4 +109,4 @@ async def champion_winrate_reply(query):
     wins, games = result
     if games == 0:
         return f'{name} has no games recorded so far in Worlds 2026 (excluding play-ins).'
-    return f"## Worlds 2026\\* winrate for {name}: __{100 * wins / games:.2f}%__\n\n-# \\*excluding play-ins"
+    return f"## Worlds 2026\\* winrate for {name}: __{100 * wins / games:.2f}%__ ({wins}W | {games - wins}L)\n\n-# \\*excluding play-ins"
