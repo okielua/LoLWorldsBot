@@ -494,6 +494,10 @@ def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeyp
         assert namespace["bot"].tree.get_command(retired) is None
     player_option, = namespace["bot"].tree.get_command("player").parameters
     assert player_option.name == "name" and player_option.required and player_option.autocomplete
+    winrate_command = namespace['bot'].tree.get_command('winrate')
+    champion_option, = winrate_command.parameters
+    assert champion_option.name == 'champion' and champion_option.required and champion_option.autocomplete
+    assert 'Main Event, excluding play-ins' in winrate_command.description
     assert namespace["bot"].tree.get_command("votehistory").guild_only is True
     assert namespace["bot"].tree.get_command("today") is not None
     assert namespace["bot"].tree.get_command("tomorrow") is not None
@@ -535,7 +539,7 @@ def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeyp
                 parameter, = item.parameters
                 assert parameter.name == "name" and not parameter.required and parameter.autocomplete
                 assert "`/votehistory [name]`" in text
-            elif item.name in {"schedule", "team", "player"}:
+            elif item.name in {"schedule", "team", "player", "winrate"}:
                 parameter, = item.parameters
                 assert parameter.required
                 assert f"`/{item.name} <" in text

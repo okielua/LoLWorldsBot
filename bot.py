@@ -34,6 +34,7 @@ from services.status_labels import MATCH_STATUS_LABELS, upcoming_line
 from services.standings_display import standings_text
 from services.golgg import GOLGG_FOOTNOTES, team_stats_text
 from services.golgg_players import player_catalog, player_reply, refresh_players_loop
+from services.golgg_champions import champion_autocomplete, champion_winrate_reply, refresh_champions_loop
 from services.team_history import HistoryPages, TeamHistoryView
 from services.match_browser import show_match_games
 from services.vote_history import voter_autocomplete, show_vote_history
@@ -475,8 +476,13 @@ class WorldsBot(discord.Client):
         )
         self.background_polling.start()
         self.player_refresh_task = asyncio.create_task(refresh_players_loop(worlds.tournament.year), name="golgg-players")
+        self.champion_refresh_task = asyncio.create_task(refresh_champions_loop(), name="champion-catalog")
 
     async def close(self):
+        champion_task = getattr(self, 'champion_refresh_task', None)
+        if champion_task:
+            champion_task.cancel()
+            await asyncio.gather(champion_task, return_exceptions=True)
         spoiler_task = getattr(self, "spoiler_task", None)
         if spoiler_task:
             spoiler_task.cancel()
@@ -1159,7 +1165,7 @@ async def next_match_command(interaction: discord.Interaction, count: app_comman
     await show_match_games(interaction, worlds, format_match, count=count, upcoming=True, now=datetime.now(UTC))
 
 
-@bot.tree.command(name="previousgames", description="Show completed Worlds matches (default: 3), with spoiler protection.")
+@bot.tree.command(name="previousgames", description="Show completed Worlds matches (default: 3).")
 @app_commands.describe(count="Number of matches to show, from 1 to 100 (default: 3).")
 async def previous(interaction: discord.Interaction, count: app_commands.Range[int, 1, 100] = 3):
     await show_match_games(interaction, worlds, format_match, count=count, upcoming=False, now=datetime.now(UTC))
@@ -1381,6 +1387,15 @@ async def team(
         max_length=3700,
         continuation_header=f"## {selected_team.name} · Matches",
     )
+
+
+@bot.tree.command(name="winrate", description="Worlds 2026 champion win rate for the Main Event, excluding play-ins.")
+@app_commands.describe(champion="Choose a champion, or start typing their name")
+@app_commands.autocomplete(champion=champion_autocomplete)
+async def winrate(interaction: discord.Interaction, champion: str):
+    await interaction.response.defer()
+    text = await champion_winrate_reply(champion)
+    await interaction.followup.send(**message_payload(text), allowed_mentions=discord.AllowedMentions.none())
 
 
 @bot.tree.command(name="player", description="View a player's Worlds stats from gol.gg. Start typing to find a player.")
@@ -1642,7 +1657,7 @@ See tomorrow’s matches in the server’s registered timezones.
 See the next 3 matches by default, or choose 1–100. Browse 3 matches per page.
 
 `/previousgames [count]` (e.g. `/previousgames 6`)
-See the last 3 completed matches by default, or choose 1–100, with timed spoiler protection. Browse 3 matches per page.
+See the last 3 completed matches by default, or choose 1–100. Browse 3 matches per page.
 
 `/schedule <view>` (e.g. `/schedule Swiss Stage`)
 Browse the next five matches or view the schedule for a tournament stage.
@@ -1652,6 +1667,9 @@ See a specific team’s Worlds matches and tournament stats from gol.gg.
 
 `/player <playername>` (e.g. `/player Zeka`)
 See a player’s Worlds stats from gol.gg. Start typing to find a player.
+
+`/winrate <champion>` (e.g. `/winrate Rumble`)
+Current Worlds 2026 Main Event champion win rate from gol.gg, excluding play-ins.
 
 `/swiss`
 Open the official visual Swiss bracket and standings on LoL Esports."""
