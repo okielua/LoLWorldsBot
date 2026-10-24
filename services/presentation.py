@@ -130,13 +130,13 @@ class MessageCard(discord.ui.LayoutView):
             await super().on_error(interaction, error, item)
 
 
-def message_payload(text, *, controls=None, title_level=2):
+def message_payload(text, *, controls=None, title_level=2, underline_title=True):
     """Use one underlined title, a blue accent, and normal body text."""
     lines = str(text).strip().splitlines()
     title = None
     if lines and lines[0].startswith("#"):
         title = lines.pop(0).lstrip("# ").strip()
-        if not (title.startswith("__") and title.endswith("__")):
+        if underline_title and not (title.startswith("__") and title.endswith("__")):
             title = f"__{title}__"
     description = "\n".join(lines).strip()
     body = f"{'#' * title_level} {title}\n\n{description}" if title else description

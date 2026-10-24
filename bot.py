@@ -1395,7 +1395,7 @@ async def team(
 async def winrate(interaction: discord.Interaction, champion: str):
     await interaction.response.defer()
     text = await champion_winrate_reply(champion)
-    await interaction.followup.send(**message_payload(text), allowed_mentions=discord.AllowedMentions.none())
+    await interaction.followup.send(**message_payload(text, underline_title=False), allowed_mentions=discord.AllowedMentions.none())
 
 
 @bot.tree.command(name="player", description="View a player's Worlds stats from gol.gg. Start typing to find a player.")
