@@ -218,7 +218,7 @@ def test_admin_delete_handles_already_missing_post_and_suppression_is_per_day(co
     asyncio.run(scenario())
 
 
-def test_first_timer_cannot_vote_on_daily_or_restored_buttons_until_mysetup(context):
+def test_first_timer_can_vote_on_daily_and_restored_buttons_without_mysetup(context):
     from services.voting import ScheduleVoteButton
     from services.polls import get_user_votes
     manager, store, channel, _, _ = context
@@ -234,16 +234,18 @@ def test_first_timer_cannot_vote_on_daily_or_restored_buttons_until_mysetup(cont
         button = next(item for item in walk_items(channel.send.call_args.kwargs["view"]) if isinstance(item, discord.ui.Button))
         first = caller()
         await button.callback(first)
-        assert "Run `/mysetup`" in rendered_message(first.response.send_message.call_args).description
-        first.response.defer.assert_not_awaited()
-        assert get_user_votes(123, store.data.tournament.id, 999) == []
+        first.response.send_message.assert_not_awaited()
+        first.response.defer.assert_awaited_once()
+        assert len(get_user_votes(123, store.data.tournament.id, 999)) == 1
         poll = get_polls(123, store.data.tournament.id)[0]
         dynamic = ScheduleVoteButton(manager, poll, 1)
         restored = await ScheduleVoteButton.from_custom_id(first, dynamic.item, dynamic.template.fullmatch(dynamic.custom_id))
-        assert not await restored.interaction_check(caller())
-        user_settings.mark_setup_completed(123, 999)
+        assert await restored.interaction_check(caller())
         await restored.callback(caller())
         assert get_user_votes(123, store.data.tournament.id, 999)[0][1] == poll.team1_id
+        assert not user_settings.has_completed_setup(123, 999)
+        assert not user_settings.worlds_role_initialized(123, 999)
+        assert user_settings.get_user_timezone(999) is None
     asyncio.run(scenario())
 
 

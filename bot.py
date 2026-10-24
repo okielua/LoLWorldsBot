@@ -913,21 +913,7 @@ def read_only_setup_payload(member, guild):
 async def require_timezone(
     interaction: discord.Interaction,
 ) -> str | None:
-    timezone_name = get_user_timezone(interaction.user.id)
-
-    if timezone_name:
-        return timezone_name
-
-    await interaction.response.send_message(
-        **message_payload("## Set Your Timezone First\n\n"
-        "Run `/mysetup` to set your timezone, or choose your region below. "
-        "The bot will use your timezone "
-        "for all match times.", controls=TimezoneRegionView()),
-
-        ephemeral=True,
-    )
-
-    return None
+    return get_user_timezone(interaction.user.id) or TOURNAMENT_TIMEZONE
 
 
 # --------------------------------------------------
