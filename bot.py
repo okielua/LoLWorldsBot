@@ -449,7 +449,8 @@ class WorldsBot(discord.Client):
         validate_application(self.user.id)
         await tournament_store.refresh()
         worlds = tournament_store.data
-        self.spoiler_ledger = SpoilerLedger(get_connection)
+        # Spoiler masking is disabled across posts, commands, and refresh edits.
+        self.spoiler_ledger = SpoilerLedger(get_connection, enabled=False)
         self.spoiler_ledger.observe(worlds)
         self.spoiler_delivery = SpoilerDelivery(self, get_connection)
         self.spoiler_delivery.install()

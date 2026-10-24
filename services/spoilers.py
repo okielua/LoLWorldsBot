@@ -108,7 +108,7 @@ def render_text(text, policy=None, *, neutral=False):
         match = policy.data.matches_by_id.get(match_id)
         slot = int(slot)
         expected = (match.team1_id if slot == 1 else match.team2_id) if match and slot else team_id
-        hidden = bool(match_id != "-" and (match is None or expected != team_id
+        hidden = bool(policy.enabled and match_id != "-" and (match is None or expected != team_id
                                           or slot and policy.participant_protected(match, slot)))
         if neutral or force_neutral:
             if hidden:
@@ -139,6 +139,8 @@ def render_text(text, policy=None, *, neutral=False):
     text = re.sub(r"⟦score:([^⟧]+)⟧", score_replace, text)
 
     def result_replace(found):
+        if not policy.enabled:
+            return found[2].replace("||", "")
         match = policy.data.matches_by_id.get(found[1])
         hidden = match is None or policy.protected(match)
         return ("Result hidden (spoiler)" if neutral else _conceal(found[2])) if hidden else found[2].replace("||", "")
@@ -146,6 +148,8 @@ def render_text(text, policy=None, *, neutral=False):
     text = re.sub(r"⟦result:([^⟧]+)⟧(.*?)⟦/result⟧", result_replace, text, flags=re.S)
 
     def aggregate_replace(found):
+        if not policy.enabled:
+            return found[2].replace("||", "")
         matches = (policy.data.matches if found[1] == "unknown" and policy.data.matches else
                    [policy.data.matches_by_id.get(key) for key in found[1].split(",") if key])
         if any(match is None for match in matches):
@@ -156,13 +160,15 @@ def render_text(text, policy=None, *, neutral=False):
         hidden = any(match is None or policy.protected(match) for match in matches)
         return ("Stats hidden (spoiler)" if neutral else _conceal(found[2])) if hidden else found[2].replace("||", "")
 
-    return re.sub(r"⟦aggregate:([^⟧]*)⟧(.*?)⟦/aggregate⟧", aggregate_replace, text, flags=re.S)
+    rendered = re.sub(r"⟦aggregate:([^⟧]*)⟧(.*?)⟦/aggregate⟧", aggregate_replace, text, flags=re.S)
+    return rendered if policy.enabled else rendered.replace("||", "")
 
 
 class SpoilerLedger:
     """Persist observation times and slot provenance alongside the voting DB."""
-    def __init__(self, connect):
+    def __init__(self, connect, *, enabled=True):
         self.connect = connect
+        self.enabled = enabled
         with closing(connect()) as db, db:
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS spoiler_ends (
@@ -228,7 +234,7 @@ class SpoilerLedger:
                         db.execute("INSERT OR REPLACE INTO spoiler_slots VALUES (?, ?, ?, ?, ?, ?)",
                                    (tournament, match.id, slot, team_id, now.isoformat(), json.dumps(deps)))
                     dependencies[(match.id, slot)] = deps
-        policy = SpoilerPolicy(data, ended_at=ends, dependencies=dependencies)
+        policy = SpoilerPolicy(data, ended_at=ends, dependencies=dependencies, enabled=self.enabled)
         set_policy(policy)
         return policy
 
@@ -241,8 +247,9 @@ def padded_name(name, width):
 
 
 class SpoilerPolicy:
-    def __init__(self, data, *, ended_at=None, dependencies=None, clock=None):
+    def __init__(self, data, *, ended_at=None, dependencies=None, clock=None, enabled=True):
         self.data = data
+        self.enabled = enabled
         self.ended_at = ended_at or {}
         # (fixture ID, slot index 1/2) -> prerequisite series IDs. Store each
         # slot separately: an opponent being unknown never conceals its peer.
@@ -261,12 +268,16 @@ class SpoilerPolicy:
         return end + RESULT_WINDOW
 
     def protected(self, match, now=None):
+        if not self.enabled:
+            return False
         if match.status != MatchStatus.COMPLETED:
             return True
         deadline = self.release_at(match)
         return deadline is None or (now or self.clock()) < deadline
 
     def participant_protected(self, match, slot, now=None):
+        if not self.enabled:
+            return False
         for prerequisite in self.dependencies.get((match.id, slot), ()):
             earlier = self.data.matches_by_id.get(prerequisite)
             if earlier is None or self.protected(earlier, now):

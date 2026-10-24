@@ -41,6 +41,38 @@ def database(tmp_path, monkeypatch):
     return user_settings.get_connection
 
 
+def test_disabled_masking_reveals_results_stats_and_both_participants(protected, monkeypatch):
+    policy, match, future, _ = protected
+    monkeypatch.setattr(policy, 'enabled', False)
+    content = (matchup(future) + '\n' + score_token(match)
+               + f'\n⟦result:{match.id}⟧✅ Correct⟦/result⟧'
+               + f'\n⟦aggregate:{match.id},missing⟧Leaderboard: ||5 points||⟦/aggregate⟧')
+    draft = {'content': content, 'components': [
+        {'type': 1, 'components': [{'type': 2, 'style': 1,
+         'custom_id': 'worldsvote:123:future:2', 'label': team_token(future.team2_id, future.id, 2),
+         'emoji': {'id': '222', 'name': 'MVK'}}]}],
+        'embeds': [{'description': '||A result||', 'fields': [{'name': '||Votes||', 'value': '||@Lua||'}]}]}
+    rendered = render_payload(draft)
+    serialized = json.dumps(rendered, ensure_ascii=False)
+    assert '||' not in serialized and '⟦' not in serialized
+    assert '✅ Correct' in serialized and '5 points' in serialized
+    assert '[see spoiler]' not in serialized and 'Stats hidden' not in serialized
+    button = rendered['components'][0]['components'][0]
+    assert button['custom_id'] == 'worldsvote:123:future:2'
+    assert 'MVK' in button['label'] and button['emoji']['id'] == '222'
+
+
+def test_disabled_masking_survives_source_refresh_and_ledger_restart(database, monkeypatch):
+    end, match, data = scenario()
+    data.tournament = SimpleNamespace(id='worlds')
+    monkeypatch.setattr(spoilers, '_current', None)
+    for ledger in (SpoilerLedger(database, enabled=False), SpoilerLedger(database, enabled=False)):
+        policy = ledger.observe(data)
+        assert not policy.enabled and not policy.protected(match)
+        assert policy.score(match) == '3–1'
+        assert '||' not in render_payload({'content': '||Legacy tags|| ' + score_token(match)})['content']
+
+
 @pytest.mark.parametrize("match_id", ["future", "prediction-test:68c569d2-e05e-4dab-9b1e-ea9a19d4b6e7:0"])
 def test_wire_payload_protects_only_dependent_team_and_button_uses_bee_question(protected, match_id):
     policy, match, future, end = protected
