@@ -1186,7 +1186,9 @@ async def show_day_schedule(interaction: discord.Interaction, day_offset: int):
     if day_offset == 0 and manager and getattr(interaction, "guild_id", None) == manager.guild_id:
         await interaction.response.defer(ephemeral=False)
         deferred = True
-        context += await daily_post_reference(interaction.guild_id, worlds.tournament.id, target_date.isoformat()) + "\n\n"
+        from services.voting_rules import voting_board_day
+        reference_day = voting_board_day(worlds, matches[0]) if matches else target_date.isoformat()
+        context += await daily_post_reference(interaction.guild_id, worlds.tournament.id, reference_day) + "\n\n"
     if day_offset == 0 and matches and manager and getattr(interaction, "guild_id", None) == manager.guild_id:
         poll_by_id = await manager.prepare_schedule_polls(matches)
         entries = [(match, format_match(match, timezone_name, include_date=False, now=now, timezones=timezones))

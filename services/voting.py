@@ -1,6 +1,6 @@
 """One private-prediction post per Worlds matchday, with five-minute cutoffs."""
 
-from services.voting_rules import voting_deadline, swiss_batch, batch_help
+from services.voting_rules import voting_deadline, swiss_batch, batch_help, voting_board_day, round_three_matches, round_three_publication_time
 from services.status_labels import upcoming_line
 
 import asyncio
@@ -362,8 +362,13 @@ class DailyPredictionsView(SetupRequiredLayoutView):
         page_count = max(1, (len(matches) + page_size - 1) // page_size)
         self.page_count = page_count
         batch = swiss_batch(manager.store.data, matches[0]) if matches else []
-        batch_voting = len(batch) > 1
-        if batch_voting:
+        round_three = bool(matches) and all((m.round_name or '').startswith('Round 3 ·') and 'swiss' in m.stage_id.lower() for m in matches)
+        batch_voting = len(batch) > 1 and {m.id for m in batch} == {m.id for m in all_matches}
+        if round_three:
+            introduction = ('Vote on all 8 Round 3 matchups.\n\n'
+                            '**Bo1 votes close together, 5 minutes before that day’s first Bo1. '
+                            'Bo3 votes close 5 minutes before each series.**\n\n')
+        elif batch_voting:
             introduction = (f"**All votes lock <t:{int(voting_deadline(batch[0], manager.store.data).timestamp())}:F> "
                             "(5 minutes before game 1)**\n\n")
         else:
@@ -441,9 +446,16 @@ class DailyPredictionsView(SetupRequiredLayoutView):
                 card.add_item(discord.ui.ActionRow(ScheduleVoteButton(manager, poll, 1), ScheduleVoteButton(manager, poll, 2)))
             timing = upcoming_line(match, manager.clock()) + '\n\n' if match.status == MatchStatus.SCHEDULED else ''
             details_text = team_display(f"**{stage_label}**\n\n{timing}{times}\n\n{status}")
+            actual_day = match.start_time.astimezone(MATCHDAY_ZONE).date().isoformat()
+            previous_day = matches[match_index - 1].start_time.astimezone(MATCHDAY_ZONE).date().isoformat() if match_index else day
+            date_prefix = (f"## __{date_heading_token(match.start_time, MATCHDAY_ZONE.key, now=manager.clock(), style='weekday')}__\n\n"
+                           if actual_day != previous_day else '')
             if compact:
                 prefix = header.content.rstrip() + "\n\n" if match_index == 0 else ""
-                details_text.content = prefix + team_display(f"## {matchup(match)}").content + "\n" + details_text.content
+                details_text.content = prefix + date_prefix + team_display(f"## {matchup(match)}").content + "\n" + details_text.content
+            elif date_prefix:
+                # Include the later matchday with its existing matchup text block.
+                card.children[-2].content = date_prefix + card.children[-2].content
             card.add_item(details_text)
             if compact:
                 card.add_item(discord.ui.ActionRow(ScheduleVoteButton(manager, poll, 1), ScheduleVoteButton(manager, poll, 2)))
@@ -523,6 +535,7 @@ class VotingManager:
         self._checked_at = {}
         self._notice_pairs = set()
         self._daily_pages = {}
+        self._publication_waits = {}
         from services.series_results import SeriesResults
         self.series_results = SeriesResults(self)
 
@@ -574,7 +587,7 @@ class VotingManager:
     def match_days(self):
         days = {}
         for match in sorted(self.store.data.matches, key=lambda item: item.start_time):
-            day = match.start_time.astimezone(MATCHDAY_ZONE).date().isoformat()
+            day = voting_board_day(self.store.data, match)
             days.setdefault(day, []).append(match)
         return days
 
@@ -641,7 +654,7 @@ class VotingManager:
         try:
             match = self.store.data.matches_by_id.get(match_id)
             if match:
-                day = match.start_time.astimezone(MATCHDAY_ZONE).date().isoformat()
+                day = voting_board_day(self.store.data, match)
                 receipt = await asyncio.to_thread(polls.get_daily_post, self.guild_id, self.store.data.tournament.id, day)
                 if receipt:
                     await self._sync_day(day, self.match_days()[day], participation=True)
@@ -785,6 +798,18 @@ class VotingManager:
                 starts = [match.start_time for match in matches if match.status != MatchStatus.CANCELLED]
                 if not starts or self.clock() < min(starts) - MAX_DAILY_POST_LEAD:
                     return None
+                round_three = round_three_matches(self.store.data)
+                if round_three and day == voting_board_day(self.store.data, round_three[0]):
+                    opens_at = round_three_publication_time(self.store.data)
+                    if not manual and self.clock() < opens_at:
+                        return None
+                    ready = len(round_three) == 8 and all('TBD' not in {m.team1_id, m.team2_id} for m in round_three)
+                    if not ready:
+                        state = (len(round_three), sum('TBD' not in {m.team1_id, m.team2_id} for m in round_three))
+                        if self._publication_waits.get(day) != state:
+                            logger.warning('Round 3 noon publication waiting for confirmed matchups: %s/%s ready', state[1], state[0])
+                            self._publication_waits[day] = state
+                        return None
             matches = [m for m in matches if "TBD" not in {m.team1_id, m.team2_id}]
             if receipt is None:
                 now = self.clock()

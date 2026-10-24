@@ -303,6 +303,108 @@ def test_combined_round_keeps_all_eight_results_in_first_page(context, monkeypat
         assert payload['view'].total_children_count <= 40
 
 
+def test_round_two_posts_first_four_then_all_eight_exactly_once_across_restarts(context):
+    from services.series_results import SeriesResults, latest_result
+    manager, store, channel, current, matches = prepare(context)
+    for match in matches:
+        match.round_name = 'Round 2 · 1–0 record'
+        match.start_time += timedelta(days=1)
+        match.voting_closes_at = voting_deadline(match, store.data)
+    current[0] = matches[0].start_time - timedelta(hours=8)
+    store.fetched_at = current[0]
+    def finish(index):
+        match = matches[index]
+        match.status = MatchStatus.COMPLETED
+        match.winner_id = match.team1_id
+        match.team1_score, match.team2_score = 1, 0
+        current[0] = max(current[0], match.start_time + timedelta(minutes=40))
+        store.fetched_at = current[0]
+    async def run():
+        await manager.tick()
+        for match in matches:
+            await manager.vote(match.id, 7, match.team1_id, 'Lua')
+        channel.send.reset_mock()
+        for index in (0, 1, 2, 4):
+            finish(index)
+            await manager.tick()
+            channel.send.assert_not_awaited()  # Must be the first four, not any four.
+        finish(3)
+        await manager.tick()
+        channel.send.assert_awaited_once()
+        text = str(channel.send.call_args.kwargs['view'].to_components())
+        assert 'Intermediate results · First 4 of 8 matches' in text
+        assert text.count('Final score: 1–0') == 4 and text.count('✅ @Lua') == 4
+        assert channel.send.call_args.kwargs['allowed_mentions'].roles[0].id == 88
+        manager.series_results = SeriesResults(manager)
+        await manager.tick()
+        channel.send.assert_awaited_once()
+        for index in (5, 6):
+            finish(index)
+            await manager.tick()
+            channel.send.assert_awaited_once()
+        finish(7)
+        await manager.tick()
+        assert channel.send.await_count == 2
+        final = str(channel.send.call_args.kwargs['view'].to_components())
+        assert final.count('Final score: 1–0') == 8 and final.count('✅ @Lua') == 8
+        assert 'Intermediate results' not in final
+        receipt = latest_result(123, store.data.tournament.id, match_id=matches[0].id)
+        assert receipt and receipt[2][0].count('Final score: 1–0') == 8
+        manager.series_results = SeriesResults(manager)
+        await manager.tick()
+        assert channel.send.await_count == 2
+    asyncio.run(run())
+
+
+def test_round_three_publishes_all_eight_at_berlin_noon_after_clock_change(context):
+    from zoneinfo import ZoneInfo
+    from services.voting_rules import round_three_publication_time, voting_board_day
+    manager, store, channel, current, matches = prepare(context)
+    first = datetime(2026, 10, 25, 17, tzinfo=UTC)
+    for index, match in enumerate(matches):
+        match.round_name = 'Round 3 · 1–1 record'
+        match.start_time = first + timedelta(hours=[0, 1, 2, 5, 24, 25, 26, 29][index])
+        match.best_of = 1 if index in {0, 1, 4, 5} else 3
+    for match in matches:
+        match.voting_closes_at = voting_deadline(match, store.data)
+    noon = round_three_publication_time(store.data)
+    assert noon.isoformat() == '2026-10-25T12:00:00+01:00'
+    assert noon.astimezone(UTC).hour == 11
+    assert voting_board_day(store.data, matches[-1]) == '2026-10-25'
+    assert len(manager.match_days()) == 1
+    async def run():
+        current[0] = noon - timedelta(microseconds=1)
+        store.fetched_at = current[0]
+        await manager.tick()
+        channel.send.assert_not_awaited()
+        current[0] = noon
+        store.fetched_at = current[0]
+        last_team = matches[-1].team2_id
+        matches[-1].team2_id = 'TBD'
+        await manager.tick()
+        channel.send.assert_not_awaited()  # No partial or TBD announcement at noon.
+        matches[-1].team2_id = last_team
+        await manager.tick()
+        channel.send.assert_awaited_once()
+        payload = channel.send.call_args.kwargs
+        text = str(payload['view'].to_components())
+        assert 'Vote on all 8 Round 3 matchups' in text
+        assert 'Bo1 votes close together' in text and 'Bo3 votes close' in text
+        assert len([item for item in walk_items(payload['view']) if isinstance(item, discord.ui.Button)]) == 16
+        assert [role.id for role in payload['allowed_mentions'].roles] == [88]
+        assert payload['allowed_mentions'].users is False
+        assert len(polls.get_published_match_ids(123, store.data.tournament.id)) == 8
+        # A Monday pick refreshes this same Sunday round board.
+        await manager.vote(matches[-1].id, 999, last_team, 'Newcomer')
+        await manager.refresh_participation(matches[-1].id)
+        assert 'Newcomer' in str(channel.get_partial_message.return_value.edit.call_args.kwargs['view'].to_components())
+        restarted = VotingManager(manager.client, store, 123, clock=lambda: current[0])
+        await restarted.tick()
+        channel.send.assert_awaited_once()
+        assert all(p.match_id in {m.id for m in matches} for p in polls.get_polls(123, store.data.tournament.id))
+    asyncio.run(run())
+
+
 def test_swiss_bo3_keeps_individual_cutoffs_and_other_days_are_independent(context):
     _, store, _, _, matches = prepare(context)
     next_day = replace(matches[0], id='next-day', start_time=matches[0].start_time + timedelta(days=1))

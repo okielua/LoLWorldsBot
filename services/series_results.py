@@ -81,7 +81,16 @@ def swiss_result_groups(data):
     return groups
 
 
-def swiss_result_pages(matches, votes_by_match, *, test_mode=False):
+def swiss_result_batches(data):
+    groups = swiss_result_groups(data)
+    batches = dict(groups)
+    for key, matches in groups.items():
+        if key.endswith(':2') and len(matches) == 8:
+            batches[key + ':after-4'] = matches[:4]
+    return batches
+
+
+def swiss_result_pages(matches, votes_by_match, *, test_mode=False, intermediate=False):
     from services.match_times import date_heading, TOURNAMENT_TIMEZONE
     from zoneinfo import ZoneInfo
     first = matches[0]
@@ -90,6 +99,8 @@ def swiss_result_pages(matches, votes_by_match, *, test_mode=False):
     heading = (f"# __{'TEST: ' if test_mode else ''}Worlds 2026 · Voting Results__\n"
                f"## __Swiss stage (Round {round_number})__\n"
                f"{date_heading(day, TOURNAMENT_TIMEZONE)}")
+    if intermediate:
+        heading += '\n\n**Intermediate results · First 4 of 8 matches**'
     sections, summaries = [], []
     for match in matches:
         votes = [(uid, team, name) for uid, team, name in votes_by_match.get(match.id, [])
@@ -225,7 +236,7 @@ class SeriesResults:
                     if match.status == MatchStatus.COMPLETED:
                         db.execute("INSERT OR IGNORE INTO series_result_posts VALUES (?, ?, ?, NULL, NULL, NULL, NULL)",
                                    (*scope, match.id))
-                for key, batch in swiss_result_groups(manager.store.data).items():
+                for key, batch in swiss_result_batches(manager.store.data).items():
                     if all(confirmed_result(match) for match in batch):
                         db.execute("INSERT OR IGNORE INTO series_result_posts VALUES (?, ?, ?, NULL, NULL, NULL, NULL)",
                                    (*scope, key))
@@ -282,13 +293,14 @@ class SeriesResults:
                 WHERE guild_id=? AND tournament_id=? AND message_id IS NOT NULL""", scope).fetchall()
         for match_id, channel_id, message_id, saved in rows:
             match = manager.store.data.matches_by_id.get(match_id)
-            batch = swiss_result_groups(manager.store.data).get(match_id)
+            batch = swiss_result_batches(manager.store.data).get(match_id)
             if batch:
                 if not all(confirmed_result(item) for item in batch):
                     continue
                 votes_by_match = {item.id: await asyncio.to_thread(polls.get_poll_results, manager.guild_id, item.id)
                                   for item in batch}
-                pages = swiss_result_pages(batch, votes_by_match, test_mode=manager.test_mode)
+                pages = swiss_result_pages(batch, votes_by_match, test_mode=manager.test_mode,
+                                           intermediate=match_id.endswith(':after-4'))
             else:
                 if match is None or match.status != MatchStatus.COMPLETED:
                     continue
@@ -330,13 +342,16 @@ class SeriesResults:
                     return
                 candidates = [(m.id, [m]) for m in manager.store.data.matches
                               if 'swiss' not in m.stage_id.lower()]
-                candidates.extend(swiss_result_groups(manager.store.data).items())
+                candidates.extend(swiss_result_batches(manager.store.data).items())
                 for receipt_key, batch in sorted(candidates, key=lambda item: item[1][0].start_time):
                     is_swiss = receipt_key.startswith('swiss-round:')
+                    intermediate = receipt_key.endswith(':after-4')
                     # A 16-team Swiss round must be complete in the source too.
                     # Never fall back to a one-match post when fixtures are missing.
-                    if is_swiss and len(batch) != SWISS_ROUND_MATCH_COUNTS.get(int(receipt_key.rsplit(':', 1)[1])):
+                    if is_swiss and not intermediate and len(batch) != SWISS_ROUND_MATCH_COUNTS.get(int(receipt_key.rsplit(':', 1)[1])):
                         continue
+                    if intermediate and all(confirmed_result(m) for m in swiss_result_groups(manager.store.data)[receipt_key.rsplit(':', 1)[0]]):
+                        continue  # If recovery happens after all eight finish, only send the final.
                     if (receipt_key in seen or receipt_key in self._pending
                             or not all(m.id in published and confirmed_result(m) for m in batch)
                             or ((retry_at := self._retry_at.get(receipt_key)) is not None
@@ -348,7 +363,8 @@ class SeriesResults:
                         validate_reminder_channel(channel, manager.guild_id)
                         votes_by_match = {m.id: await asyncio.to_thread(polls.get_poll_results, manager.guild_id, m.id)
                                           for m in batch}
-                        pages = (swiss_result_pages(batch, votes_by_match, test_mode=manager.test_mode) if is_swiss
+                        pages = (swiss_result_pages(batch, votes_by_match, test_mode=manager.test_mode,
+                                                    intermediate=intermediate) if is_swiss
                                  else result_pages(match, votes_by_match[match.id], test_mode=manager.test_mode))
                         role = settings.worlds_role_id if not manager.test_mode else None
                         recipients = []
@@ -375,6 +391,7 @@ class SeriesResults:
                         # Commit after Discord acknowledgement without another await.
                         self._save(receipt_key, record)
                         del self._pending[receipt_key]
+                        logger.info("Published voting results %s (%s matches) as message %s", receipt_key, len(batch), message.id)
                     except (discord.DiscordException, OSError, sqlite3.Error, ValueError):
                         logger.exception("Could not announce completed voting results %s", receipt_key)
                         self._retry_at[receipt_key] = manager.clock() + timedelta(seconds=60)

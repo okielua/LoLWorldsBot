@@ -1,9 +1,29 @@
 """Swiss Bo1 matchdays vote and receive reminders as one batch."""
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from models import MatchStatus
 from services.match_times import TOURNAMENT_TIMEZONE
+
+
+def round_three_matches(data):
+    return sorted((m for m in data.matches if 'swiss' in m.stage_id.lower()
+                   and (m.round_name or '').startswith('Round 3 ·')
+                   and m.status != MatchStatus.CANCELLED), key=lambda m: (m.start_time, m.id))
+
+
+def voting_board_day(data, match):
+    batch = round_three_matches(data) if 'swiss' in match.stage_id.lower() and (match.round_name or '').startswith('Round 3 ·') else []
+    first = batch[0] if batch else match
+    return first.start_time.astimezone(ZoneInfo(TOURNAMENT_TIMEZONE)).date().isoformat()
+
+
+def round_three_publication_time(data):
+    batch = round_three_matches(data)
+    if not batch:
+        return None
+    berlin = ZoneInfo('Europe/Berlin')
+    return datetime.combine(batch[0].start_time.astimezone(berlin).date(), time(12), berlin)
 
 
 def swiss_batch(data, match):
