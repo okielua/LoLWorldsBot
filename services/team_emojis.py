@@ -10,7 +10,7 @@ EMOJI_NAMES = {
     "T1": "t1", "TSW": "TSW", "TL": "TLAW", "TLAW": "TLAW",
     "TES": "TES", "MVK": "MVK", "LYON": "LYON", "MKOI": "MKOI",
     "LOS": "LOS", "KC": "KC", "IG": "IG", "HLE": "HLE",
-    "GEN": "GEN", "G2": "G2", "FUR": "FURIA", "FURIA": "FURIA",
+    "GEN": "GENG", "G2": "G2", "FUR": "FURIA", "FURIA": "FURIA",
     "DK": "DKIA", "DKIA": "DKIA", "C9": "CLOUD9", "CLOUD9": "CLOUD9",
     "CFO": "CFO", "BLG": "BLG", "AL": "AL",
 }
