@@ -94,13 +94,13 @@ def test_results_place_matchday_mvp_after_form_and_keep_days_separate(source):
     votes = {match.id:polls.get_poll_results(123,match.id) for match in matches[:4]}
     pages = asyncio.run(add_prediction_form(['# Results'],manager,matches[:4],votes))
     text='\n'.join(pages)
-    assert text.index('__Last 5 picks__') < text.index('Matchday MVP') < text.index('🏆 Player 7')
-    assert '## __Matchday MVP · Sunday, 25 October 2026__' in text
+    assert text.index('__Last 5 picks__') < text.index('Matchday Trophy Winner') < text.index('🏆 Player 7')
+    assert '## __Matchday Trophy Winner · Sunday, 25 October 2026__' in text
     finish(data,matches[4:])
     votes = {match.id:polls.get_poll_results(123,match.id) for match in matches}
     pages = asyncio.run(add_prediction_form(['# Results'],manager,matches,votes))
     text='\n'.join(pages)
-    assert text.count('## __Matchday MVP')==2
+    assert text.count('## __Matchday Trophy Winner')==2
     assert '🏆 Player 7' in text and '🏆 Player 8' in text
 
 

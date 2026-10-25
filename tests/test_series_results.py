@@ -346,3 +346,33 @@ def test_summon_prefers_new_completed_vote_over_an_older_announcement(context):
         assert "Latest voter" in text and "Previous voter" not in text
         assert "Open the results announcement" not in text
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('pages', [['# Results'], ['# Results', '# Trophy winners']])
+def test_results_keep_dark_stats_and_trophy_buttons_on_every_page(pages):
+    from services.series_results import ResultsPages
+    from services.presentation import message_payload
+
+    async def scenario():
+        controls = ResultsPages(pages, 123, 'worlds-2026')
+        payload = message_payload(pages[0], controls=controls)
+        def shortcuts():
+            return {item.label: item for child in payload['view'].walk_children()
+                    for item in [getattr(child, 'item', child)]
+                    if isinstance(item, discord.ui.Button)
+                    and item.label in ('My Advanced Stats', 'Trophy Case')}
+        buttons = shortcuts()
+        assert set(buttons) == {'My Advanced Stats', 'Trophy Case'}
+        assert all(button.style == discord.ButtonStyle.secondary for button in buttons.values())
+        assert buttons['My Advanced Stats'].custom_id == 'worldsstats:123:worlds-2026'
+        assert buttons['Trophy Case'].custom_id == 'worldstrophies:123:worlds-2026'
+        if len(pages) > 1:
+            caller = SimpleNamespace(response=SimpleNamespace(defer=AsyncMock()),
+                                     edit_original_response=AsyncMock())
+            await controls.turn(caller, 1)
+            assert controls.page == 1 and set(shortcuts()) == set(buttons)
+            caller.response.defer.assert_awaited_once()
+            assert caller.edit_original_response.call_args.kwargs['allowed_mentions'].to_dict() == {'parse': []}
+        payload['view'].stop()
+        controls.stop()
+    asyncio.run(scenario())

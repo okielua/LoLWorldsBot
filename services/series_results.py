@@ -28,6 +28,20 @@ logger = logging.getLogger(__name__)
 SWISS_ROUND_MATCH_COUNTS = {1: 8, 2: 8, 3: 8, 4: 6, 5: 3}
 
 
+class ResultsPages(HistoryPages):
+    """Keep result navigation and personal collection shortcuts together."""
+
+    def __init__(self, pages, guild_id, tournament_id):
+        from services.leaderboard_views import MyStatsButton
+        from services.trophycase import TrophyCaseButton
+        super().__init__(pages)
+        stats = MyStatsButton(guild_id, tournament_id)
+        trophies = TrophyCaseButton(guild_id, tournament_id)
+        stats.row = trophies.row = 1 if len(pages) > 1 else 0
+        self.add_item(stats)
+        self.add_item(trophies)
+
+
 def initialize():
     with closing(get_connection()) as db, db:
         db.execute("""CREATE TABLE IF NOT EXISTS series_result_scopes (
@@ -212,7 +226,7 @@ async def show_latest_results(interaction):
                 pages = receipt[2]
             link = f"\n\n[Open the results announcement](https://discord.com/channels/{interaction.guild_id}/{channel_id}/{message_id})"
             pages = [page + link for page in pages]
-        await interaction.followup.send(**message_payload(pages[0], controls=HistoryPages(pages)),
+        await interaction.followup.send(**message_payload(pages[0], controls=ResultsPages(pages, manager.guild_id, manager.store.data.tournament.id)),
                                         ephemeral=False, allowed_mentions=discord.AllowedMentions.none())
     else:
         await interaction.followup.send(**message_payload("No completed series with a published vote is available in this server yet."),
@@ -315,7 +329,7 @@ class SeriesResults:
             try:
                 channel = manager.client.get_channel(channel_id) or await manager.client.fetch_channel(channel_id)
                 await channel.get_partial_message(message_id).edit(
-                    **message_payload(pages[0], controls=HistoryPages(pages)), allowed_mentions=discord.AllowedMentions.none())
+                    **message_payload(pages[0], controls=ResultsPages(pages, manager.guild_id, manager.store.data.tournament.id)), allowed_mentions=discord.AllowedMentions.none())
             except discord.NotFound:
                 # Keep the retrievable result even if its original post was deleted.
                 pass
@@ -385,7 +399,7 @@ class SeriesResults:
                                            receipt_key, len(remaining))
                         mentions = ([f"<@&{role}>"] if role else []) + [f"<@{uid}>" for uid in first]
                         text = pages[0] + ("\n\n" + " ".join(mentions) if mentions else "")
-                        message = await channel.send(**message_payload(text, controls=HistoryPages(pages)),
+                        message = await channel.send(**message_payload(text, controls=ResultsPages(pages, manager.guild_id, manager.store.data.tournament.id)),
                             allowed_mentions=discord.AllowedMentions(everyone=False, replied_user=False,
                                 roles=[discord.Object(role)] if role else False,
                                 users=[discord.Object(uid) for uid in first] if first else False))

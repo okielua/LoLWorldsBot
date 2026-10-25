@@ -152,9 +152,9 @@ async def add_results_mvp(pages, manager, matches):
             swiss = 'swiss' in award.matches[0].stage_id.lower()
             if swiss:
                 day = award.matches[0].start_time.astimezone(ZoneInfo(TOURNAMENT_TIMEZONE))
-                title = f'## __Matchday MVP · {day:%A, %d %B %Y}__'
+                title = f'## __Matchday Trophy Winner · {day:%A, %d %B %Y}__'
             else:
-                title = f'## __{award.label} MVP__'
+                title = f'## __{award.label} Trophy Winner__'
             lines = [title]
             if award.winners:
                 for row in award.winners:
@@ -164,11 +164,11 @@ async def add_results_mvp(pages, manager, matches):
                 row = award.winners[0]
                 lines.append(f'-# {row.correct}/{row.submitted} correct ({float(row.accuracy):.1%})')
             else:
-                lines.append('No MVP: no correct predictions were recorded.')
+                lines.append('No trophy awarded: no correct predictions were recorded.')
             blocks.append(lines)
     else:
         swiss = any('swiss' in m.stage_id.lower() for m in matches)
-        blocks = [['## __Matchday MVP__' if swiss else '## __Stage MVP__',
+        blocks = [['## __Matchday Trophy Winner__' if swiss else '## __Stage Trophy Winner__',
                    'Waiting for all matchday results.' if swiss else 'Waiting for all stage results.']]
     pages = list(pages)
     index = max((i for i, page in enumerate(pages) if '__Last 5 picks__' in page), default=len(pages)-1)
