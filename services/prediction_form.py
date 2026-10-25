@@ -8,12 +8,17 @@ import discord
 
 from services.prediction_stats import get_competition_snapshot
 from services.spoilers import render_text
+from services.team_emojis import custom_emoji
 
 
 FORM_HEADING = ('## __Last 5 picks__\n'
                 '-# Oldest → newest\n'
                 '-# ✅ Correct · ❌ Wrong · ➖ Skipped\n'
                 "-# 🔥 Ongoing streak of 3+ (skipped matches don't break streaks)")
+
+
+def form_heading():
+    return FORM_HEADING.replace('➖', str(custom_emoji('dootpinkline') or '➖'))
 
 
 def aligned_name_fields(names):
@@ -60,7 +65,7 @@ async def add_prediction_form(pages, manager, matches, votes_by_match):
     lines = form_rows(snapshot, participants)
     if not lines:
         return pages
-    section = FORM_HEADING + '\n\n' + '\n'.join(lines)
+    section = form_heading() + '\n\n' + '\n'.join(lines)
     def fits(text):
         return max(len(text), len(render_text(text))) <= 3600
     pages = list(pages)
@@ -70,7 +75,7 @@ async def add_prediction_form(pages, manager, matches, votes_by_match):
         pages[0] = merged
         return pages
     # Stay inside the same Discord post if a large voter list needs more room.
-    heading = pages[0].splitlines()[0] + '\n\n' + FORM_HEADING
+    heading = pages[0].splitlines()[0] + '\n\n' + form_heading()
     current = heading
     for line in lines:
         if not fits(current + '\n\n' + line):
