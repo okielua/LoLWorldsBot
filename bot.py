@@ -1613,11 +1613,11 @@ async def leaderboard(interaction: discord.Interaction):
     await interaction.followup.send(**payload, ephemeral=False, allowed_mentions=discord.AllowedMentions.none())
 
 
-@bot.tree.command(name="stats", description="Privately view a member's Worlds 2026 voting stats.")
+@bot.tree.command(name="stats", description="View a member's Worlds 2026 voting stats.")
 @app_commands.guild_only()
 @app_commands.describe(name="Choose the member whose voting stats you want to see.")
 async def stats(interaction: discord.Interaction, name: discord.Member):
-    await show_personal_stats(interaction, interaction.guild_id, worlds.tournament.id, data=worlds, target_user=name)
+    await show_personal_stats(interaction, interaction.guild_id, worlds.tournament.id, data=worlds, target_user=name, ephemeral=False)
 
 
 @bot.tree.command(
@@ -1658,7 +1658,7 @@ Choose a server member from the suggestions to view their past predictions and s
 See Communism’s leaderboard for predictions made through this bot.
 
 `/stats <name>`
-Privately view a member’s Worlds 2026 voting stats. Choose a server member from the name picker.
+View a member’s Worlds 2026 voting stats. Choose a server member from the name picker.
 
 `/trophycase`
 See every voter’s MVP trophies and remaining trophy slots.

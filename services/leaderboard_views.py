@@ -64,11 +64,11 @@ class StatsSections(SetupRequiredView):
     section_heading_pattern = r'(?m)^## [^\n]+ __\*[^*\n]+\*__$'
 
 
-async def show_personal_stats(interaction, guild_id, tournament_id, *, data=None, target_user=None):
+async def show_personal_stats(interaction, guild_id, tournament_id, *, data=None, target_user=None, ephemeral=True):
     if interaction.guild_id != guild_id or getattr(interaction, "guild", None) is None:
         await interaction.response.send_message(**message_payload("These stats belong to another server."), ephemeral=True)
         return
-    await interaction.response.defer(ephemeral=True)
+    await interaction.response.defer(ephemeral=ephemeral)
     if data is None:
         manager = getattr(getattr(interaction, "client", None), "voting_manager", None)
         data = manager.store.data if manager and manager.store.data.tournament.id == tournament_id else None
@@ -77,7 +77,7 @@ async def show_personal_stats(interaction, guild_id, tournament_id, *, data=None
     payload = embed_card_payload(personal_stats_embed(snapshot, target.id, target.display_name,
                                                      rows=[row for row, _ in entries], previous=previous),
                                  controls=StatsSections(timeout=900), title_level=1)
-    await interaction.followup.send(**payload, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+    await interaction.followup.send(**payload, ephemeral=ephemeral, allowed_mentions=discord.AllowedMentions.none())
 
 
 class MyStatsButton(discord.ui.DynamicItem[discord.ui.Button],

@@ -83,7 +83,7 @@ def test_playin_votes_count_in_leaderboard_and_personal_stats_with_result_protec
     asyncio.run(scenario())
 
 
-def test_button_and_stats_command_return_identical_private_clicker_stats(stats_data):
+def test_button_and_public_stats_command_return_identical_clicker_stats(stats_data):
     from test_bot_commands import load_command
     data = stats_data
     async def scenario():
@@ -105,6 +105,8 @@ def test_button_and_stats_command_return_identical_private_clicker_stats(stats_d
         command_caller = interaction_for(data, 8)
         await load_command("stats", data, discord=discord)(command_caller, command_caller.user)
         assert rendered_payload(command_caller.followup.send.call_args.kwargs) == rendered
+        command_caller.response.defer.assert_awaited_once_with(ephemeral=False)
+        assert command_caller.followup.send.call_args.kwargs["ephemeral"] is False
         owner = interaction_for(data, 7)
         await button.callback(owner)
         assert "### · Correct predictions: 1/1 (100%)" in rendered_payload(owner.followup.send.call_args.kwargs).description
@@ -198,7 +200,7 @@ def test_leaderboard_contains_persistent_trophycase_button():
     asyncio.run(scenario())
 
 
-def test_stats_command_can_privately_view_another_member(stats_data):
+def test_stats_command_can_publicly_view_another_member(stats_data):
     from test_bot_commands import load_command
     async def scenario():
         caller = interaction_for(stats_data, 8)
@@ -210,7 +212,7 @@ def test_stats_command_can_privately_view_another_member(stats_data):
         assert '### · Correct predictions: 1/1 (100%)' in rendered.description
         assert 'Other user’s' not in rendered.description and '### My ' not in rendered.description
         assert 'whether `lua` votes for or against them' in rendered.description.replace('\u00a0', '')
-        assert payload['ephemeral'] is True and payload['allowed_mentions'].to_dict() == {'parse': []}
+        assert payload['ephemeral'] is False and payload['allowed_mentions'].to_dict() == {'parse': []}
         payload['view'].stop()
     asyncio.run(scenario())
 
@@ -225,7 +227,7 @@ def test_stats_command_handles_a_member_with_no_votes(stats_data):
         text = rendered_payload(payload).description
         assert '### · Correct predictions: 0/0 (—)' in text
         assert '### · League rank: —' in text
-        assert payload['ephemeral'] is True
+        assert payload['ephemeral'] is False
         payload['view'].stop()
     asyncio.run(scenario())
 
