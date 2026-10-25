@@ -98,7 +98,7 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
             case = ['🏆' if i < (2 if row==entries[0][0] else 1) else '⚪' for i in range(slot_count)]
         earned = [f'🏆 ({labels[i]})' for i, slot in enumerate(case) if slot == '🏆' and i < len(labels)]
         if earned:
-            block += '\n\n**__Trophies:__**\n' + '\n'.join(earned)
+            block += '\n**__Trophies:__**\n' + '\n'.join(earned)
         blocks.append((tiers[row.user_id], block))
     prefix = "Sample results. The real leaderboard is unchanged.\n\n" if preview else ""
     title = "Communism Worlds Leaderboard"
