@@ -249,6 +249,44 @@ def test_first_timer_can_vote_on_daily_and_restored_buttons_without_mysetup(cont
     asyncio.run(scenario())
 
 
+def test_temporary_extension_reopens_live_and_scheduled_polls_then_closes_exactly(context):
+    from services import polls
+    from services.prediction_stats import get_competition_snapshot
+    manager, store, channel, current, _ = context
+    async def run():
+        await manager.tick()
+        match = store.data.matches[0]
+        current[0] = match.start_time + timedelta(minutes=2)
+        store.fetched_at = current[0]
+        match.status = MatchStatus.LIVE
+        await manager.tick()
+        until = current[0] + timedelta(minutes=10)
+        with user_settings.get_connection() as db:
+            db.execute('UPDATE match_polls SET voting_override_until=? WHERE guild_id=? AND match_id=?',
+                       (until.isoformat(), 123, match.id))
+        await manager.tick()
+        assert any(p.match_id == match.id for p in await manager.personal_vote_targets(999))
+        await manager.vote(match.id, 999, match.team1_id, 'Late voter')
+        current[0] = until - timedelta(microseconds=1)
+        store.fetched_at = current[0]
+        await manager.vote(match.id, 998, match.team2_id, 'Other voter')
+        current[0] = until
+        store.fetched_at = current[0]
+        with pytest.raises(ValueError, match='closed'):
+            polls.cast_vote(123, match.id, 997, match.team1_id, current[0])
+        with pytest.raises(ValueError, match='closed'):
+            await manager.vote(match.id, 997, match.team1_id)
+        match.status = MatchStatus.COMPLETED
+        match.winner_id = match.team1_id
+        match.team1_score, match.team2_score = 3, 0
+        await manager.tick()
+        snapshot = get_competition_snapshot(123, store.data.tournament.id)
+        assert next(row for row in snapshot.rows if row.user_id == 999).correct == 1
+        reopened = next(p for p in polls.get_polls(123, store.data.tournament.id) if p.match_id == match.id)
+        assert reopened.closed and reopened.voting_closes_at == until
+    asyncio.run(run())
+
+
 def test_daily_post_waits_until_exact_24_hour_boundary_even_after_previous_day_ends(context):
     manager, store, channel, current, _ = context
     first = store.data.matches[0]

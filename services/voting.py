@@ -446,6 +446,8 @@ class DailyPredictionsView(SetupRequiredLayoutView):
                 card.add_item(discord.ui.ActionRow(ScheduleVoteButton(manager, poll, 1), ScheduleVoteButton(manager, poll, 2)))
             timing = upcoming_line(match, manager.clock()) + '\n\n' if match.status == MatchStatus.SCHEDULED else ''
             details_text = team_display(f"**{stage_label}**\n\n{timing}{times}\n\n{status}")
+            if poll.voting_override_until and manager.clock() < poll.voting_override_until and not poll.closed:
+                details_text.content += f"\n**Voting reopened until <t:{int(poll.voting_override_until.timestamp())}:T>**"
             actual_day = match.start_time.astimezone(MATCHDAY_ZONE).date().isoformat()
             previous_day = matches[match_index - 1].start_time.astimezone(MATCHDAY_ZONE).date().isoformat() if match_index else day
             date_prefix = (f"## __{date_heading_token(match.start_time, MATCHDAY_ZONE.key, now=manager.clock(), style='weekday')}__\n\n"
@@ -595,11 +597,9 @@ class VotingManager:
         match = self.store.data.matches_by_id.get(match_id)
         if not self.fresh():
             raise ValueError("Live data is temporarily unavailable; please try again shortly.")
-        if (
-            match is None or match.status != MatchStatus.SCHEDULED
-            or "TBD" in {match.team1_id, match.team2_id}
-            or self.clock() >= voting_deadline(match, self.store.data)
-        ):
+        available = await asyncio.to_thread(polls.get_polls, self.guild_id, self.store.data.tournament.id)
+        poll = next((p for p in available if p.match_id == match_id), None)
+        if not polls.is_open_for_votes(match, poll, self.clock(), self.store.data):
             raise ValueError("Predictions have closed for this match.")
         if team_id not in {match.team1_id, match.team2_id}:
             raise ValueError("This matchup changed. Please use the current prediction buttons.")
@@ -607,7 +607,9 @@ class VotingManager:
             raise ValueError("This matchup changed. Please use the current prediction buttons.")
         await asyncio.to_thread(polls.reconcile_polls, self.guild_id, self.store.data, self.clock())
         current = self.store.data.matches_by_id.get(match_id)
-        if not self.fresh() or current is None or current.status != MatchStatus.SCHEDULED or self.clock() >= voting_deadline(current, self.store.data):
+        available = await asyncio.to_thread(polls.get_polls, self.guild_id, self.store.data.tournament.id)
+        poll = next((p for p in available if p.match_id == match_id), None)
+        if not self.fresh() or not polls.is_open_for_votes(current, poll, self.clock(), self.store.data):
             raise ValueError("Predictions have closed or live data is unavailable. Please try again shortly.")
         if {current.team1_id, current.team2_id} != {match.team1_id, match.team2_id}:
             raise ValueError("This matchup changed. Please use the current prediction buttons.")
@@ -671,9 +673,7 @@ class VotingManager:
         candidates = []
         for poll in available:
             match = data.matches_by_id.get(poll.match_id)
-            if (match and poll.match_id in published and not poll.closed and match.status == MatchStatus.SCHEDULED
-                    and "TBD" not in {match.team1_id, match.team2_id}
-                    and self.clock() < voting_deadline(match, self.store.data)):
+            if poll.match_id in published and polls.is_open_for_votes(match, poll, self.clock(), data):
                 candidates.append(poll)
         return sorted(candidates, key=lambda poll: (poll.start_time, poll.match_id))
 

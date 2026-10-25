@@ -20,6 +20,7 @@ class Poll:
     closed: bool
     winner_id: str | None
     voting_closes_at: datetime | None = None
+    voting_override_until: datetime | None = None
 
 
 def initialize_polls():
@@ -59,6 +60,8 @@ def initialize_polls():
         if "display_name" not in columns:
             connection.execute("ALTER TABLE poll_votes ADD COLUMN display_name TEXT")
         poll_columns = {row[1] for row in connection.execute("PRAGMA table_info(match_polls)")}
+        if 'voting_override_until' not in poll_columns:
+            connection.execute('ALTER TABLE match_polls ADD COLUMN voting_override_until TEXT')
         if "voting_closes_at" not in poll_columns:
             connection.execute("ALTER TABLE match_polls ADD COLUMN voting_closes_at TEXT")
         if "result_observed_at" not in poll_columns:
@@ -140,16 +143,26 @@ def create_poll(guild_id, match, data=None):
 
 def _poll(row):
     return Poll(*row[:5], datetime.fromisoformat(row[5]), bool(row[6]), row[7],
-                datetime.fromisoformat(row[8]) if len(row) > 8 and row[8] else None)
+                datetime.fromisoformat(row[8]) if len(row) > 8 and row[8] else None,
+                datetime.fromisoformat(row[9]) if len(row) > 9 and row[9] else None)
 
 
 def get_polls(guild_id, tournament_id):
     with closing(get_connection()) as connection:
         rows = connection.execute("""
-            SELECT guild_id, match_id, tournament_id, team1_id, team2_id, start_time, closed, winner_id, voting_closes_at
+            SELECT guild_id, match_id, tournament_id, team1_id, team2_id, start_time, closed, winner_id, voting_closes_at, voting_override_until
             FROM match_polls WHERE guild_id = ? AND tournament_id = ?
         """, (guild_id, tournament_id)).fetchall()
     return [_poll(row) for row in rows]
+
+
+def is_open_for_votes(match, poll, now, data):
+    if match is None or 'TBD' in {match.team1_id, match.team2_id}:
+        return False
+    extended = bool(poll and poll.voting_override_until and now < poll.voting_override_until)
+    if match.status != MatchStatus.SCHEDULED and not (extended and match.status == MatchStatus.LIVE):
+        return False
+    return not (poll and poll.closed) and now < (voting_deadline(poll) if poll else voting_deadline(match, data))
 
 
 def cast_vote(guild_id, match_id, user_id, team_id, now, display_name=None, expected_pair=None):
@@ -189,11 +202,17 @@ def reconcile_polls(guild_id, data, now, *, fresh=True):
             match = matches.get(poll.match_id) if fresh else None
             start = match.start_time if match else poll.start_time
             deadline = voting_deadline(match, data) if match else voting_deadline(poll)
+            if poll.voting_override_until:
+                deadline = max(deadline, poll.voting_override_until)
             closed = poll.closed or now >= deadline
+            extended = bool(poll.voting_override_until and now < poll.voting_override_until
+                            and match and match.status in {MatchStatus.SCHEDULED, MatchStatus.LIVE})
+            if extended:
+                closed = False
             winner = poll.winner_id
             team1, team2 = poll.team1_id, poll.team2_id
             if fresh:
-                if match is None or match.status != MatchStatus.SCHEDULED:
+                if match is None or match.status != MatchStatus.SCHEDULED and not extended:
                     closed = True
                 if match:
                     team1, team2 = match.team1_id, match.team2_id
