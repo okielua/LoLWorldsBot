@@ -168,7 +168,11 @@ class ServerReminderDelivery:
                         content += f"\n\n### {field.name}\n{field.value.rstrip(chr(0x200b)).strip()}"
                 if len(batch) > 1:
                     pairings = "\n".join(f"### {matchup(m)}" for m in batch)
-                    content = (f"## Swiss Matchday\n**{stage_name}{round_label} · Bo{match.best_of}**\n\n"
+                    batch_label = f"{stage_name}{round_label} · Bo{match.best_of}"
+                    if len({m.best_of for m in batch}) > 1:
+                        batch_label = f"{stage_name} · Round 3"
+                        pairings = '\n'.join(f"### {matchup(m)}\n**{m.round_name} · Bo{m.best_of}**" for m in batch)
+                    content = (f"## Swiss Matchday\n**{batch_label}**\n\n"
                                + upcoming_line(match, self.clock()) + '\n\n'
                                f"Voting is now closed for **all {len(batch)} matches**.\n\n{pairings}")
                     if self.message_prefix:

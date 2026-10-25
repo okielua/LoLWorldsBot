@@ -366,8 +366,7 @@ class DailyPredictionsView(SetupRequiredLayoutView):
         batch_voting = len(batch) > 1 and {m.id for m in batch} == {m.id for m in all_matches}
         if round_three:
             introduction = ('Vote on all 8 Round 3 matchups.\n\n'
-                            '**Bo1 votes close together, 5 minutes before that day’s first Bo1. '
-                            'Bo3 votes close 5 minutes before each series.**\n\n')
+                            '**Each day’s four polls close together, 5 minutes before that day’s first match.**\n\n')
         elif batch_voting:
             introduction = (f"**All votes lock <t:{int(voting_deadline(batch[0], manager.store.data).timestamp())}:F> "
                             "(5 minutes before game 1)**\n\n")

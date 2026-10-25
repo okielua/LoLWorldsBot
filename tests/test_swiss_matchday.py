@@ -389,7 +389,7 @@ def test_round_three_publishes_all_eight_at_berlin_noon_after_clock_change(conte
         payload = channel.send.call_args.kwargs
         text = str(payload['view'].to_components())
         assert 'Vote on all 8 Round 3 matchups' in text
-        assert 'Bo1 votes close together' in text and 'Bo3 votes close' in text
+        assert 'Each day’s four polls close together' in text
         assert len([item for item in walk_items(payload['view']) if isinstance(item, discord.ui.Button)]) == 16
         assert [role.id for role in payload['allowed_mentions'].roles] == [88]
         assert payload['allowed_mentions'].users is False
@@ -402,6 +402,25 @@ def test_round_three_publishes_all_eight_at_berlin_noon_after_clock_change(conte
         await restarted.tick()
         channel.send.assert_awaited_once()
         assert all(p.match_id in {m.id for m in matches} for p in polls.get_polls(123, store.data.tournament.id))
+        for match in matches[:4]:
+            assert voting_deadline(match, store.data) == first - timedelta(minutes=5)
+        second_day_cutoff = first + timedelta(days=1, minutes=-5)
+        for match in matches[4:]:
+            assert voting_deadline(match, store.data) == second_day_cutoff
+        current[0] = first - timedelta(minutes=5)
+        store.fetched_at = current[0]
+        await restarted.tick()
+        by_id = {p.match_id: p for p in polls.get_polls(123, store.data.tournament.id)}
+        assert all(by_id[m.id].closed for m in matches[:4])
+        assert all(not by_id[m.id].closed for m in matches[4:])
+        current[0] = second_day_cutoff
+        store.fetched_at = current[0]
+        await restarted.tick()
+        assert all(p.closed for p in polls.get_polls(123, store.data.tournament.id))
+        for match in matches[4:]:
+            with pytest.raises(ValueError, match='closed'):
+                polls.cast_vote(123, match.id, 999, match.team1_id, current[0])
+        channel.send.assert_awaited_once()
     asyncio.run(run())
 
 

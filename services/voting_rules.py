@@ -27,6 +27,10 @@ def round_three_publication_time(data):
 
 
 def swiss_batch(data, match):
+    if 'swiss' in match.stage_id.lower() and (match.round_name or '').startswith('Round 3 ·'):
+        zone = ZoneInfo(TOURNAMENT_TIMEZONE)
+        day = match.start_time.astimezone(zone).date()
+        return [m for m in round_three_matches(data) if m.start_time.astimezone(zone).date() == day] or [match]
     if match.best_of != 1 or 'swiss' not in match.stage_id.lower():
         return [match]
     zone = ZoneInfo(TOURNAMENT_TIMEZONE)
