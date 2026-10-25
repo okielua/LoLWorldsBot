@@ -28,7 +28,7 @@ def test_sample_leaderboard_matches_compact_specification():
     assert 'Current streak:' not in text and 'Best streak:' not in text
     assert '⚪' not in text and '🏆' in text and '✅' in text and '❌' in text
     assert 'Full collection' not in text and '12 trophies' not in text
-    assert '**Last 10 picks:**' in text and 'Trophies:\n🏆 (Swiss day 1)\n🏆 (Swiss day 2)' in text
+    assert '**__Last 10 picks:__**' in text and '**__Trophies:__**\n🏆 (Swiss day 1)\n🏆 (Swiss day 2)' in text
     assert all("**" not in re.sub(r"\*\*\d+(?:\.\d+)?% correct\*\*", "", line) for line in text.splitlines() if line.startswith("-#"))
     assert '-# *✅ Correct · ❌ Wrong · ➖ Skipped*' in text
     assert "skipped matches don't break streaks" in text
@@ -214,5 +214,5 @@ def test_earned_trophies_are_labelled_by_matchday_and_stage():
     for i in (1, 8, 11):
         case[i] = '🏆'
     embed, = leaderboard_embeds([(row, 'Player')], trophies={1: case}, trophy_slots=slots)
-    assert 'Trophies:\n🏆 (Swiss day 2)\n🏆 (Quarterfinals)\n🏆 (Worlds 2026 overall)' in embed.description
+    assert '**__Trophies:__**\n🏆 (Swiss day 2)\n🏆 (Quarterfinals)\n🏆 (Worlds 2026 overall)' in embed.description
     assert '⚪' not in embed.description and 'Full collection' not in embed.description

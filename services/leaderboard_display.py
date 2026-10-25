@@ -84,13 +84,13 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
             icons = [str(custom_emoji('dootpinkline') or '➖') if i=='➖' else i for i in icons]
         else:
             icons = []
-        block += '\n**Last 10 picks:**\n' + (' '.join(icons[-10:]) or 'No scored picks yet.')
+        block += '\n**__Last 10 picks:__**\n' + (' '.join(icons[-10:]) or 'No scored picks yet.')
         case = (trophies or {}).get(row.user_id,['⚪']*slot_count)
         if preview and trophies is None and row.correct:
             case = ['🏆' if i < (2 if row==entries[0][0] else 1) else '⚪' for i in range(slot_count)]
         earned = [f'🏆 ({labels[i]})' for i, slot in enumerate(case) if slot == '🏆' and i < len(labels)]
         if earned:
-            block += '\n\nTrophies:\n' + '\n'.join(earned)
+            block += '\n\n**__Trophies:__**\n' + '\n'.join(earned)
         blocks.append(block)
     prefix = "Sample results. The real leaderboard is unchanged.\n\n" if preview else ""
     title = "Communism Worlds Leaderboard"
