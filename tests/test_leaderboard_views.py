@@ -315,7 +315,7 @@ def test_badge_files_are_included_in_discord_multipart_upload():
     asyncio.run(scenario())
 
 
-def test_stats_reuse_leaderboard_name_padding_in_title_header_and_descriptions(stats_data):
+def test_stats_names_are_unpadded_while_leaderboard_names_stay_aligned(stats_data):
     from services.leaderboard_views import leaderboard_context
     async def scenario():
         caller = interaction_for(stats_data, 7)
@@ -327,6 +327,9 @@ def test_stats_reuse_leaderboard_name_padding_in_title_header_and_descriptions(s
         await show_personal_stats(caller, 123, stats_data.tournament.id, data=stats_data)
         payload = caller.followup.send.call_args.kwargs
         card = rendered_payload(payload)
+        padded_name = name
+        name = '`lua`'
+        assert padded_name not in card.title and padded_name not in card.description
         assert name in card.title
         assert f'# {name}’s __Basic Stats__' in card.description
         assert f'whose series {name} predicts' in card.description

@@ -123,11 +123,11 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
     return pages
 
 
-def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous=None, display_names=None):
+def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous=None):
     rows = snapshot.rows if rows is None else rows
     ranks = competition_ranks(rows)
     row = next((row for row in rows if row.user_id == user_id), None)
-    name = aligned_name_fields({**(display_names or {}), user_id: display_name},
+    name = aligned_name_fields({user_id: display_name},
                                prefix="", max_length=80)[user_id]
     owner = f"{name}’s"
     title = f"Worlds 2026 Voting Stats · {name}"

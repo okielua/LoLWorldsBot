@@ -69,8 +69,7 @@ async def show_personal_stats(interaction, guild_id, tournament_id, *, data=None
     snapshot, entries, previous = await leaderboard_context(interaction, tournament_id, data=data)
     target = target_user or interaction.user
     payload = embed_card_payload(personal_stats_embed(snapshot, target.id, target.display_name,
-                                                     rows=[row for row, _ in entries], previous=previous,
-                                                     display_names={row.user_id: name for row, name in entries}), title_level=1)
+                                                     rows=[row for row, _ in entries], previous=previous), title_level=1)
     await interaction.followup.send(**payload, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
 
