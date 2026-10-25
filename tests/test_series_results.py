@@ -121,7 +121,7 @@ def test_test_completion_never_pings_and_latest_command_is_public(context):
             response=SimpleNamespace(defer=AsyncMock()), followup=SimpleNamespace(send=AsyncMock()))
         await show_latest_results(interaction)
         call = interaction.followup.send.call_args
-        assert not call.kwargs.get("ephemeral")
+        assert call.kwargs.get("ephemeral") is True
         assert "TEST: Series Voting Results" in rendered_message(call).title
         assert call.kwargs["allowed_mentions"].to_dict() == {"parse": []}
     asyncio.run(scenario())
@@ -301,7 +301,7 @@ def test_any_member_can_summon_results_without_an_automatic_post(context, receip
         assert "✅ @Lua" in card.description and "❌ @Miwa" in card.description
         assert "||" not in card.description
         assert ("Open the results announcement" in card.description) == (receipt == "announced")
-        assert not call.kwargs.get("ephemeral", False)
+        assert call.kwargs.get("ephemeral") is True
         assert call.kwargs["allowed_mentions"].to_dict() == {"parse": []}
         assert channel.send.await_count == count
         if receipt != "announced":

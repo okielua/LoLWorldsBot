@@ -189,14 +189,14 @@ def result_pages(match, votes, *, test_mode=False):
 
 
 async def show_latest_results(interaction):
-    await interaction.response.defer()
+    await interaction.response.defer(ephemeral=True)
     client = interaction.client
     manager = (getattr(client, 'prediction_test_manager', None)
                or getattr(client, 'last_prediction_test_manager', None)
                or client.voting_manager)
     if manager.guild_id != interaction.guild_id:
         await interaction.followup.send(**message_payload("No completed series with a published vote is available in this server yet."),
-                                        allowed_mentions=discord.AllowedMentions.none())
+                                        ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
         return
     if manager.fresh():
         await asyncio.to_thread(polls.reconcile_polls, manager.guild_id, manager.store.data, manager.clock())
@@ -213,10 +213,10 @@ async def show_latest_results(interaction):
             link = f"\n\n[Open the results announcement](https://discord.com/channels/{interaction.guild_id}/{channel_id}/{message_id})"
             pages = [page + link for page in pages]
         await interaction.followup.send(**message_payload(pages[0], controls=HistoryPages(pages)),
-                                        allowed_mentions=discord.AllowedMentions.none())
+                                        ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
     else:
         await interaction.followup.send(**message_payload("No completed series with a published vote is available in this server yet."),
-                                        allowed_mentions=discord.AllowedMentions.none())
+                                        ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
 
 class SeriesResults:

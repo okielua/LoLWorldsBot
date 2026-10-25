@@ -1647,7 +1647,7 @@ Choose your timezone, time format, teams, and Worlds role and match reminder pre
 Open your private voting panel. Vote or change a pick; your selected team is marked green with ✓.
 Voter names appear publicly under each daily matchup, without pings. Picks stay private until voting closes.
 
-`/votehistory` — Post the latest completed series’ voting results, even if the automatic post is missing. No pings.
+`/votehistory` — Privately view the latest completed series’ voting results, even if the automatic post is missing. No pings.
 `/votehistory [name]` (e.g. `/votehistory @apodso`)
 Choose a server member from the suggestions to view their past predictions and stats. Choose yourself for your own history and the My Stats button.
 
