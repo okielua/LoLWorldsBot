@@ -111,6 +111,12 @@ class MessageCard(discord.ui.LayoutView):
             if len(paragraphs) > split_after:
                 text = "\n\n".join(paragraphs[:split_after])
                 after_first_row = paragraphs[split_after]
+        if getattr(controls, "title_divider", False):
+            title, newline, remaining = text.partition('\n')
+            if newline and title.startswith('#'):
+                card.add_item(team_display(title))
+                card.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.large))
+                text = remaining.strip()
         section_pattern = getattr(controls, "section_heading_pattern", None)
         footnote_divider = getattr(controls, "footnote_divider", False)
         section_media = getattr(controls, "section_media", None)

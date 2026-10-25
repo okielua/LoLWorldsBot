@@ -94,6 +94,7 @@ class MyStatsButton(discord.ui.DynamicItem[discord.ui.Button],
 
 
 class LeaderboardView(SetupRequiredView):
+    title_divider = True
     footnote_divider = True
     section_heading_pattern = r'(?m)^# (?:<a?:\w+:\d+>|:(?:challenger|diamond|gold|iron):)$'
 
