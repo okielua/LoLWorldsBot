@@ -14,7 +14,7 @@ LEADERBOARD_HELP = format_footnotes(
     "-# Standings include play-ins; last 10 picks shown, starting at Swiss.\n"
     "-# ✅ Correct · ❌ Wrong · ➖ Skipped\n"
     "-# 🔥 Ongoing streak of 3+ (skipped matches don't break streaks)\n"
-    "-# 🏆 Earned MVP trophies · Full collection: `/trophycase`."
+    "-# 🏆 Earned MVP trophies."
 )
 
 
@@ -41,13 +41,31 @@ def rank_movement(user_id, ranks, previous):
             f"{custom_emoji('arrow_down_red') or '⬇️'}{-change}" if change < 0 else '')
 
 
+def trophy_labels(slots):
+    labels, swiss_day = [], 0
+    for stage, _ in slots:
+        if stage == 'swiss':
+            swiss_day += 1
+            labels.append(f'Swiss day {swiss_day}')
+        else:
+            labels.append(next((label for key, label in (
+                ('quarterfinal', 'Quarterfinals'), ('semifinal', 'Semifinals'),
+                ('final', 'Final'), ('overall', 'Worlds 2026 overall'))
+                if key in stage.lower()), stage))
+    return labels
+
+
 def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, trophies=None, trophy_slots=None):
     entries = sorted(entries, key=lambda entry: (-entry[0].correct, -entry[0].accuracy, entry[0].user_id))
     ranks = competition_ranks([row for row, _ in entries])
     blocks = []
     history_rows = {row.user_id:row for row in history.rows} if history else {}
     help_text = LEADERBOARD_HELP.replace('➖',str(custom_emoji('dootpinkline') or '➖'))
-    slot_count = len(trophy_slots) if trophy_slots is not None else 12
+    slots = trophy_slots if trophy_slots is not None else (
+        [('swiss', str(i)) for i in range(8)]
+        + [('quarterfinals', ''), ('semifinals', ''), ('final', ''), ('overall', '')])
+    slot_count = len(slots)
+    labels = trophy_labels(slots)
     for row, name in entries:
         movement = rank_movement(row.user_id, ranks, previous)
         streak = getattr(history_rows.get(row.user_id),'current_streak',0) if history is not None else row.current_streak
@@ -66,13 +84,13 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
             icons = [str(custom_emoji('dootpinkline') or '➖') if i=='➖' else i for i in icons]
         else:
             icons = []
-        block += ' '.join(icons[-10:])
+        block += '\n**Last 10 picks:**\n' + (' '.join(icons[-10:]) or 'No scored picks yet.')
         case = (trophies or {}).get(row.user_id,['⚪']*slot_count)
         if preview and trophies is None and row.correct:
             case = ['🏆' if i < (2 if row==entries[0][0] else 1) else '⚪' for i in range(slot_count)]
-        earned = case.count('🏆')
+        earned = [f'🏆 ({labels[i]})' for i, slot in enumerate(case) if slot == '🏆' and i < len(labels)]
         if earned:
-            block += '\n' + ' '.join(['🏆'] * earned)
+            block += '\n\nTrophies:\n' + '\n'.join(earned)
         blocks.append(block)
     prefix = "Sample results. The real leaderboard is unchanged.\n\n" if preview else ""
     title = "Communism Worlds Leaderboard"

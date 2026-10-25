@@ -12,10 +12,8 @@ from services.team_history import HistoryPages
 
 
 TROPHY_HELP = (
-    '-# 🏆 Earned · ⚪ Not earned\n'
     '-# 12 trophies to win: 8 Swiss matchdays, 3 stages (quarterfinals, semifinals, final), '
-    'and 1 overall Worlds 2026 winner.\n'
-    '-# Slots run chronologically from left to right; the overall trophy is last.'
+    'and 1 overall Worlds 2026 winner.'
 )
 
 

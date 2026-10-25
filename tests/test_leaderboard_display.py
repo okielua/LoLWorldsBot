@@ -27,7 +27,8 @@ def test_sample_leaderboard_matches_compact_specification():
     assert not any(word in text for word in ("participation", "75.0%", "behind", "Level on", "\u200b", "\n\n\n"))
     assert 'Current streak:' not in text and 'Best streak:' not in text
     assert '⚪' not in text and '🏆' in text and '✅' in text and '❌' in text
-    assert '`/trophycase`' in text and '12 trophies' not in text
+    assert 'Full collection' not in text and '12 trophies' not in text
+    assert '**Last 10 picks:**' in text and 'Trophies:\n🏆 (Swiss day 1)\n🏆 (Swiss day 2)' in text
     assert all("**" not in re.sub(r"\*\*\d+(?:\.\d+)?% correct\*\*", "", line) for line in text.splitlines() if line.startswith("-#"))
     assert '-# *✅ Correct · ❌ Wrong · ➖ Skipped*' in text
     assert "skipped matches don't break streaks" in text
@@ -71,7 +72,7 @@ def test_full_swiss_history_skips_custom_rank_arrows_and_trophy_slots(monkeypatc
                             result_match_ids=tuple(f's{i}' for i in range(5)))
     case=['⚪','🏆']+['⚪']*10
     embed,=leaderboard_embeds([(rows[0],'Winner'),(rows[1],'Other')],previous={1:2,2:1},
-        history=history,trophies={1:case},trophy_slots=list(range(12)))
+        history=history,trophies={1:case},trophy_slots=[('swiss', str(i)) for i in range(8)] + [('quarterfinals', ''), ('semifinals', ''), ('final', ''), ('overall', '')])
     text=embed.description
     assert '__Winner__ <:arrow_up_green:100>1 🔥\n## 4/5 (80%)' in text
     assert '__Other__ <:arrow_down_red:101>1\n## 2/5 (40%)' in text
@@ -204,3 +205,14 @@ def test_history_only_displays_latest_ten_matches_without_changing_totals():
     assert ' '.join(['✅'] * 10) in embed.description
     assert '❌' not in embed.description.split('-# *Standings')[0]
     assert 'last 10 picks shown' in embed.description
+
+
+def test_earned_trophies_are_labelled_by_matchday_and_stage():
+    row = PredictionStats(1, 11, 19, 19, 0, 5)
+    slots = [('swiss', str(i)) for i in range(8)] + [('quarterfinals', ''), ('semifinals', ''), ('final', ''), ('overall', '')]
+    case = ['⚪'] * 12
+    for i in (1, 8, 11):
+        case[i] = '🏆'
+    embed, = leaderboard_embeds([(row, 'Player')], trophies={1: case}, trophy_slots=slots)
+    assert 'Trophies:\n🏆 (Swiss day 2)\n🏆 (Quarterfinals)\n🏆 (Worlds 2026 overall)' in embed.description
+    assert '⚪' not in embed.description and 'Full collection' not in embed.description
