@@ -13,7 +13,7 @@ def test_last_five_is_oldest_to_newest_and_streak_can_exceed_five():
     recent = [SimpleNamespace(chosen='A', winner_id='A') for _ in range(7)]
     snapshot = SimpleNamespace(rows=[SimpleNamespace(user_id=7, current_streak=7)], recent={7: recent})
     line, = form_rows(snapshot, {7: 'Lua'})
-    assert line.count('✅') == 5 and '🔥 Current streak: **7**' in line
+    assert line.count('✅') == 5 and 'Current streak: **7** 🔥' in line
     snapshot.recent[7][0] = SimpleNamespace(chosen='B', winner_id='A')
     snapshot.rows[0].current_streak = 0
     line, = form_rows(snapshot, {7: 'Lua'})

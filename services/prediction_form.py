@@ -9,7 +9,7 @@ from services.spoilers import render_text
 
 
 FORM_HEADING = ('### __Last 5 picks__\n'
-                '-# Scored predictions across all rounds · Oldest → newest\n'
+                '-# Oldest → newest\n'
                 '-# ✅ Correct · ❌ Wrong · 🔥 Current streak of 3+; skipped matches do not break it.')
 
 
@@ -23,8 +23,8 @@ def form_rows(snapshot, participants):
             continue
         icons = ' '.join('✅' if pick.chosen == pick.winner_id else '❌' for pick in reversed(recent))
         safe_name = discord.utils.escape_mentions(discord.utils.escape_markdown(' '.join(name.split())[:64]))
-        fire = '🔥 ' if row.current_streak >= 3 else ''
-        lines.append(f'**@{safe_name}** · {icons} · {fire}Current streak: **{row.current_streak}**')
+        fire = ' 🔥' if row.current_streak >= 3 else ''
+        lines.append(f'**@{safe_name}** · {icons} · Current streak: **{row.current_streak}**{fire}')
     return lines
 
 
