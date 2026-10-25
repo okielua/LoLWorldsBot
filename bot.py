@@ -42,6 +42,7 @@ from services.match_browser import show_match_games
 from services.vote_history import voter_autocomplete, show_vote_history
 from services.vote_panel import OpenVotePanel, PublicVotersButton, daily_post_reference
 from services.runtime_config import runtime_config, prepare_seed, remove_development_commands, validate_application
+from services.command_sync import sync_commands_after_ready
 from services.setup_gate import SetupCommandTree
 from services.spoilers import SpoilerLedger, current_policy, date_heading_token, matchup, score_token
 from services.spoiler_delivery import SpoilerDelivery
@@ -469,18 +470,17 @@ class WorldsBot(discord.Client):
         remove_development_commands(self.tree)
         self.tree.copy_global_to(guild=guild)
 
-        synced = await self.tree.sync(guild=guild)
-
-        logger.info(
-            "Synced %s command(s) to guild %s",
-            len(synced),
-            GUILD_ID,
-        )
+        self.command_sync_task = asyncio.create_task(
+            sync_commands_after_ready(self, guild, logger), name="slash-command-registration")
         self.background_polling.start()
         self.player_refresh_task = asyncio.create_task(refresh_players_loop(worlds.tournament.year), name="golgg-players")
         self.champion_refresh_task = asyncio.create_task(refresh_champions_loop(), name="champion-catalog")
 
     async def close(self):
+        command_sync_task = getattr(self, 'command_sync_task', None)
+        if command_sync_task:
+            command_sync_task.cancel()
+            await asyncio.gather(command_sync_task, return_exceptions=True)
         champion_task = getattr(self, 'champion_refresh_task', None)
         if champion_task:
             champion_task.cancel()
