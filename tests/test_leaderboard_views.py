@@ -77,7 +77,7 @@ def test_playin_votes_count_in_leaderboard_and_personal_stats_with_result_protec
         text = "\n".join(child["content"] for card in rendered["components"] for child in card["components"]
                          if child.get("type") == 10)
         assert "### · Correct predictions: ||1/1|| (||100%||)" in text
-        assert "*Check Your PayPal*" in text
+        assert "__*Check Your PayPal*__" in text
         assert text.count("Not enough data") == 4
         assert 'including Play-Ins' in text
     asyncio.run(scenario())
@@ -96,7 +96,7 @@ def test_button_and_stats_command_return_identical_private_clicker_stats(stats_d
         assert "### · Correct predictions: 0/1 (0%)" in rendered.description
         assert "### · Correct predictions: 0/1 (0%)" in rendered.description
         assert "Pending votes" not in rendered.description
-        assert all(label in rendered.description for label in ("## :PeyzPal: *Check Your PayPal*", "## :PepeKMS: *Can’t Read These Frauds*", "## :Copium: *Hopium Supplier*", "## :Discheesed: *Democracy Was a Mistake*"))
+        assert all(label in rendered.description for label in ("## :PeyzPal: __*Check Your PayPal*__", "## :PepeKMS: __*Can’t Read These Frauds*__", "## :Copium: __*Hopium Supplier*__", "## :Discheesed: __*Democracy Was a Mistake*__"))
         first_text = next(item.content for item in clicked["view"].walk_children() if isinstance(item, discord.ui.TextDisplay))
         assert first_text.startswith("# __Worlds 2026 Voting Stats · `Other user`__\n")
         caller.response.defer.assert_awaited_once_with(ephemeral=True)
@@ -340,5 +340,25 @@ def test_stats_names_are_unpadded_while_leaderboard_names_stay_aligned(stats_dat
         assert card.description.count('### · ') == 5
         assert '’s current rank:' not in card.description
         board['view'].stop()
+        payload['view'].stop()
+    asyncio.run(scenario())
+
+
+def test_stats_insights_keep_their_content_together_with_native_dividers(stats_data):
+    async def scenario():
+        caller = interaction_for(stats_data, 7)
+        await show_personal_stats(caller, 123, stats_data.tournament.id, data=stats_data)
+        payload = caller.followup.send.call_args.kwargs
+        card, = payload['view'].children
+        texts = [i.content for i in card.children if isinstance(i, discord.ui.TextDisplay)]
+        dividers = [i for i in card.children if isinstance(i, discord.ui.Separator)]
+        assert len(texts) == 4 and len(dividers) == 3
+        assert all(i.visible and i.spacing == discord.SeparatorSpacing.large for i in dividers)
+        labels = ['Check Your PayPal', 'Can’t Read These Frauds', 'Hopium Supplier', 'Democracy Was a Mistake']
+        for text, label in zip(texts, labels):
+            assert '__*' + label + '*__' in text
+            assert 'Not enough data' in text
+            assert sum(other in text for other in labels) == 1
+        assert payload['ephemeral'] is True
         payload['view'].stop()
     asyncio.run(scenario())

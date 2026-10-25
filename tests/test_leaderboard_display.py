@@ -91,14 +91,14 @@ def test_personal_stats_use_requested_summary_and_four_explained_sections():
     embed = personal_stats_embed(snapshot, 4, "Sample Player 4", previous={1: 1, 4: 3})
     text = embed.description.replace("\u00a0", "")
     assert embed.title == "Worlds 2026 Voting Stats · `Sample Player 4`"
-    assert text.index("# `Sample Player 4`’s __Basic Stats__") < text.index("### · Current rank:") < text.index("# __Some other Stats__") < text.index("## :PeyzPal: *Check Your PayPal*")
+    assert text.index("# `Sample Player 4`’s __Basic Stats__") < text.index("### · Current rank:") < text.index("# __Some other Stats__") < text.index("## :PeyzPal: __*Check Your PayPal*__")
     assert "### · Current rank: 2 of 2" in text
     assert "### · League rank: :gold:" in text
     assert "### · Correct predictions: 14/20 (70%)" in text
     assert "My votes:" not in text
     assert "My incorrect predictions:" not in text and "My missed votes:" not in text
     assert "### · Current streak: 🔥🔥\n### · Best streak: 🔥🔥🔥🔥🔥" in text
-    assert text.index("## :PeyzPal: *Check Your PayPal*") < text.index("## :PepeKMS: *Can’t Read These Frauds*") < text.index("## :Copium: *Hopium Supplier*") < text.index("## :Discheesed: *Democracy Was a Mistake*")
+    assert text.index("## :PeyzPal: __*Check Your PayPal*__") < text.index("## :PepeKMS: __*Can’t Read These Frauds*__") < text.index("## :Copium: __*Hopium Supplier*__") < text.index("## :Discheesed: __*Democracy Was a Mistake*__")
     assert text.startswith("-# *(All stats cover completed series across Worlds, including Play-Ins.)*")
     assert not any(label in text for label in ("Recent predictions", "Pending votes", "Boldest correct call", "Ranked by", "Rank movement", "behind the leader"))
     notes = [line for line in text.splitlines() if line.startswith("-# ")]
@@ -139,10 +139,10 @@ def test_renamed_insights_show_real_values_below_explanations():
     assert "\n\n### **GEN** · **1/3 correct (33.3%)**" in text
     assert "\n\n### **GEN** · **backed to win in 2 series they lost**" in text
     assert "### **2/3 minority predictions correct**\n\n### **T1** · **1/2 correct**\n### **GEN** · **1/1 correct**" in text
-    assert "## :PeyzPal: *Check Your PayPal*\n\n-# *The team whose series `lua` predicts most accurately" in text
-    assert "## :PepeKMS: *Can’t Read These Frauds*\n\n-# *The team whose series `lua` predicts least accurately" in text
-    assert "## :Copium: *Hopium Supplier*\n\n-# *The team `lua` backed to win most often when they actually lost." in text
-    assert "## :Discheesed: *Democracy Was a Mistake*\n\n-# *How often `lua` predicts correctly" in text
+    assert "## :PeyzPal: __*Check Your PayPal*__\n\n-# *The team whose series `lua` predicts most accurately" in text
+    assert "## :PepeKMS: __*Can’t Read These Frauds*__\n\n-# *The team whose series `lua` predicts least accurately" in text
+    assert "## :Copium: __*Hopium Supplier*__\n\n-# *The team `lua` backed to win most often when they actually lost." in text
+    assert "## :Discheesed: __*Democracy Was a Mistake*__\n\n-# *How often `lua` predicts correctly" in text
     assert "Boldest correct call" not in text and "Recent predictions" not in text
 
 
@@ -164,7 +164,7 @@ def test_advanced_stats_show_minimums_and_remain_within_the_actual_card_limit_wi
             payload = embed_card_payload(embed)
             text = "\n".join(item.content for item in payload["view"].walk_children() if isinstance(item, discord.ui.TextDisplay))
             assert len(text) <= 4000
-            assert all(label in text for label in ("## :PeyzPal: *Check Your PayPal*", "## :PepeKMS: *Can’t Read These Frauds*", "## :Copium: *Hopium Supplier*", "## :Discheesed: *Democracy Was a Mistake*"))
+            assert all(label in text for label in ("## :PeyzPal: __*Check Your PayPal*__", "## :PepeKMS: __*Can’t Read These Frauds*__", "## :Copium: __*Hopium Supplier*__", "## :Discheesed: __*Democracy Was a Mistake*__"))
             assert "<:t1:" in text and "<:CLOUD9:" in text
             assert "Pending votes" not in text
             payload["view"].stop()
@@ -188,7 +188,7 @@ def test_personal_section_headers_use_real_custom_emojis_in_requested_order():
         snapshot = CompetitionSnapshot([], None, {}, {}, 0)
         text = personal_stats_embed(snapshot, 7, "lua").description
         headers = [line for line in text.splitlines() if line.startswith("## ") and any(label in line for label in labels)]
-        assert headers == [f"## {emoji} *{label}*" for emoji, label in zip(emojis, labels)]
+        assert headers == [f"## {emoji} __*{label}*__" for emoji, label in zip(emojis, labels)]
         assert "Advanced stats" not in text and "•" not in text
         notes = [line for line in text.splitlines() if line.startswith("-# ")]
         assert all(line.startswith("-# *") and line.endswith("*") for line in notes)

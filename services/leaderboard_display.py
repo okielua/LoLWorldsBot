@@ -178,7 +178,7 @@ def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous
             "### " + value(team_text(f"**{team.team_id}** · **{team.correct}/{team.total} correct**"))
             for team in advanced.minority_teams)
     def section(name, title):
-        return f"\n\n## {custom_emoji(name) or ':' + name + ':'} *{title}*\n"
+        return f"\n\n## {custom_emoji(name) or ':' + name + ':'} __*{title}*__\n"
 
     body += (
         "\n\n\u2800\n\n# __Some other Stats__"
