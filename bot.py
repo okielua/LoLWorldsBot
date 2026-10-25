@@ -1601,8 +1601,8 @@ async def mvp(interaction: discord.Interaction):
 @app_commands.guild_only()
 async def leaderboard(interaction: discord.Interaction):
     await interaction.response.defer()
-    _, entries, previous = await leaderboard_context(interaction, worlds.tournament.id, data=worlds)
-    payload = leaderboard_payload(entries, interaction.guild_id, worlds.tournament.id, previous=previous)
+    context, entries, previous = await leaderboard_context(interaction, worlds.tournament.id, data=worlds)
+    payload = leaderboard_payload(entries, interaction.guild_id, worlds.tournament.id, previous=previous, context=context)
     await interaction.followup.send(**payload, allowed_mentions=discord.AllowedMentions.none())
 
 

@@ -11,9 +11,10 @@ from services.spoilers import aggregate_token
 ACCENT = 0x5865F2
 UNAVAILABLE = "\u2014"  # Approved for unavailable rank and accuracy.
 LEADERBOARD_HELP = format_footnotes(
-    "-# • Ranked by correct predictions, then accuracy.\n"
-    "-# • ↑↓ Rank movement since the previous completed match.\n"
-    "-# • Incorrect predictions reset streaks; missed votes don’t."
+    "-# Standings include play-ins; history starts at Swiss.\n"
+    "-# ✅ Correct · ❌ Wrong · ➖ Skipped\n"
+    "-# 🔥 Ongoing streak of 3+ (skipped matches don't break streaks)\n"
+    "-# 🏆 MVP trophies: Swiss matchdays, then quarterfinals, semifinals and final."
 )
 
 
@@ -36,23 +37,42 @@ def rank_movement(user_id, ranks, previous):
     if user_id not in previous:
         return "New"
     change = previous[user_id] - ranks[user_id]
-    return f"↑{change}" if change > 0 else f"↓{-change}" if change < 0 else ""
+    return (f"{custom_emoji('arrow_up_green') or '⬆️'}{change}" if change > 0 else
+            f"{custom_emoji('arrow_down_red') or '⬇️'}{-change}" if change < 0 else '')
 
 
-def leaderboard_embeds(entries, *, previous=None, preview=False):
+def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, trophies=None, trophy_slots=None):
     entries = sorted(entries, key=lambda entry: (-entry[0].correct, -entry[0].accuracy, entry[0].user_id))
     ranks = competition_ranks([row for row, _ in entries])
     blocks = []
+    history_rows = {row.user_id:row for row in history.rows} if history else {}
+    help_text = LEADERBOARD_HELP.replace('➖',str(custom_emoji('dootpinkline') or '➖'))
+    slot_count = len(trophy_slots) if trophy_slots is not None else 11
     for row, name in entries:
         movement = rank_movement(row.user_id, ranks, previous)
-        streak_icon = "🔥 " if row.current_streak >= 3 else ""
-        blocks.append(
-            f"### `{ranks[row.user_id]}.` {safe_name(name)}: {row.correct} correct\n"
-            + (f"-# Rank movement: {movement}\n" if movement else "")
-            + f"-# Voted on {row.submitted} of {row.eligible} past matches\n"
-            + f"-# Accuracy: **{accuracy_text(row)}{' correct' if row.submitted else ''}**\n\n"
-            + f"-# {streak_icon}Current streak: {row.current_streak}\n-# Best streak: {row.longest_streak}"
-        )
+        streak = getattr(history_rows.get(row.user_id),'current_streak',0) if history is not None else row.current_streak
+        streak_icon = ' 🔥' if streak>=3 else ''
+        block = (f"### `{ranks[row.user_id]}.` __{safe_name(name)}__: {row.correct} correct"
+                 + (f' {movement}' if movement else '') + streak_icon + '\n'
+                 + f'-# {accuracy_text(row)} accuracy · {row.submitted}/{row.eligible} voted\n')
+        if history is not None:
+            choices = {pick.match_id:pick.chosen==pick.winner_id for pick in history.recent.get(row.user_id,[])}
+            icons = [('✅' if choices[mid] else '❌') if mid in choices else str(custom_emoji('dootpinkline') or '➖')
+                     for mid in history.result_match_ids or ()]
+        elif preview:
+            tail = min(row.current_streak,row.correct)
+            icons = (['➖']*max(0,row.eligible-row.submitted) + ['✅']*(row.correct-tail)
+                     + ['❌']*(row.submitted-row.correct) + ['✅']*tail)
+            icons = [str(custom_emoji('dootpinkline') or '➖') if i=='➖' else i for i in icons]
+        else:
+            icons = []
+        block += '\n'.join(' '.join(icons[i:i+12]) for i in range(0,len(icons),12))
+        case = (trophies or {}).get(row.user_id,['⚪']*slot_count)
+        if preview and trophies is None and row.correct:
+            case = ['🏆' if i < (2 if row==entries[0][0] else 1) else '⚪' for i in range(slot_count)]
+        if case:
+            block += '\n' + ' '.join(case)
+        blocks.append(block)
     prefix = "Sample results. The real leaderboard is unchanged.\n\n" if preview else ""
     title = "Communism Worlds Leaderboard"
     if preview:
@@ -61,11 +81,11 @@ def leaderboard_embeds(entries, *, previous=None, preview=False):
     # An empty status contains no scored predictions to protect.
     protect = aggregate_token if entries else str
     for block in blocks or ["No results yet. The standings update as matches finish."]:
-        if len(body) + len(block) + len(LEADERBOARD_HELP) + 4 > 3700:
-            pages.append(discord.Embed(title=title, description=protect(body.rstrip()) + "\n\n" + LEADERBOARD_HELP, colour=ACCENT))
+        if len(body) + len(block) + len(help_text) + 4 > 3700:
+            pages.append(discord.Embed(title=title, description=protect(body.rstrip()) + "\n\n" + help_text, colour=ACCENT))
             body = prefix
         body += format_footnotes(block) + "\n\n"
-    pages.append(discord.Embed(title=title, description=protect(body.rstrip()) + "\n\n" + LEADERBOARD_HELP, colour=ACCENT))
+    pages.append(discord.Embed(title=title, description=protect(body.rstrip()) + "\n\n" + help_text, colour=ACCENT))
     return pages
 
 

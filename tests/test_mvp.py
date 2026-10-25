@@ -128,3 +128,24 @@ def test_mvp_command_uses_big_headings_and_never_pings(source, monkeypatch):
     text = str(payload['view'].to_components())
     assert '## 🏆 Player 7' in text and 'Swiss Round 1' in text
     assert payload['allowed_mentions'].to_dict() == {'parse': []}
+
+
+def test_eleven_trophy_slots_cover_eight_swiss_days_and_three_knockout_stages(source):
+    first=period(source,'swiss',8,datetime(2026,10,23,17,tzinfo=UTC),round_number=1)
+    second=period(source,'swiss',8,datetime(2026,10,24,17,tzinfo=UTC),round_number=2)
+    third=period(source,'swiss',8,datetime(2026,10,25,17,tzinfo=UTC),round_number=3,offset=1)
+    fourth=period(source,'swiss',6,datetime(2026,10,28,17,tzinfo=UTC),round_number=4)
+    for i,match in enumerate(fourth):match.start_time=datetime(2026,10,28+i//2,17+i%2,tzinfo=UTC)
+    fifth=period(source,'swiss',3,datetime(2026,10,31,17,tzinfo=UTC),round_number=5)
+    quarters=period(source,'quarterfinals',4,datetime(2026,11,1,17,tzinfo=UTC))
+    semis=period(source,'semifinals',2,datetime(2026,11,8,17,tzinfo=UTC))
+    final=period(source,'final',1,datetime(2026,11,14,17,tzinfo=UTC))
+    data=replace(source,matches=first+second+third+fourth+fifth+quarters+semis+final)
+    populate(data,lambda _:[(7,True),(8,True)])
+    finish(data,first)
+    cases,slots=mvp.trophy_cases(123,data)
+    assert len(slots)==11 and sum(key[0]=='swiss' for key in slots)==8
+    assert cases[7]==['🏆']+['⚪']*10 and cases[8]==cases[7]
+    finish(data,data.matches)
+    cases,slots=mvp.trophy_cases(123,data)
+    assert cases[7]==cases[8]==['🏆']*11

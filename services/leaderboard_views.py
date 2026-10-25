@@ -1,6 +1,7 @@
 """Public leaderboard pages and the shared private /votehistory button handler."""
 
 import asyncio
+from dataclasses import dataclass
 
 import discord
 
@@ -10,8 +11,25 @@ from services.presentation import message_payload, embed_card_payload
 from services.setup_gate import require_setup, SetupRequiredView
 
 
+@dataclass(frozen=True)
+class LeaderboardSnapshot:
+    competition: object
+    swiss_history: object
+    trophy_cases: dict
+    trophy_slots: list
+
+    def __getattr__(self, name):
+        return getattr(self.competition, name)
+
+
 async def leaderboard_context(interaction, tournament_id, *, data=None):
     snapshot = await asyncio.to_thread(get_competition_snapshot, interaction.guild_id, tournament_id, data=data)
+    if data is not None:
+        from services.mvp import trophy_cases
+        history = await asyncio.to_thread(get_competition_snapshot, interaction.guild_id,
+            tournament_id, data=data, from_swiss=True)
+        cases, slots = await asyncio.to_thread(trophy_cases,interaction.guild_id,data)
+        snapshot = LeaderboardSnapshot(snapshot,history,cases,slots)
     names = {}
     for row in snapshot.rows + (snapshot.previous_rows or []):
         if row.user_id in names:
@@ -97,6 +115,8 @@ class LeaderboardView(SetupRequiredView):
         await self.turn_page(interaction, 1)
 
 
-def leaderboard_payload(entries, guild_id, tournament_id, *, previous=None, preview=False):
-    pages = leaderboard_embeds(entries, previous=previous, preview=preview)
+def leaderboard_payload(entries, guild_id, tournament_id, *, previous=None, preview=False, context=None):
+    pages = leaderboard_embeds(entries, previous=previous, preview=preview,
+        history=getattr(context,'swiss_history',None), trophies=getattr(context,'trophy_cases',None),
+        trophy_slots=getattr(context,'trophy_slots',None))
     return embed_card_payload(pages[0], controls=LeaderboardView(pages, guild_id, tournament_id))

@@ -16,19 +16,20 @@ def test_sample_leaderboard_matches_compact_specification():
     assert embed.title == "TEST: Communism Worlds Leaderboard"
     assert embed.colour.value == 0x5865F2
     assert "Sample results. The real leaderboard is unchanged." in text
-    assert "### `1.` lua: 18 correct\n\n-# *Rank movement: ↑1*\n-# *Voted on 24 of 30 past matches*\n-# *Accuracy: **75% correct***\n\n-# *🔥 Current streak: 4*\n-# *Best streak: 7*" in text
-    assert "### `2.` Sample Player 2: 18 correct\n\n-# *Rank movement: ↓1*\n" in text
-    assert "### `2.` Sample Player 3: 18 correct\n" in text
-    assert "### `4.` Sample Player 4: 14 correct\n\n-# *Rank movement: ↑1*\n" in text
-    assert "**69.2% correct**" in text and "**70% correct**" in text
-    assert "### `6.` Sample Player 6: 0 correct\n" in text
+    assert "### `1.` __lua__: 18 correct ⬆️1 🔥" in text
+    assert "### `2.` __Sample Player 2__: 18 correct ⬇️1" in text
+    assert "### `2.` __Sample Player 3__: 18 correct" in text
+    assert "### `4.` __Sample Player 4__: 14 correct ⬆️1" in text
+    assert '69.2% accuracy' in text and '70% accuracy' in text
+    assert '75% accuracy · 24/30 voted' in text
+    assert "### `6.` __Sample Player 6__: 0 correct" in text
     assert text.index("18 correct") < text.index("0 correct")
     assert not any(word in text for word in ("participation", "75.0%", "behind", "Level on", "\u200b", "\n\n\n"))
-    assert "🔥 Current streak: 3" in text
-    assert "🔥 Current streak: 2" not in text and "🔥 Current streak: 0" not in text
+    assert 'Current streak:' not in text and 'Best streak:' not in text
+    assert '⚪' in text and '🏆' in text and '✅' in text and '❌' in text
     assert all("**" not in re.sub(r"\*\*\d+(?:\.\d+)?% correct\*\*", "", line) for line in text.splitlines() if line.startswith("-#"))
-    assert "-# • *Ranked by correct predictions, then accuracy.*" in text
-    assert "missed votes don’t" in text
+    assert '-# *✅ Correct · ❌ Wrong · ➖ Skipped*' in text
+    assert "skipped matches don't break streaks" in text
 
 
 def test_preview_has_no_actual_mentions_and_every_chunk_is_bounded():
@@ -41,18 +42,41 @@ def test_preview_has_no_actual_mentions_and_every_chunk_is_bounded():
         text = embed.description
         assert embed.title == "TEST: Communism Worlds Leaderboard"
         assert "<@123456789012345678>" not in text and "@everyone" not in text
-        assert "-# • *Ranked by" in text and "-# • *Incorrect predictions" in text
+        assert '-# *✅ Correct' in text and 'Ongoing streak of 3+' in text
 
 
 def test_shared_first_place_and_zero_scores_do_not_gain_a_gap_or_fake_movement():
     entries = [(PredictionStats(1, 0, 1, 2, 0, 0), "A"), (PredictionStats(2, 0, 2, 2, 0, 0), "B")]
     embed, = leaderboard_embeds(entries)
-    assert "### `1.` A: 0 correct" in embed.description and "### `1.` B: 0 correct" in embed.description
+    assert "### `1.` __A__: 0 correct" in embed.description and "### `1.` __B__: 0 correct" in embed.description
     assert "behind" not in embed.description and "Level on" not in embed.description
     assert "New" not in embed.description
-    assert "↑" not in embed.description.split("-# • *Ranked")[0]
+    assert '⬆️' not in embed.description and '⬇️' not in embed.description
     new, = leaderboard_embeds(entries, previous={})
-    assert "### `1.` A: 0 correct\n\n-# *Rank movement: New*" in new.description
+    assert "### `1.` __A__: 0 correct New" in new.description
+
+
+def test_full_swiss_history_skips_custom_rank_arrows_and_trophy_slots(monkeypatch):
+    from types import SimpleNamespace
+    import discord
+    from services import leaderboard_display
+    logos = {name:discord.PartialEmoji(name=name,id=100+i) for i,name in enumerate(
+        ['arrow_up_green','arrow_down_red','dootpinkline'])}
+    monkeypatch.setattr(leaderboard_display,'custom_emoji',logos.get)
+    rows=[PredictionStats(1,4,5,6,4,4),PredictionStats(2,2,5,6,1,1)]
+    start=datetime(2026,10,23,tzinfo=UTC)
+    recent=[Prediction(f's{i}','A','B',start+timedelta(hours=i),'A' if i else 'B','A') for i in (4,3,2,0)]
+    history=SimpleNamespace(rows=[PredictionStats(1,3,4,5,3,3)],recent={1:recent},
+                            result_match_ids=tuple(f's{i}' for i in range(5)))
+    case=['⚪','🏆']+['⚪']*9
+    embed,=leaderboard_embeds([(rows[0],'Winner'),(rows[1],'Other')],previous={1:2,2:1},
+        history=history,trophies={1:case},trophy_slots=list(range(11)))
+    text=embed.description
+    assert '__Winner__: 4 correct <:arrow_up_green:100>1 🔥' in text
+    assert '__Other__: 2 correct <:arrow_down_red:101>1' in text
+    assert '❌ <:dootpinkline:102> ✅ ✅ ✅' in text
+    assert ' '.join(case) in text
+    assert 'Current streak:' not in text and 'Best streak:' not in text and 'Oldest' not in text
 
 
 def test_personal_stats_use_requested_summary_and_four_explained_sections():

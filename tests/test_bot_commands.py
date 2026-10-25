@@ -693,12 +693,12 @@ def test_prediction_leaderboard_shows_tied_ranks_without_exposing_vote_counts():
     callback = load_command("leaderboard", data, leaderboard_context=context, discord=discord)
     asyncio.run(callback(interaction))
     text = rendered_message(send.call_args).description
-    assert "### `1.` Friend 1: 2 correct" in text
-    assert "### `1.` Friend 2: 2 correct" in text
-    assert "### `3.` Friend 3: 1 correct" in text
+    assert "### `1.` __Friend 1__: 2 correct" in text
+    assert "### `1.` __Friend 2__: 2 correct" in text
+    assert "### `3.` __Friend 3__: 1 correct" in text
     assert "behind" not in text and "Level on" not in text
-    assert "66.7% correct" in text and "Voted on 3 of 10 past matches" in text
-    assert "Current streak: 2*\n-# *Best streak: 2" in text
+    assert "66.7% accuracy · 3/10 voted" in text
+    assert 'Current streak:' not in text and 'Best streak:' not in text
     assert rendered_message(send.call_args).title == "__Communism Worlds Leaderboard__"
     assert "ephemeral" not in send.call_args.kwargs
     assert send.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
@@ -1268,6 +1268,7 @@ def test_leaderboard_adds_fire_only_to_streaks_of_three_or_more():
     callback = load_command("leaderboard", data, discord=discord, leaderboard_context=context)
     asyncio.run(callback(interaction))
     text = rendered_message(interaction.followup.send.call_args).description
-    assert "🔥 Current streak: 3" in text
-    assert "Current streak: 2" in text and "🔥 Current streak: 2" not in text
+    assert '### `1.` __Friend 7__: 4 correct 🔥' in text
+    assert '### `2.` __Friend 8__: 3 correct 🔥' not in text
+    assert 'Current streak:' not in text and 'Best streak:' not in text
     assert "points" not in text

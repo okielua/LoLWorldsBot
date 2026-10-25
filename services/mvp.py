@@ -73,6 +73,26 @@ def previous_mvp_award(guild_id, data, current_day):
     return awards[-1] if awards else None
 
 
+def trophy_cases(guild_id, data):
+    zone = ZoneInfo(TOURNAMENT_TIMEZONE)
+    days = sorted({m.start_time.astimezone(zone).date().isoformat() for m in data.matches
+                   if 'swiss' in m.stage_id.lower() and m.status != MatchStatus.CANCELLED})
+    slots = [('swiss', day) for day in days]
+    slots += [(stage.id, '') for stage in sorted(data.stages,key=lambda s:s.order)
+              if any(name in stage.id.lower() for name in ('quarterfinal','semifinal','final'))]
+    cases = {}
+    for award in get_mvp_awards(guild_id,data):
+        match = award.matches[0]
+        key = (('swiss',match.start_time.astimezone(zone).date().isoformat())
+               if 'swiss' in match.stage_id.lower() else (match.stage_id,''))
+        if key not in slots:
+            continue
+        for winner in award.winners:
+            case = cases.setdefault(winner.user_id,['⚪']*len(slots))
+            case[slots.index(key)] = '🏆'
+    return cases, slots
+
+
 def mvp_pages(awards, names):
     heading = '# __Worlds 2026 MVPs__'
     if not awards:

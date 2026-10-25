@@ -64,13 +64,14 @@ def test_leaderboard_uses_real_card_renderer_and_only_player_headers_are_bold():
         texts = [item.content for item in payload["view"].walk_children() if isinstance(item, discord.ui.TextDisplay)]
         text, = texts
         assert text.startswith("## __TEST: Communism Worlds Leaderboard__")
-        assert "### `1.` lua: 18 correct\n\n-# *Voted on" in text
+        assert "### `1.` __lua__: 18 correct" in text
         assert "Sample results. The real leaderboard is unchanged." in text
-        assert "\u200b" not in text and "**75% correct**" in text
+        assert "\u200b" not in text and "75% accuracy" in text
         notes = [line for line in text.splitlines() if line.startswith("-#")]
         assert notes and all(line.endswith("*") for line in notes)
         assert all(not line.startswith("-# •") for line in notes if "Voted on" in line or "Current streak:" in line)
-        assert "-# • *Ranked by" in text
+        assert "Current streak:" not in text and "Best streak:" not in text
+        assert "-# *✅ Correct · ❌ Wrong" in text
         assert len(text) <= 4000
         help_text = team_display("-# **Use** `/votehistory` to see votes.").content
         assert help_text == "\u00a0\n\n-# *Use `/votehistory` to see votes.*"
