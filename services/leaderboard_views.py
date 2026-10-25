@@ -84,6 +84,7 @@ class MyStatsButton(discord.ui.DynamicItem[discord.ui.Button],
 
 
 class LeaderboardView(SetupRequiredView):
+    footnote_divider = True
     section_heading_pattern = r'(?m)^# (?:<a?:\w+:\d+>|:(?:challenger|diamond|gold|iron):)$'
 
     def __init__(self, pages, guild_id, tournament_id):

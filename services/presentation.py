@@ -34,7 +34,7 @@ class SpacedContainer(discord.ui.Container):
         return super().add_item(item)
 
 
-def add_match_sections(card, text, *, heading_pattern=None):
+def add_match_sections(card, text, *, heading_pattern=None, footnote_divider=False):
     """Native dividers between configured sections or matchups."""
     headings = list(re.finditer(heading_pattern or r'(?m)^#{2,3} [^\n]+ vs [^\n]+$', text))
     boundaries = []
@@ -44,12 +44,21 @@ def add_match_sections(card, text, *, heading_pattern=None):
         if date and heading_pattern is None:
             start = date.start()
         boundaries.append(start)
+    if footnote_divider:
+        footer = re.search(r'(?m)^-# ', text)
+        if footer and footer.start() > 0:
+            boundaries.append(footer.start())
+    boundaries = sorted(set(boundaries))
     cursor = 0
     for boundary in boundaries:
         card.add_item(team_display(text[cursor:boundary].strip()))
         card.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.large))
         cursor = boundary
-    card.add_item(team_display(text[cursor:].strip()))
+    tail = text[cursor:].strip()
+    display = team_display(tail)
+    if footnote_divider and tail.startswith('-# '):
+        display.content = display.content.removeprefix(MATCH_GAP)
+    card.add_item(display)
 
 
 class MessageCard(discord.ui.LayoutView):
@@ -90,13 +99,14 @@ class MessageCard(discord.ui.LayoutView):
                 text = "\n\n".join(paragraphs[:split_after])
                 after_first_row = paragraphs[split_after]
         section_pattern = getattr(controls, "section_heading_pattern", None)
-        add_match_sections(card, text, heading_pattern=section_pattern)
+        footnote_divider = getattr(controls, "footnote_divider", False)
+        add_match_sections(card, text, heading_pattern=section_pattern, footnote_divider=footnote_divider)
         if controls:
             items = {item.custom_id: item for item in controls.children}
             for index, row in enumerate(controls.to_components()):
                 card.add_item(discord.ui.ActionRow(*(items[item["custom_id"]] for item in row["components"])))
                 if index == 0 and after_first_row:
-                    add_match_sections(card, after_first_row, heading_pattern=section_pattern)
+                    add_match_sections(card, after_first_row, heading_pattern=section_pattern, footnote_divider=footnote_divider)
         self.add_item(card)
 
     async def interaction_check(self, interaction):

@@ -232,7 +232,9 @@ def test_leaderboard_uses_native_dividers_between_tiers_not_players():
         card, = payload['view'].children
         texts = [i.content for i in card.children if isinstance(i, discord.ui.TextDisplay)]
         dividers = [i for i in card.children if isinstance(i, discord.ui.Separator)]
-        assert len(texts) == 4 and len(dividers) == 3
+        assert len(texts) == 5 and len(dividers) == 4
+        assert texts[4].startswith("-# ") and "League ranks:" in texts[4]
+        assert "-# " not in texts[3]
         assert all(i.visible and i.spacing == discord.SeparatorSpacing.large for i in dividers)
         assert '# :challenger:' in texts[0] and '# :diamond:' in texts[1] and '# :gold:' in texts[2] and '# :iron:' in texts[3]
         assert 'Player1' in texts[1] and 'Player2' in texts[1]
