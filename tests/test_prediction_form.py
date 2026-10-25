@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 from models import MatchStatus
 from services import polls
-from services.prediction_form import add_prediction_form, form_rows
+from services.prediction_form import add_prediction_form, form_rows, aligned_name_fields
 from test_prediction_stats import competition, pick, complete
 
 
@@ -18,6 +18,18 @@ def test_last_five_is_oldest_to_newest_and_streak_can_exceed_five():
     snapshot.rows[0].current_streak = 0
     line, = form_rows(snapshot, {7: 'Lua'})
     assert '✅ ✅ ✅ ✅ ❌' in line and 'Current streak: **0**' in line and '🔥' not in line
+
+
+def test_name_fields_use_nonbreaking_padding_and_leave_emojis_outside_code():
+    names = aligned_name_fields({1: 'Sam', 2: 'Taylor', 3: 'Alex'})
+    assert len({len(field.strip('`')) for field in names.values()}) == 1
+    assert names[1] == '`@Sam\xa0\xa0\xa0`'
+    assert names[2] == '`@Taylor`'
+    assert '``' in aligned_name_fields({1: 'a`b'})[1]
+    snapshot = SimpleNamespace(rows=[SimpleNamespace(user_id=i,current_streak=1) for i in names],
+        recent={i:[SimpleNamespace(chosen='A',winner_id='A')] for i in names})
+    lines = form_rows(snapshot, {1:'Sam',2:'Taylor',3:'Alex'})
+    assert all('` · ✅' in line for line in lines)
 
 
 def test_short_histories_are_not_padded_with_missed_games():

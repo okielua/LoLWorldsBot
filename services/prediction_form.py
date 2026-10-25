@@ -1,6 +1,8 @@
 """Rolling scored-pick history, frozen at each results post's match boundary."""
 
 import asyncio
+import re
+import unicodedata
 
 import discord
 
@@ -14,8 +16,25 @@ FORM_HEADING = ('### __Last 5 picks__\n'
                 "-# · 🔥 Current streak of 3+ (skipped matches don't break streaks)")
 
 
+def aligned_name_fields(names):
+    def cells(name):
+        return sum(0 if unicodedata.category(char) in {'Mn', 'Me', 'Cf'} else
+                   2 if unicodedata.east_asian_width(char) in {'W', 'F'} else 1 for char in name)
+    labels = {uid: '@' + ' '.join(name.split())[:64] for uid, name in names.items()}
+    width = max(map(cells, labels.values()), default=0)
+    result = {}
+    for uid, label in labels.items():
+        field = discord.utils.escape_mentions(label) + '\N{NO-BREAK SPACE}' * (width - cells(label))
+        ticks = '`' * (max((len(run) for run in re.findall(r'`+', field)), default=0) + 1)
+        content = f' {field} ' if '`' in field else field
+        result[uid] = f'{ticks}{content}{ticks}'
+    return result
+
+
 def form_rows(snapshot, participants):
     stats = {row.user_id: row for row in snapshot.rows}
+    participants = {uid: name for uid, name in participants.items() if uid in stats and snapshot.recent.get(uid)}
+    names = aligned_name_fields(participants)
     lines = []
     for user_id, name in sorted(participants.items(), key=lambda item: (item[1].casefold(), item[0])):
         recent = snapshot.recent.get(user_id, [])[:5]
@@ -23,9 +42,8 @@ def form_rows(snapshot, participants):
         if not recent or row is None:
             continue
         icons = ' '.join('✅' if pick.chosen == pick.winner_id else '❌' for pick in reversed(recent))
-        safe_name = discord.utils.escape_mentions(discord.utils.escape_markdown(' '.join(name.split())[:64]))
         fire = ' 🔥' if row.current_streak >= 3 else ''
-        lines.append(f'**@{safe_name}** · {icons} · Current streak: **{row.current_streak}**{fire}')
+        lines.append(f'{names[user_id]} · {icons} · Current streak: **{row.current_streak}**{fire}')
     return lines
 
 
