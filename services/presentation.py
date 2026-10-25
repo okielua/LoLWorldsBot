@@ -42,7 +42,7 @@ class SpacedContainer(discord.ui.Container):
         return super().add_item(item)
 
 
-def add_match_sections(card, text, *, heading_pattern=None, footnote_divider=False, section_media=None, media_files=None, section_bottom_gap=False):
+def add_match_sections(card, text, *, heading_pattern=None, footnote_divider=False, section_media=None, media_files=None, section_bottom_gap=False, first_section_divider=False):
     """Native dividers between configured sections or matchups."""
     def add_section(content):
         for heading, (url, description) in (section_media or {}).items():
@@ -67,12 +67,13 @@ def add_match_sections(card, text, *, heading_pattern=None, footnote_divider=Fal
 
     headings = list(re.finditer(heading_pattern or r'(?m)^#{2,3} [^\n]+ vs [^\n]+$', text))
     boundaries = []
-    for heading in headings[1:]:
+    for heading in (headings if first_section_divider else headings[1:]):
         start = heading.start()
         date = re.search(r'(?m)^## __[^\n]+__\n\s*\Z', text[:start])
         if date and heading_pattern is None:
             start = date.start()
-        boundaries.append(start)
+        if start > 0:
+            boundaries.append(start)
     if footnote_divider:
         footer = re.search(r'(?m)^-# ', text)
         if footer and footer.start() > 0:
@@ -81,7 +82,7 @@ def add_match_sections(card, text, *, heading_pattern=None, footnote_divider=Fal
     cursor = 0
     for boundary in boundaries:
         section = text[cursor:boundary].strip()
-        if section_bottom_gap:
+        if section_bottom_gap and (not first_section_divider or cursor > 0):
             section += "\n\n\u2800"
         add_section(section)
         card.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.large))
@@ -140,9 +141,10 @@ class MessageCard(discord.ui.LayoutView):
         footnote_divider = getattr(controls, "footnote_divider", False)
         section_media = getattr(controls, "section_media", None)
         section_bottom_gap = getattr(controls, "section_bottom_gap", False)
+        first_section_divider = getattr(controls, "first_section_divider", False)
         add_match_sections(card, text, heading_pattern=section_pattern, footnote_divider=footnote_divider,
                            section_media=section_media, media_files=self.media_files,
-                           section_bottom_gap=section_bottom_gap)
+                           section_bottom_gap=section_bottom_gap, first_section_divider=first_section_divider)
         if controls:
             items = {item.custom_id: item for item in controls.children}
             for index, row in enumerate(controls.to_components()):
@@ -150,7 +152,7 @@ class MessageCard(discord.ui.LayoutView):
                 if index == 0 and after_first_row:
                     add_match_sections(card, after_first_row, heading_pattern=section_pattern,
                                        footnote_divider=footnote_divider, section_media=section_media, media_files=self.media_files,
-                           section_bottom_gap=section_bottom_gap)
+                           section_bottom_gap=section_bottom_gap, first_section_divider=first_section_divider)
         self.add_item(card)
 
     def stop(self):

@@ -353,12 +353,15 @@ def test_stats_insights_keep_their_content_together_with_native_dividers(stats_d
         card, = payload['view'].children
         texts = [i.content for i in card.children if isinstance(i, discord.ui.TextDisplay)]
         dividers = [i for i in card.children if isinstance(i, discord.ui.Separator)]
-        assert len(texts) == 4 and len(dividers) == 3
-        assert all(text.endswith("\n\n\u2800") for text in texts[:-1])
+        assert len(texts) == 5 and len(dividers) == 4
+        assert all(text.endswith("\n\n\u2800") for text in texts[1:-1])
         assert not texts[-1].endswith("\u2800")
         assert all(i.visible and i.spacing == discord.SeparatorSpacing.large for i in dividers)
+        assert texts[0].endswith('# __Some other Stats__')
+        assert 'Check Your PayPal' not in texts[0]
+        assert isinstance(card.children[1], discord.ui.Separator) and card.children[1].visible
         labels = ['Check Your PayPal', 'Can’t Read These Frauds', 'Hopium Supplier', 'Democracy Was a Mistake']
-        for text, label in zip(texts, labels):
+        for text, label in zip(texts[1:], labels):
             assert '__*' + label + '*__' in text
             assert 'Not enough data' in text
             assert sum(other in text for other in labels) == 1
