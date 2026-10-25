@@ -18,7 +18,6 @@ LEADERBOARD_HELP = format_footnotes(
     "-# 🔥 Ongoing streak of 3+ (skipped matches don't break streaks)\n"
     "-# 🏆 Earned MVP trophies.\n"
     "-# First place is always Challenger. Remaining places follow the merged proportions; ties share a tier.\n"
-    "-# Percentages are rounded League reference shares, not server percentiles."
 )
 
 

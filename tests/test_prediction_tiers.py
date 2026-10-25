@@ -49,7 +49,7 @@ def test_group_headings_use_server_emojis_and_smaller_player_headers(monkeypatch
     assert '# <:gold:102> __Gold__' in text
     assert '# <:iron:103> __Iron__' in text
     assert '## 1. `Player0`' in text
-    assert 'First place is always Challenger' in text and 'not server percentiles' in text
+    assert 'First place is always Challenger' in text and 'not server percentiles' not in text
     assert 'ties share a tier' in text
     assert 'Tiers follow leaderboard position' not in text and 'Merged ranks:' not in text
     line = next(line for line in text.splitlines() if '<:challenger:100> top' in line)
