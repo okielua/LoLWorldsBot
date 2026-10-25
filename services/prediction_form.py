@@ -10,7 +10,8 @@ from services.spoilers import render_text
 
 FORM_HEADING = ('### __Last 5 picks__\n'
                 '-# Oldest → newest\n'
-                '-# ✅ Correct · ❌ Wrong · 🔥 Current streak of 3+; skipped matches do not break it.')
+                '-# ✅ Correct · ❌ Wrong\n'
+                "-# · 🔥 Current streak of 3+ (skipped matches don't break streaks)")
 
 
 def form_rows(snapshot, participants):
