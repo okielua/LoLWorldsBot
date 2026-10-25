@@ -96,7 +96,7 @@ def test_button_and_stats_command_return_identical_private_clicker_stats(stats_d
         assert "### · Correct predictions: 0/1 (0%)" in rendered.description
         assert "### · Correct predictions: 0/1 (0%)" in rendered.description
         assert "Pending votes" not in rendered.description
-        assert all(label in rendered.description for label in ("### :PeyzPal: *Check Your PayPal*", "### :PepeKMS: *Can’t Read These Frauds*", "### :Copium: *Hopium Supplier*", "### :Discheesed: *Democracy Was a Mistake*"))
+        assert all(label in rendered.description for label in ("## :PeyzPal: *Check Your PayPal*", "## :PepeKMS: *Can’t Read These Frauds*", "## :Copium: *Hopium Supplier*", "## :Discheesed: *Democracy Was a Mistake*"))
         first_text = next(item.content for item in clicked["view"].walk_children() if isinstance(item, discord.ui.TextDisplay))
         assert first_text.startswith("# __Worlds 2026 Voting Stats · `Other user`__\n")
         caller.response.defer.assert_awaited_once_with(ephemeral=True)
@@ -328,12 +328,12 @@ def test_stats_reuse_leaderboard_name_padding_in_title_header_and_descriptions(s
         payload = caller.followup.send.call_args.kwargs
         card = rendered_payload(payload)
         assert name in card.title
-        assert f'## {name}’s __Basic Stats__' in card.description
+        assert f'# {name}’s __Basic Stats__' in card.description
         assert f'whose series {name} predicts' in card.description
         assert f'whether {name} votes' in card.description
         assert '### · League rank: :challenger:' in card.description
         assert 'League rank: :challenger: Challenger' not in card.description
-        assert '\n\n\u2800\n\n## __Some other Stats__' in card.description
+        assert '\n\n\u2800\n\n# __Some other Stats__' in card.description
         assert card.description.count('### · ') == 5
         assert '’s current rank:' not in card.description
         board['view'].stop()
