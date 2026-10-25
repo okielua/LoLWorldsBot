@@ -44,10 +44,11 @@ def test_group_headings_use_server_emojis_and_smaller_player_headers(monkeypatch
     monkeypatch.setattr(leaderboard_display, 'custom_emoji', emojis.get)
     pages = leaderboard_embeds([(row, f'Player{row.user_id}') for row in players(7)])
     text = '\n'.join(page.description for page in pages)
-    assert '# <:challenger:100> __Challenger__' in text
-    assert '# <:diamond:101> __Diamond__' in text
-    assert '# <:gold:102> __Gold__' in text
-    assert '# <:iron:103> __Iron__' in text
+    assert '# <:challenger:100>' in text
+    assert '# <:diamond:101>' in text
+    assert '# <:gold:102>' in text
+    assert '# <:iron:103>' in text
+    assert [line for line in text.splitlines() if line.startswith('# ')] == [f'# {emojis[key]}' for key, _, _ in TIERS]
     assert '## 1. `Player0`' in text
     assert 'first place is always Challenger' in text and 'not server percentiles' not in text
     assert 'based on the merged LoL rank distribution' in text

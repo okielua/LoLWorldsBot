@@ -109,8 +109,8 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
     # An empty status contains no scored predictions to protect.
     protect = aggregate_token if entries else str
     previous_tier = None
-    headings = {key: f"# {custom_emoji(key) or ':' + key + ':'} __{name}__"
-                for key, name, _ in TIERS}
+    headings = {key: f"# {custom_emoji(key) or ':' + key + ':'}"
+                for key, _, _ in TIERS}
     for tier, block in blocks or [(None, "No results yet. The standings update as matches finish.")]:
         heading = headings[tier] + '\n\n' if tier and tier != previous_tier else ''
         addition = heading + block
