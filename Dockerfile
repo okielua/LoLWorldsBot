@@ -16,6 +16,7 @@ RUN groupadd --gid 10001 worldsbot \
 COPY bot.py models.py ./
 COPY services/ ./services/
 COPY data/worlds_2026.json data/golgg_players_2026.json data/golgg_team_ids_2026.json data/champions.json ./data/
+COPY data/rank_badges/ ./data/rank_badges/
 COPY deploy/backup_database.py ./deploy/backup_database.py
 
 USER worldsbot

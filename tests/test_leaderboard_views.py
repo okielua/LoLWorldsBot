@@ -45,7 +45,7 @@ def interaction_for(data, user_id):
         guild_id=123, guild=SimpleNamespace(get_member=members.get), user=members[user_id],
         client=SimpleNamespace(voting_manager=SimpleNamespace(store=SimpleNamespace(data=data))),
         response=SimpleNamespace(defer=AsyncMock(), send_message=AsyncMock(), edit_message=AsyncMock()),
-        followup=SimpleNamespace(send=AsyncMock()),
+        edit_original_response=AsyncMock(), followup=SimpleNamespace(send=AsyncMock()),
     )
 
 
@@ -148,13 +148,16 @@ def test_normal_weight_card_keeps_my_stats_button_and_pagination(stats_data):
         click = interaction_for(stats_data, 8)
         await view.next_page.callback(click)
         assert view.page == 1
-        rendered_page = rendered_payload(click.response.edit_message.call_args.kwargs).description
+        click.response.defer.assert_awaited_once()
+        assert click.edit_original_response.call_args.kwargs["attachments"]
+        assert "files" not in click.edit_original_response.call_args.kwargs
+        rendered_page = rendered_payload(click.edit_original_response.call_args.kwargs).description
         assert all(line.strip() in rendered_page for line in view.pages[1].description.splitlines()
                    if line.strip() and not line.startswith("# "))
-        assert any(isinstance(item, discord.ui.MediaGallery) for item in click.response.edit_message.call_args.kwargs["view"].walk_children())
-        assert click.response.edit_message.call_args.kwargs["embeds"] == []
-        assert "embed" not in click.response.edit_message.call_args.kwargs
-        assert len([item for item in click.response.edit_message.call_args.kwargs["view"].walk_children() if isinstance(item, MyStatsButton)]) == 1
+        assert any(isinstance(item, discord.ui.MediaGallery) for item in click.edit_original_response.call_args.kwargs["view"].walk_children())
+        assert click.edit_original_response.call_args.kwargs["embeds"] == []
+        assert "embed" not in click.edit_original_response.call_args.kwargs
+        assert len([item for item in click.edit_original_response.call_args.kwargs["view"].walk_children() if isinstance(item, MyStatsButton)]) == 1
         await view.previous.callback(click)
         assert view.page == 0 and view.previous.disabled
         view.stop()
@@ -270,8 +273,11 @@ def test_tier_badges_render_as_images_with_dividers_controls_and_pagination(monk
         assert isinstance(card.children[1], discord.ui.Separator) and card.children[1].visible
         assert isinstance(card.children[2], discord.ui.MediaGallery)
         assert all(i.items[0].description is None for i in galleries)
-        assert [i.items[0].media.url for i in galleries] == [f'https://cdn.discordapp.com/emojis/{100+i}.png?size=128' for i in range(4)]
-        assert all('size=128' in i.items[0].media.url for i in galleries)
+        assert [i.items[0].media.url for i in galleries] == [f'attachment://worlds-rank-{key}.png' for key, _, _ in TIERS]
+        assert [file.filename for file in payload['files']] == [f'worlds-rank-{key}.png' for key, _, _ in TIERS]
+        import struct
+        assert {struct.unpack('>II', file.fp.getvalue()[16:24]) for file in payload['files']} == {(128, 104)}
+        assert all(i.items[0].media.url.startswith('attachment://') for i in galleries)
         assert all(not i.items[0].spoiler for i in galleries)
         assert len([i for i in card.children if isinstance(i, discord.ui.Separator) and i.visible]) == 5
         texts = '\n'.join(i.content for i in card.children if isinstance(i, discord.ui.TextDisplay))
@@ -288,4 +294,22 @@ def test_tier_badges_render_as_images_with_dividers_controls_and_pagination(monk
             assert any(isinstance(i, discord.ui.MediaGallery) for i in view.walk_children())
             assert view.total_children_count <= 40
             view.stop()
+    asyncio.run(scenario())
+
+
+def test_badge_files_are_included_in_discord_multipart_upload():
+    import json
+    from discord.http import handle_message_parameters
+    from services.prediction_stats import PredictionStats
+    async def scenario():
+        entries = [(PredictionStats(i, 7-i, 10, 10, 0, 0), f'Player{i}') for i in range(7)]
+        payload = leaderboard_payload(entries, 123, 'worlds-2026')
+        with handle_message_parameters(**payload) as request:
+            wire = json.loads(next(part['value'] for part in request.multipart if part['name'] == 'payload_json'))
+            names = [attachment['filename'] for attachment in wire['attachments']]
+            assert len(names) == 4 and all(name.startswith('worlds-rank-') for name in names)
+            galleries = [item for item in wire['components'][0]['components'] if item['type'] == 12]
+            assert [gallery['items'][0]['media']['url'] for gallery in galleries] == ['attachment://' + name for name in names]
+            assert all('description' not in gallery['items'][0] for gallery in galleries)
+        payload['view'].stop()
     asyncio.run(scenario())

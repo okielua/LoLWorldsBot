@@ -2,24 +2,24 @@
 
 import asyncio
 from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
 
 import discord
 
 from services.leaderboard_display import leaderboard_embeds, personal_stats_embed
 from services.prediction_stats import competition_ranks, get_competition_snapshot
-from services.presentation import message_payload, embed_card_payload
+from services.presentation import message_payload, embed_card_payload, ImageAttachment
 from services.setup_gate import require_setup, SetupRequiredView
 from services.trophycase import TrophyCaseButton
 from services.prediction_tiers import TIERS
 from services.team_emojis import custom_emoji
 
 
-TIER_BADGE_IDS = {
-    'challenger': 1563990056312635454,
-    'diamond': 1563989985252741120,
-    'gold': 1563989937349459968,
-    'iron': 1563989868458016819,
-}
+@lru_cache(maxsize=4)
+def rank_badge(key):
+    path = Path(__file__).resolve().parents[1] / 'data' / 'rank_badges' / f'{key}.png'
+    return ImageAttachment(f'worlds-rank-{key}.png', path.read_bytes())
 
 
 @dataclass(frozen=True)
@@ -103,11 +103,8 @@ class LeaderboardView(SetupRequiredView):
         media = {}
         for key, _, _ in TIERS:
             emoji = custom_emoji(key)
-            emoji_id = emoji.id if emoji else TIER_BADGE_IDS[key]
-            extension = 'gif' if emoji and emoji.animated else 'png'
             heading = f"# {emoji or ':' + key + ':'}"
-            media[heading] = (f'https://cdn.discordapp.com/emojis/{emoji_id}.{extension}?size=128',
-                              None)
+            media[heading] = (rank_badge(key), None)
         return media
 
     def __init__(self, pages, guild_id, tournament_id):
@@ -129,10 +126,13 @@ class LeaderboardView(SetupRequiredView):
         if interaction.guild_id != self.guild_id:
             await interaction.response.send_message(**message_payload("This leaderboard belongs to another server."), ephemeral=True)
             return
+        await interaction.response.defer()
         self.page = min(max(0, self.page + amount), len(self.pages) - 1)
         self.update_buttons()
         payload = embed_card_payload(self.pages[self.page], controls=self)
-        await interaction.response.edit_message(**payload)
+        files = payload.pop("files", [])
+        await interaction.edit_original_response(**payload, attachments=files,
+                                                 allowed_mentions=discord.AllowedMentions.none())
 
     @discord.ui.button(label="Previous", style=discord.ButtonStyle.secondary)
     async def previous(self, interaction, button):

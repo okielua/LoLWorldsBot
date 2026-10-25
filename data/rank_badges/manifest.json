@@ -1,0 +1,94 @@
+{
+  "challenger": {
+    "source_emoji": 1563990056312635454,
+    "source_size": [
+      128,
+      128
+    ],
+    "trimmed_bounds": [
+      0,
+      3,
+      128,
+      107
+    ],
+    "output_size": [
+      128,
+      104
+    ],
+    "visible_bounds": [
+      0,
+      0,
+      128,
+      104
+    ]
+  },
+  "diamond": {
+    "source_emoji": 1563989985252741120,
+    "source_size": [
+      128,
+      128
+    ],
+    "trimmed_bounds": [
+      0,
+      25,
+      128,
+      108
+    ],
+    "output_size": [
+      128,
+      104
+    ],
+    "visible_bounds": [
+      0,
+      10,
+      128,
+      93
+    ]
+  },
+  "gold": {
+    "source_emoji": 1563989937349459968,
+    "source_size": [
+      128,
+      128
+    ],
+    "trimmed_bounds": [
+      9,
+      13,
+      118,
+      110
+    ],
+    "output_size": [
+      128,
+      104
+    ],
+    "visible_bounds": [
+      5,
+      0,
+      122,
+      104
+    ]
+  },
+  "iron": {
+    "source_emoji": 1563989868458016819,
+    "source_size": [
+      128,
+      128
+    ],
+    "trimmed_bounds": [
+      22,
+      49,
+      108,
+      101
+    ],
+    "output_size": [
+      128,
+      104
+    ],
+    "visible_bounds": [
+      0,
+      13,
+      128,
+      90
+    ]
+  }
+}

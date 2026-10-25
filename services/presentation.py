@@ -1,6 +1,8 @@
 """Shared visual rules for command replies and editable setup panels."""
 
 import discord
+from dataclasses import dataclass
+from io import BytesIO
 import logging
 import re
 from services.team_emojis import team_display
@@ -9,6 +11,12 @@ from services.setup_gate import require_setup
 BLUE = 0x5865F2
 MATCH_GAP = "\u00a0\n\n"
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ImageAttachment:
+    filename: str
+    data: bytes
 
 
 class SpacedContainer(discord.ui.Container):
@@ -34,7 +42,7 @@ class SpacedContainer(discord.ui.Container):
         return super().add_item(item)
 
 
-def add_match_sections(card, text, *, heading_pattern=None, footnote_divider=False, section_media=None):
+def add_match_sections(card, text, *, heading_pattern=None, footnote_divider=False, section_media=None, media_files=None):
     """Native dividers between configured sections or matchups."""
     def add_section(content):
         for heading, (url, description) in (section_media or {}).items():
@@ -43,6 +51,10 @@ def add_match_sections(card, text, *, heading_pattern=None, footnote_divider=Fal
                 before, after = content[:match.start()].strip(), content[match.end():].strip()
                 if before:
                     card.add_item(team_display(before))
+                if isinstance(url, ImageAttachment):
+                    file = discord.File(BytesIO(url.data), filename=url.filename)
+                    media_files.append(file)
+                    url = file
                 card.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(
                     media=url, description=description)))
                 if after:
@@ -79,12 +91,16 @@ class MessageCard(discord.ui.LayoutView):
     def __init__(self, text, controls=None):
         super().__init__(timeout=controls.timeout if controls else 900)
         self.controls = controls
+        self.media_files = []
         self.expiry_interaction = None
         self.set_content(text)
 
     def set_content(self, text):
         """Update a reusable card without replacing its callback owner/timer."""
         controls = self.controls
+        for file in self.media_files:
+            file.close()
+        self.media_files = []
         self.clear_items()
         card = SpacedContainer(accent_colour=discord.Colour(BLUE))
         positions = getattr(controls, "control_after_paragraphs", None)
@@ -121,15 +137,20 @@ class MessageCard(discord.ui.LayoutView):
         footnote_divider = getattr(controls, "footnote_divider", False)
         section_media = getattr(controls, "section_media", None)
         add_match_sections(card, text, heading_pattern=section_pattern, footnote_divider=footnote_divider,
-                           section_media=section_media)
+                           section_media=section_media, media_files=self.media_files)
         if controls:
             items = {item.custom_id: item for item in controls.children}
             for index, row in enumerate(controls.to_components()):
                 card.add_item(discord.ui.ActionRow(*(items[item["custom_id"]] for item in row["components"])))
                 if index == 0 and after_first_row:
                     add_match_sections(card, after_first_row, heading_pattern=section_pattern,
-                                       footnote_divider=footnote_divider, section_media=section_media)
+                                       footnote_divider=footnote_divider, section_media=section_media, media_files=self.media_files)
         self.add_item(card)
+
+    def stop(self):
+        for file in getattr(self, 'media_files', ()):
+            file.close()
+        super().stop()
 
     async def interaction_check(self, interaction):
         allowed = await self.controls.interaction_check(interaction) if self.controls else True
@@ -180,7 +201,10 @@ def message_payload(text, *, controls=None, title_level=2, underline_title=True)
             controls._message_card = card
     else:
         card.set_content(body)
-    return {"content": None, "embeds": [], "view": card}
+    payload = {"content": None, "embeds": [], "view": card}
+    if card.media_files:
+        payload["files"] = list(card.media_files)
+    return payload
 
 
 def embed_card_payload(embed, *, controls=None, title_level=2):
