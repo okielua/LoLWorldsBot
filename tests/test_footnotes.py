@@ -62,7 +62,7 @@ def test_leaderboard_uses_real_card_renderer_and_only_player_headers_are_bold():
         assert payload["embeds"] == [] and "embed" not in payload
         assert isinstance(payload["view"], discord.ui.LayoutView)
         texts = [item.content for item in payload["view"].walk_children() if isinstance(item, discord.ui.TextDisplay)]
-        text, = texts
+        text = "\n\n".join(texts)
         text = text.replace("\u00a0", "")
         assert text.startswith("## __TEST: Communism Worlds Leaderboard__")
         assert "## 1. `lua`" in text

@@ -222,3 +222,20 @@ def test_stats_command_handles_a_member_with_no_votes(stats_data):
         assert payload['ephemeral'] is True
         payload['view'].stop()
     asyncio.run(scenario())
+
+
+def test_leaderboard_uses_native_dividers_between_tiers_not_players():
+    from services.prediction_stats import PredictionStats
+    async def scenario():
+        entries = [(PredictionStats(i, 7-i, 10, 10, 0, 0), f'Player{i}') for i in range(7)]
+        payload = leaderboard_payload(entries, 123, 'worlds-2026')
+        card, = payload['view'].children
+        texts = [i.content for i in card.children if isinstance(i, discord.ui.TextDisplay)]
+        dividers = [i for i in card.children if isinstance(i, discord.ui.Separator)]
+        assert len(texts) == 4 and len(dividers) == 3
+        assert all(i.visible and i.spacing == discord.SeparatorSpacing.large for i in dividers)
+        assert 'Challenger' in texts[0] and 'Diamond' in texts[1] and 'Gold' in texts[2] and 'Iron' in texts[3]
+        assert 'Player1' in texts[1] and 'Player2' in texts[1]
+        assert payload['view'].total_children_count <= 40
+        payload['view'].stop()
+    asyncio.run(scenario())

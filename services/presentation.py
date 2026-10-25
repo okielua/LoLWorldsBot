@@ -34,14 +34,14 @@ class SpacedContainer(discord.ui.Container):
         return super().add_item(item)
 
 
-def add_match_sections(card, text):
-    """Native dividers between matchups, keeping date headings with their game."""
-    headings = list(re.finditer(r'(?m)^#{2,3} [^\n]+ vs [^\n]+$', text))
+def add_match_sections(card, text, *, heading_pattern=None):
+    """Native dividers between configured sections or matchups."""
+    headings = list(re.finditer(heading_pattern or r'(?m)^#{2,3} [^\n]+ vs [^\n]+$', text))
     boundaries = []
     for heading in headings[1:]:
         start = heading.start()
         date = re.search(r'(?m)^## __[^\n]+__\n\s*\Z', text[:start])
-        if date:
+        if date and heading_pattern is None:
             start = date.start()
         boundaries.append(start)
     cursor = 0
@@ -89,13 +89,14 @@ class MessageCard(discord.ui.LayoutView):
             if len(paragraphs) > split_after:
                 text = "\n\n".join(paragraphs[:split_after])
                 after_first_row = paragraphs[split_after]
-        add_match_sections(card, text)
+        section_pattern = getattr(controls, "section_heading_pattern", None)
+        add_match_sections(card, text, heading_pattern=section_pattern)
         if controls:
             items = {item.custom_id: item for item in controls.children}
             for index, row in enumerate(controls.to_components()):
                 card.add_item(discord.ui.ActionRow(*(items[item["custom_id"]] for item in row["components"])))
                 if index == 0 and after_first_row:
-                    add_match_sections(card, after_first_row)
+                    add_match_sections(card, after_first_row, heading_pattern=section_pattern)
         self.add_item(card)
 
     async def interaction_check(self, interaction):

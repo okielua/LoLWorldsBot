@@ -84,6 +84,8 @@ class MyStatsButton(discord.ui.DynamicItem[discord.ui.Button],
 
 
 class LeaderboardView(SetupRequiredView):
+    section_heading_pattern = r'(?m)^# [^\n]+ __(?:Challenger|Diamond|Gold|Iron)__$'
+
     def __init__(self, pages, guild_id, tournament_id):
         super().__init__(timeout=900)
         self.pages, self.page, self.guild_id = pages, 0, guild_id
