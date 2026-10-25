@@ -76,7 +76,7 @@ def test_playin_votes_count_in_leaderboard_and_personal_stats_with_result_protec
         rendered = render_payload({"components": reply["view"].to_components()})
         text = "\n".join(child["content"] for card in rendered["components"] for child in card["components"]
                          if child.get("type") == 10)
-        assert "### lua’s correct predictions: ||1/1|| (||100%||)" in text
+        assert "### · Correct predictions: ||1/1|| (||100%||)" in text
         assert "*Check Your PayPal*" in text
         assert text.count("Not enough data") == 4
         assert 'including Play-Ins' in text
@@ -92,13 +92,13 @@ def test_button_and_stats_command_return_identical_private_clicker_stats(stats_d
         await button.callback(caller)
         clicked = caller.followup.send.call_args.kwargs
         rendered = rendered_payload(clicked)
-        assert rendered.title == "__Worlds 2026 Voting Stats · Other user__"
-        assert "### Other user’s correct predictions: 0/1 (0%)" in rendered.description
-        assert "### Other user’s correct predictions: 0/1 (0%)" in rendered.description
+        assert rendered.title == "__Worlds 2026 Voting Stats · `Other user`__"
+        assert "### · Correct predictions: 0/1 (0%)" in rendered.description
+        assert "### · Correct predictions: 0/1 (0%)" in rendered.description
         assert "Pending votes" not in rendered.description
         assert all(label in rendered.description for label in ("### :PeyzPal: *Check Your PayPal*", "### :PepeKMS: *Can’t Read These Frauds*", "### :Copium: *Hopium Supplier*", "### :Discheesed: *Democracy Was a Mistake*"))
         first_text = next(item.content for item in clicked["view"].walk_children() if isinstance(item, discord.ui.TextDisplay))
-        assert first_text.startswith("# __Worlds 2026 Voting Stats · Other user__\n")
+        assert first_text.startswith("# __Worlds 2026 Voting Stats · `Other user`__\n")
         caller.response.defer.assert_awaited_once_with(ephemeral=True)
         assert clicked["ephemeral"] is True
         assert clicked["allowed_mentions"].to_dict() == {"parse": []}
@@ -107,7 +107,7 @@ def test_button_and_stats_command_return_identical_private_clicker_stats(stats_d
         assert rendered_payload(command_caller.followup.send.call_args.kwargs) == rendered
         owner = interaction_for(data, 7)
         await button.callback(owner)
-        assert "### lua’s correct predictions: 1/1 (100%)" in rendered_payload(owner.followup.send.call_args.kwargs).description
+        assert "### · Correct predictions: 1/1 (100%)" in rendered_payload(owner.followup.send.call_args.kwargs).description
     asyncio.run(scenario())
 
 
@@ -206,10 +206,10 @@ def test_stats_command_can_privately_view_another_member(stats_data):
         await load_command('stats', stats_data, discord=discord)(caller, target)
         payload = caller.followup.send.call_args.kwargs
         rendered = rendered_payload(payload)
-        assert rendered.title == '__Worlds 2026 Voting Stats · lua__'
-        assert '### lua’s correct predictions: 1/1 (100%)' in rendered.description
+        assert rendered.title.replace('\u00a0', '') == '__Worlds 2026 Voting Stats · `lua`__'
+        assert '### · Correct predictions: 1/1 (100%)' in rendered.description
         assert 'Other user’s' not in rendered.description and '### My ' not in rendered.description
-        assert 'whether lua votes for or against them' in rendered.description
+        assert 'whether `lua` votes for or against them' in rendered.description.replace('\u00a0', '')
         assert payload['ephemeral'] is True and payload['allowed_mentions'].to_dict() == {'parse': []}
         payload['view'].stop()
     asyncio.run(scenario())
@@ -223,8 +223,8 @@ def test_stats_command_handles_a_member_with_no_votes(stats_data):
         await load_command('stats', stats_data, discord=discord)(caller, target)
         payload = caller.followup.send.call_args.kwargs
         text = rendered_payload(payload).description
-        assert 'New member’s correct predictions: 0/0 (—)' in text
-        assert 'New member’s League rank: —' in text
+        assert '### · Correct predictions: 0/0 (—)' in text
+        assert '### · League rank: —' in text
         assert payload['ephemeral'] is True
         payload['view'].stop()
     asyncio.run(scenario())
@@ -311,5 +311,31 @@ def test_badge_files_are_included_in_discord_multipart_upload():
             galleries = [item for item in wire['components'][0]['components'] if item['type'] == 12]
             assert [gallery['items'][0]['media']['url'] for gallery in galleries] == ['attachment://' + name for name in names]
             assert all('description' not in gallery['items'][0] for gallery in galleries)
+        payload['view'].stop()
+    asyncio.run(scenario())
+
+
+def test_stats_reuse_leaderboard_name_padding_in_title_header_and_descriptions(stats_data):
+    from services.leaderboard_views import leaderboard_context
+    async def scenario():
+        caller = interaction_for(stats_data, 7)
+        _, entries, _ = await leaderboard_context(caller, stats_data.tournament.id, data=stats_data)
+        board = leaderboard_payload(entries, 123, stats_data.tournament.id)
+        board_text = rendered_payload(board).description
+        name = '`lua' + '\N{NO-BREAK SPACE}' * 7 + '`'
+        assert name in board_text
+        await show_personal_stats(caller, 123, stats_data.tournament.id, data=stats_data)
+        payload = caller.followup.send.call_args.kwargs
+        card = rendered_payload(payload)
+        assert name in card.title
+        assert f'## {name}’s __Basic Stats__' in card.description
+        assert f'whose series {name} predicts' in card.description
+        assert f'whether {name} votes' in card.description
+        assert '### · League rank: :challenger:' in card.description
+        assert 'League rank: :challenger: Challenger' not in card.description
+        assert '\n\n\u2800\n\n## __Some other Stats__' in card.description
+        assert card.description.count('### · ') == 5
+        assert '’s current rank:' not in card.description
+        board['view'].stop()
         payload['view'].stop()
     asyncio.run(scenario())

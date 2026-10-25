@@ -17,6 +17,11 @@ def format_footnotes(text):
         inner_indent = body[:len(body) - len(body.lstrip('\N{NO-BREAK SPACE}'))]
         indent += inner_indent
         body = body[len(inner_indent):]
+        code_spans = []
+        def protect_code(found):
+            code_spans.append(found.group())
+            return f'\ue000{len(code_spans) - 1}\ue001'
+        body = re.sub(r'(?<!`)(`+)(?!`)[^\n]*?\1(?!`)', protect_code, body)
         def keep_emphasis(bold):
             city_time = (bold.start() == 0 and bold.group(1).endswith(":")
                          and re.match(r"\s+\d{1,2}:\d{2}", body[bold.end():]))
@@ -24,6 +29,8 @@ def format_footnotes(text):
 
         body = re.sub(r"(?<!\\)\*\*(.+?)(?<!\\)\*\*", keep_emphasis, body)
         body = re.sub(r"(?<![\\*])\*([^*]+)\*(?!\*)", r"\1", body)
+        for index, code in enumerate(code_spans):
+            body = body.replace(f'\ue000{index}\ue001', code)
         return "-# " + indent + ("• " if bullet else "") + "*" + body + "*"
     text = re.sub(r"(?m)^-#[ \t]+([^\n]*)", replace, text)
     # Separate footnote blocks from the body, keeping consecutive notes compact.

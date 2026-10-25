@@ -90,14 +90,14 @@ def test_personal_stats_use_requested_summary_and_four_explained_sections():
     snapshot = CompetitionSnapshot([leader, row], None, {4: recent}, {4: pending}, 30)
     embed = personal_stats_embed(snapshot, 4, "Sample Player 4", previous={1: 1, 4: 3})
     text = embed.description.replace("\u00a0", "")
-    assert embed.title == "Worlds 2026 Voting Stats · Sample Player 4"
-    assert text.index("## __Basic Stats__") < text.index("### Sample Player 4’s current rank:") < text.index("## __Some other Stats__") < text.index("### :PeyzPal: *Check Your PayPal*")
-    assert "### Sample Player 4’s current rank: 2 of 2" in text
-    assert "### Sample Player 4’s League rank: :gold: Gold" in text
-    assert "### Sample Player 4’s correct predictions: 14/20 (70%)" in text
+    assert embed.title == "Worlds 2026 Voting Stats · `Sample Player 4`"
+    assert text.index("## `Sample Player 4`’s __Basic Stats__") < text.index("### · Current rank:") < text.index("## __Some other Stats__") < text.index("### :PeyzPal: *Check Your PayPal*")
+    assert "### · Current rank: 2 of 2" in text
+    assert "### · League rank: :gold:" in text
+    assert "### · Correct predictions: 14/20 (70%)" in text
     assert "My votes:" not in text
     assert "My incorrect predictions:" not in text and "My missed votes:" not in text
-    assert "### Sample Player 4’s current streak: 🔥🔥\n### Sample Player 4’s best streak: 🔥🔥🔥🔥🔥" in text
+    assert "### · Current streak: 🔥🔥\n### · Best streak: 🔥🔥🔥🔥🔥" in text
     assert text.index("### :PeyzPal: *Check Your PayPal*") < text.index("### :PepeKMS: *Can’t Read These Frauds*") < text.index("### :Copium: *Hopium Supplier*") < text.index("### :Discheesed: *Democracy Was a Mistake*")
     assert text.startswith("-# *(All stats cover completed series across Worlds, including Play-Ins.)*")
     assert not any(label in text for label in ("Recent predictions", "Pending votes", "Boldest correct call", "Ranked by", "Rank movement", "behind the leader"))
@@ -111,14 +111,14 @@ def test_pending_only_and_no_votes_have_clear_empty_states():
     prediction = Prediction("m", "C9", "FUR", datetime(2026, 10, 17, tzinfo=UTC), "C9", None)
     snapshot = CompetitionSnapshot([], None, {}, {7: [prediction]}, 30)
     embed = personal_stats_embed(snapshot, 7, "lua")
-    assert f"### lua’s current rank: {UNAVAILABLE}" in embed.description
-    assert "Pending votes" not in embed.description and "### lua’s correct predictions: 0/0 (—)" in embed.description
+    assert f"### · Current rank: {UNAVAILABLE}" in embed.description
+    assert "Pending votes" not in embed.description and "### · Correct predictions: 0/0 (—)" in embed.description
     assert "accuracy" not in embed.description.lower()
     assert accuracy_text(PredictionStats(7, 0, 0, 30, 0, 0)) == UNAVAILABLE
     empty = personal_stats_embed(snapshot, 8, "No votes")
     assert empty.description.count("Not enough data") == 4
     snapshot = replace(snapshot, rows=[PredictionStats(7, 1, 1, 30, 1, 1)], pending={})
-    assert "### lua’s current rank: 1 of 1" in personal_stats_embed(snapshot, 7, "lua").description
+    assert "### · Current rank: 1 of 1" in personal_stats_embed(snapshot, 7, "lua").description
 
 
 def test_renamed_insights_show_real_values_below_explanations():
@@ -139,10 +139,10 @@ def test_renamed_insights_show_real_values_below_explanations():
     assert "\n\n**GEN** · **1/3 correct (33.3%)**" in text
     assert "\n\n**GEN** · **backed to win in 2 series they lost**" in text
     assert "**2/3 minority predictions correct**\n\n**T1** · **1/2 correct**\n**GEN** · **1/1 correct**" in text
-    assert "### :PeyzPal: *Check Your PayPal*\n\n-# *The team whose series lua predicts most accurately" in text
-    assert "### :PepeKMS: *Can’t Read These Frauds*\n\n-# *The team whose series lua predicts least accurately" in text
-    assert "### :Copium: *Hopium Supplier*\n\n-# *The team lua backed to win most often when they actually lost." in text
-    assert "### :Discheesed: *Democracy Was a Mistake*\n\n-# *How often lua predicts correctly" in text
+    assert "### :PeyzPal: *Check Your PayPal*\n\n-# *The team whose series `lua` predicts most accurately" in text
+    assert "### :PepeKMS: *Can’t Read These Frauds*\n\n-# *The team whose series `lua` predicts least accurately" in text
+    assert "### :Copium: *Hopium Supplier*\n\n-# *The team `lua` backed to win most often when they actually lost." in text
+    assert "### :Discheesed: *Democracy Was a Mistake*\n\n-# *How often `lua` predicts correctly" in text
     assert "Boldest correct call" not in text and "Recent predictions" not in text
 
 
@@ -234,7 +234,7 @@ def test_advanced_stats_replace_one_pick_streak_with_dash_and_show_earned_fires(
     row = PredictionStats(7, 4, 10, 19, 1, 5)
     snapshot = CompetitionSnapshot([row], None, {}, {}, 19)
     text = personal_stats_embed(snapshot, 7, 'Jerry').description
-    assert '### Jerry’s current streak: <:dootpinkline:1563980159202103478>' in text
-    assert '### Jerry’s best streak: 🔥🔥🔥🔥🔥' in text
+    assert '### · Current streak: <:dootpinkline:1563980159202103478>' in text
+    assert '### · Best streak: 🔥🔥🔥🔥🔥' in text
     empty = personal_stats_embed(replace(snapshot, rows=[replace(row, current_streak=0, longest_streak=1)]), 7, 'Jerry').description
-    assert '### Jerry’s current streak: <:dootpinkline:1563980159202103478>\n### Jerry’s best streak: <:dootpinkline:1563980159202103478>' in empty
+    assert '### · Current streak: <:dootpinkline:1563980159202103478>\n### · Best streak: <:dootpinkline:1563980159202103478>' in empty

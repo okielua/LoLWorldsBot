@@ -123,11 +123,12 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
     return pages
 
 
-def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous=None):
+def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous=None, display_names=None):
     rows = snapshot.rows if rows is None else rows
     ranks = competition_ranks(rows)
     row = next((row for row in rows if row.user_id == user_id), None)
-    name = safe_name(display_name)
+    name = aligned_name_fields({**(display_names or {}), user_id: display_name},
+                               prefix="", max_length=80)[user_id]
     owner = f"{name}’s"
     title = f"Worlds 2026 Voting Stats · {name}"
     if row is None:
@@ -149,16 +150,15 @@ def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous
             name='dootpinkline', id=1563980159202103478))
 
     tier = prediction_tiers(rows).get(user_id)
-    tier_name = next((name for key, name, _ in TIERS if key == tier), UNAVAILABLE)
-    tier_text = f"{custom_emoji(tier) or ':' + tier + ':'} {tier_name}" if tier else UNAVAILABLE
+    tier_text = str(custom_emoji(tier) or ":" + tier + ":") if tier else UNAVAILABLE
     body = (
         "-# (All stats cover completed series across Worlds, including Play-Ins.)\n\n"
-        "## __Basic Stats__\n\n"
-        f"### {owner} current rank: {aggregate_token(standing, rank_scope) if rank else standing}\n"
-        f"### {owner} League rank: {aggregate_token(tier_text, rank_scope) if rank else tier_text}\n"
-        f"### {owner} correct predictions: {value(f'{row.correct}/{row.submitted}')} ({value(accuracy_text(row))})\n"
-        f"### {owner} current streak: {streak_text(row.current_streak)}\n"
-        f"### {owner} best streak: {streak_text(row.longest_streak)}"
+        f"## {owner} __Basic Stats__\n\n"
+        f"### · Current rank: {aggregate_token(standing, rank_scope) if rank else standing}\n"
+        f"### · League rank: {aggregate_token(tier_text, rank_scope) if rank else tier_text}\n"
+        f"### · Correct predictions: {value(f'{row.correct}/{row.submitted}')} ({value(accuracy_text(row))})\n"
+        f"### · Current streak: {streak_text(row.current_streak)}\n"
+        f"### · Best streak: {streak_text(row.longest_streak)}"
     )
     advanced = snapshot.advanced.get(user_id, AdvancedPredictionStats())
 
@@ -181,7 +181,7 @@ def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous
         return f"\n\n### {custom_emoji(name) or ':' + name + ':'} *{title}*\n"
 
     body += (
-        "\n\n## __Some other Stats__"
+        "\n\n\u2800\n\n## __Some other Stats__"
         + section("PeyzPal", "Check Your PayPal")
         + f"-# The team whose series {name} predicts most accurately, whether {name} votes for or against them. Requires at least 3 scored predictions involving that team.\n\n"
         f"{team_read(advanced.best_read)}"

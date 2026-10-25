@@ -478,8 +478,8 @@ def test_personal_stats_protect_values_but_keep_labels_and_explanations_readable
                                    result_match_ids=(match.id,))
     draft = {"embeds": [personal_stats_embed(snapshot, 7, "lua").to_dict()]}
     text = render_payload(draft)["embeds"][0]["description"]
-    assert "### lua’s current rank: ||1 of 1||" in text
-    assert "### lua’s correct predictions: ||1/1|| (||100%||)" in text
+    assert "### · Current rank: ||1 of 1||" in text
+    assert "### · Correct predictions: ||1/1|| (||100%||)" in text
     assert "*Check Your PayPal*" in text
     assert "*Can’t Read These Frauds*" in text
     assert "Requires at least 3 scored predictions" in text
@@ -506,4 +506,4 @@ def test_unrelated_protected_result_does_not_hide_personal_stats(protected):
     assert not policy.protected(released)
     text = render_payload({"embeds": [personal_stats_embed(snapshot, 7, "lua").to_dict()]})["embeds"][0]["description"]
     assert "||" not in text
-    assert "### lua’s correct predictions: 1/1 (100%)" in text
+    assert "### · Correct predictions: 1/1 (100%)" in text

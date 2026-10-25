@@ -89,3 +89,11 @@ def test_indented_footnotes_keep_whitespace_outside_italic_markers_on_rerender()
     assert format_footnotes(source) == expected
     assert format_footnotes(expected) == expected
     assert '*' + indent not in expected
+
+
+def test_name_code_blocks_preserve_literal_stars_padding_and_backticks():
+    code = '``a`**b**' + '\N{NO-BREAK SPACE}' * 3 + '``'
+    source = '-# The team ' + code + ' predicts correctly.'
+    expected = '-# *The team ' + code + ' predicts correctly.*'
+    assert format_footnotes(source) == expected
+    assert format_footnotes(expected) == expected
