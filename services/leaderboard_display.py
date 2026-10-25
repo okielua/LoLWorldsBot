@@ -154,6 +154,7 @@ def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous
     tier_text = f"{custom_emoji(tier) or ':' + tier + ':'} {tier_name}" if tier else UNAVAILABLE
     body = (
         "-# (All stats cover completed series across Worlds, including Play-Ins.)\n\n"
+        "## __Basic Stats__\n\n"
         f"### {owner} current rank: {aggregate_token(standing, rank_scope) if rank else standing}\n"
         f"### {owner} League rank: {aggregate_token(tier_text, rank_scope) if rank else tier_text}\n"
         f"### {owner} correct predictions: {value(f'{row.correct}/{row.submitted}')} ({value(accuracy_text(row))})\n"
@@ -178,10 +179,11 @@ def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous
             value(team_text(f"**{team.team_id}** · **{team.correct}/{team.total} correct**"))
             for team in advanced.minority_teams)
     def section(name, title):
-        return f"\n\n## {custom_emoji(name) or ':' + name + ':'} __{title}__\n"
+        return f"\n\n### {custom_emoji(name) or ':' + name + ':'} *{title}*\n"
 
     body += (
-        section("PeyzPal", "Check Your PayPal")
+        "\n\n## __Some other Stats__"
+        + section("PeyzPal", "Check Your PayPal")
         + f"-# The team whose series {name} predicts most accurately, whether {name} votes for or against them. Requires at least 3 scored predictions involving that team.\n\n"
         f"{team_read(advanced.best_read)}"
         + section("PepeKMS", "Can’t Read These Frauds")

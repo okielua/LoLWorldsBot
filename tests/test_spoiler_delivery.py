@@ -480,8 +480,8 @@ def test_personal_stats_protect_values_but_keep_labels_and_explanations_readable
     text = render_payload(draft)["embeds"][0]["description"]
     assert "### lua’s current rank: ||1 of 1||" in text
     assert "### lua’s correct predictions: ||1/1|| (||100%||)" in text
-    assert "__Check Your PayPal__" in text
-    assert "__Can’t Read These Frauds__" in text
+    assert "*Check Your PayPal*" in text
+    assert "*Can’t Read These Frauds*" in text
     assert "Requires at least 3 scored predictions" in text
     assert "completed series across Worlds, including Play-Ins" in text
     assert not text.startswith("||")

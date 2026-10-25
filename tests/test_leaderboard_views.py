@@ -77,7 +77,7 @@ def test_playin_votes_count_in_leaderboard_and_personal_stats_with_result_protec
         text = "\n".join(child["content"] for card in rendered["components"] for child in card["components"]
                          if child.get("type") == 10)
         assert "### lua’s correct predictions: ||1/1|| (||100%||)" in text
-        assert "__Check Your PayPal__" in text
+        assert "*Check Your PayPal*" in text
         assert text.count("Not enough data") == 4
         assert 'including Play-Ins' in text
     asyncio.run(scenario())
@@ -96,7 +96,7 @@ def test_button_and_stats_command_return_identical_private_clicker_stats(stats_d
         assert "### Other user’s correct predictions: 0/1 (0%)" in rendered.description
         assert "### Other user’s correct predictions: 0/1 (0%)" in rendered.description
         assert "Pending votes" not in rendered.description
-        assert all(label in rendered.description for label in ("## :PeyzPal: __Check Your PayPal__", "## :PepeKMS: __Can’t Read These Frauds__", "## :Copium: __Hopium Supplier__", "## :Discheesed: __Democracy Was a Mistake__"))
+        assert all(label in rendered.description for label in ("### :PeyzPal: *Check Your PayPal*", "### :PepeKMS: *Can’t Read These Frauds*", "### :Copium: *Hopium Supplier*", "### :Discheesed: *Democracy Was a Mistake*"))
         first_text = next(item.content for item in clicked["view"].walk_children() if isinstance(item, discord.ui.TextDisplay))
         assert first_text.startswith("# __Worlds 2026 Voting Stats · Other user__\n")
         caller.response.defer.assert_awaited_once_with(ephemeral=True)
