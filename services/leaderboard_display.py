@@ -7,6 +7,7 @@ from services.team_emojis import team_text, custom_emoji
 from services.footnotes import format_footnotes
 from services.spoilers import aggregate_token
 from services.prediction_form import aligned_name_fields
+from services.prediction_tiers import TIERS, prediction_tiers
 
 
 ACCENT = 0x5865F2
@@ -15,7 +16,11 @@ LEADERBOARD_HELP = format_footnotes(
     "-# Standings include play-ins; last 10 picks shown, starting at Swiss.\n"
     "-# ✅ Correct · ❌ Wrong · ➖ Skipped\n"
     "-# 🔥 Ongoing streak of 3+ (skipped matches don't break streaks)\n"
-    "-# 🏆 Earned MVP trophies."
+    "-# 🏆 Earned MVP trophies.\n"
+    "-# Tiers follow leaderboard position: correct picks first, then percentage.\n"
+    "-# First place is always Challenger. Remaining places use Diamond 35 : Gold 44 : Iron 19.7 proportions; ties share a tier.\n"
+    "-# Merged ranks: Challenger = Master–Challenger; Diamond = Platinum–Diamond; Gold = Silver–Gold; Iron = Iron–Bronze.\n"
+    "-# Top % labels are rounded League reference cutoffs, not server percentiles."
 )
 
 
@@ -60,6 +65,7 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
     entries = sorted(entries, key=lambda entry: (-entry[0].correct, -entry[0].accuracy, entry[0].user_id))
     ranks = competition_ranks([row for row, _ in entries])
     blocks = []
+    tiers = prediction_tiers([row for row, _ in entries])
     names = aligned_name_fields({row.user_id: name for row, name in entries}, prefix='', max_length=80)
     history_rows = {row.user_id:row for row in history.rows} if history else {}
     help_text = LEADERBOARD_HELP.replace('➖',str(custom_emoji('dootpinkline') or '➖'))
@@ -72,7 +78,7 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
         movement = rank_movement(row.user_id, ranks, previous)
         streak = getattr(history_rows.get(row.user_id),'current_streak',0) if history is not None else row.current_streak
         streak_icon = ' 🔥' if streak>=3 else ''
-        block = (f"# {ranks[row.user_id]}. {names[row.user_id]}"
+        block = (f"## {ranks[row.user_id]}. {names[row.user_id]}"
                  + ((' ' if movement == 'New' else '') + movement if movement else '') + streak_icon + '\n'
                  + f'## {row.correct}/{row.submitted} ({accuracy_text(row)})\n')
         if history is not None:
@@ -93,7 +99,7 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
         earned = [f'🏆 ({labels[i]})' for i, slot in enumerate(case) if slot == '🏆' and i < len(labels)]
         if earned:
             block += '\n\n**__Trophies:__**\n' + '\n'.join(earned)
-        blocks.append(block)
+        blocks.append((tiers[row.user_id], block))
     prefix = "Sample results. The real leaderboard is unchanged.\n\n" if preview else ""
     title = "Communism Worlds Leaderboard"
     if preview:
@@ -101,11 +107,18 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
     pages, body = [], prefix
     # An empty status contains no scored predictions to protect.
     protect = aggregate_token if entries else str
-    for block in blocks or ["No results yet. The standings update as matches finish."]:
-        if len(body) + len(block) + len(help_text) + 4 > 3700:
+    previous_tier = None
+    headings = {key: f"# {custom_emoji(key) or ':' + key + ':'} {name} (top {cutoff}%)"
+                for key, name, cutoff in TIERS}
+    for tier, block in blocks or [(None, "No results yet. The standings update as matches finish.")]:
+        heading = headings[tier] + '\n\n' if tier and tier != previous_tier else ''
+        addition = heading + block
+        if len(body) + len(addition) + len(help_text) + 4 > 3700:
             pages.append(discord.Embed(title=title, description=protect(body.rstrip()) + "\n\n" + help_text, colour=ACCENT))
             body = prefix
-        body += format_footnotes(block) + "\n\n"
+            addition = (headings[tier] + '\n\n' if tier else '') + block
+        body += format_footnotes(addition) + "\n\n"
+        previous_tier = tier
     pages.append(discord.Embed(title=title, description=protect(body.rstrip()) + "\n\n" + help_text, colour=ACCENT))
     return pages
 

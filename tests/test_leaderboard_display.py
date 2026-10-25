@@ -16,14 +16,14 @@ def test_sample_leaderboard_matches_compact_specification():
     assert embed.title == "TEST: Communism Worlds Leaderboard"
     assert embed.colour.value == 0x5865F2
     assert "Sample results. The real leaderboard is unchanged." in text
-    assert "# 1. `lua`⬆️ 🔥\n## 18/24 (75%)" in text
-    assert "# 2. `Sample Player 2`⬇️\n## 18/26 (69.2%)" in text
-    assert "# 2. `Sample Player 3`" in text
-    assert "# 4. `Sample Player 4`⬆️" in text
+    assert "## 1. `lua`⬆️ 🔥\n## 18/24 (75%)" in text
+    assert "## 2. `Sample Player 2`⬇️\n## 18/26 (69.2%)" in text
+    assert "## 2. `Sample Player 3`" in text
+    assert "## 4. `Sample Player 4`⬆️" in text
     assert '(69.2%)' in text and '(70%)' in text
     assert '## 18/24 (75%)' in text
-    assert "# 6. `Sample Player 6`" in text
-    assert text.index("18/24") < text.index("# 6. `Sample Player 6`")
+    assert "## 6. `Sample Player 6`" in text
+    assert text.index("18/24") < text.index("## 6. `Sample Player 6`")
     assert not any(word in text for word in ("participation", "75.0%", "behind", "Level on", "\u200b", "\n\n\n"))
     assert 'Current streak:' not in text and 'Best streak:' not in text
     assert '⚪' not in text and '🏆' in text and '✅' in text and '❌' in text
@@ -39,7 +39,7 @@ def test_preview_has_no_actual_mentions_and_every_chunk_is_bounded():
     entries = [(replace(row, user_id=i * 6 + row.user_id), name + "x" * 200) for i in range(20) for row, name in entries]
     chunks = leaderboard_embeds(entries, preview=True)
     assert len(chunks) > 1 and all(len(embed.description) <= 4096 and len(embed) <= 6000 for embed in chunks)
-    assert sum(len(re.findall(r"^# \d+\.", embed.description, re.MULTILINE)) for embed in chunks) == 120
+    assert sum(len(re.findall(r"^## \d+\.", embed.description, re.MULTILINE)) for embed in chunks) == 120
     for embed in chunks:
         text = embed.description.replace("\u00a0", "")
         assert embed.title == "TEST: Communism Worlds Leaderboard"
@@ -50,12 +50,12 @@ def test_preview_has_no_actual_mentions_and_every_chunk_is_bounded():
 def test_shared_first_place_and_zero_scores_do_not_gain_a_gap_or_fake_movement():
     entries = [(PredictionStats(1, 0, 1, 2, 0, 0), "A"), (PredictionStats(2, 0, 2, 2, 0, 0), "B")]
     embed, = leaderboard_embeds(entries)
-    assert "# 1. `A`" in embed.description and "# 1. `B`" in embed.description
+    assert "## 1. `A`" in embed.description and "## 1. `B`" in embed.description
     assert "behind" not in embed.description and "Level on" not in embed.description
     assert "New" not in embed.description
     assert '⬆️' not in embed.description and '⬇️' not in embed.description
     new, = leaderboard_embeds(entries, previous={})
-    assert "# 1. `A` New" in new.description
+    assert "## 1. `A` New" in new.description
 
 
 def test_full_swiss_history_skips_custom_rank_arrows_and_trophy_slots(monkeypatch):
@@ -222,5 +222,5 @@ def test_leaderboard_header_name_blocks_share_the_longest_width():
     rows = [(PredictionStats(1, 2, 3, 4, 0, 2), 'Amy'),
             (PredictionStats(2, 1, 3, 4, 0, 1), 'TheFluke')]
     embed, = leaderboard_embeds(rows, previous={1:2, 2:1})
-    assert '# 1. `Amy' + '\N{NO-BREAK SPACE}' * 5 + '`⬆️' in embed.description
-    assert '# 2. `TheFluke`⬇️' in embed.description
+    assert '## 1. `Amy' + '\N{NO-BREAK SPACE}' * 5 + '`⬆️' in embed.description
+    assert '## 2. `TheFluke`⬇️' in embed.description
