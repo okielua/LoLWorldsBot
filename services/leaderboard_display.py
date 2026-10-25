@@ -6,6 +6,7 @@ from services.prediction_stats import PredictionStats, AdvancedPredictionStats, 
 from services.team_emojis import team_text, custom_emoji
 from services.footnotes import format_footnotes
 from services.spoilers import aggregate_token
+from services.prediction_form import aligned_name_fields
 
 
 ACCENT = 0x5865F2
@@ -59,6 +60,7 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
     entries = sorted(entries, key=lambda entry: (-entry[0].correct, -entry[0].accuracy, entry[0].user_id))
     ranks = competition_ranks([row for row, _ in entries])
     blocks = []
+    names = aligned_name_fields({row.user_id: name for row, name in entries}, prefix='', max_length=80)
     history_rows = {row.user_id:row for row in history.rows} if history else {}
     help_text = LEADERBOARD_HELP.replace('➖',str(custom_emoji('dootpinkline') or '➖'))
     slots = trophy_slots if trophy_slots is not None else (
@@ -70,7 +72,7 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
         movement = rank_movement(row.user_id, ranks, previous)
         streak = getattr(history_rows.get(row.user_id),'current_streak',0) if history is not None else row.current_streak
         streak_icon = ' 🔥' if streak>=3 else ''
-        block = (f"# {ranks[row.user_id]}. __{safe_name(name)}__"
+        block = (f"# {ranks[row.user_id]}. {names[row.user_id]}"
                  + ((' ' if movement == 'New' else '') + movement if movement else '') + streak_icon + '\n'
                  + f'## {row.correct}/{row.submitted} ({accuracy_text(row)})\n')
         if history is not None:

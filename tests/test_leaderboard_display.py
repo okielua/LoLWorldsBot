@@ -12,18 +12,18 @@ def test_sample_leaderboard_matches_compact_specification():
     entries = sample_leaderboard_entries("lua")
     assert len(entries) == 6
     embed, = leaderboard_embeds(entries, preview=True, previous={1: 2, 2: 1, 3: 2, 4: 5, 5: 4, 6: 6})
-    text = embed.description
+    text = embed.description.replace("\u00a0", "")
     assert embed.title == "TEST: Communism Worlds Leaderboard"
     assert embed.colour.value == 0x5865F2
     assert "Sample results. The real leaderboard is unchanged." in text
-    assert "# 1. __lua__⬆️ 🔥\n## 18/24 (75%)" in text
-    assert "# 2. __Sample Player 2__⬇️\n## 18/26 (69.2%)" in text
-    assert "# 2. __Sample Player 3__" in text
-    assert "# 4. __Sample Player 4__⬆️" in text
+    assert "# 1. `lua`⬆️ 🔥\n## 18/24 (75%)" in text
+    assert "# 2. `Sample Player 2`⬇️\n## 18/26 (69.2%)" in text
+    assert "# 2. `Sample Player 3`" in text
+    assert "# 4. `Sample Player 4`⬆️" in text
     assert '(69.2%)' in text and '(70%)' in text
     assert '## 18/24 (75%)' in text
-    assert "# 6. __Sample Player 6__" in text
-    assert text.index("18/24") < text.index("# 6. __Sample Player 6__")
+    assert "# 6. `Sample Player 6`" in text
+    assert text.index("18/24") < text.index("# 6. `Sample Player 6`")
     assert not any(word in text for word in ("participation", "75.0%", "behind", "Level on", "\u200b", "\n\n\n"))
     assert 'Current streak:' not in text and 'Best streak:' not in text
     assert '⚪' not in text and '🏆' in text and '✅' in text and '❌' in text
@@ -41,7 +41,7 @@ def test_preview_has_no_actual_mentions_and_every_chunk_is_bounded():
     assert len(chunks) > 1 and all(len(embed.description) <= 4096 and len(embed) <= 6000 for embed in chunks)
     assert sum(len(re.findall(r"^# \d+\.", embed.description, re.MULTILINE)) for embed in chunks) == 120
     for embed in chunks:
-        text = embed.description
+        text = embed.description.replace("\u00a0", "")
         assert embed.title == "TEST: Communism Worlds Leaderboard"
         assert "<@123456789012345678>" not in text and "@everyone" not in text
         assert '-# *✅ Correct' in text and 'Ongoing streak of 3+' in text
@@ -50,12 +50,12 @@ def test_preview_has_no_actual_mentions_and_every_chunk_is_bounded():
 def test_shared_first_place_and_zero_scores_do_not_gain_a_gap_or_fake_movement():
     entries = [(PredictionStats(1, 0, 1, 2, 0, 0), "A"), (PredictionStats(2, 0, 2, 2, 0, 0), "B")]
     embed, = leaderboard_embeds(entries)
-    assert "# 1. __A__" in embed.description and "# 1. __B__" in embed.description
+    assert "# 1. `A`" in embed.description and "# 1. `B`" in embed.description
     assert "behind" not in embed.description and "Level on" not in embed.description
     assert "New" not in embed.description
     assert '⬆️' not in embed.description and '⬇️' not in embed.description
     new, = leaderboard_embeds(entries, previous={})
-    assert "# 1. __A__ New" in new.description
+    assert "# 1. `A` New" in new.description
 
 
 def test_full_swiss_history_skips_custom_rank_arrows_and_trophy_slots(monkeypatch):
@@ -73,9 +73,9 @@ def test_full_swiss_history_skips_custom_rank_arrows_and_trophy_slots(monkeypatc
     case=['⚪','🏆']+['⚪']*10
     embed,=leaderboard_embeds([(rows[0],'Winner'),(rows[1],'Other')],previous={1:2,2:1},
         history=history,trophies={1:case},trophy_slots=[('swiss', str(i)) for i in range(8)] + [('quarterfinals', ''), ('semifinals', ''), ('final', ''), ('overall', '')])
-    text=embed.description
-    assert '__Winner__<:arrow_up_blue:100> 🔥\n## 4/5 (80%)' in text
-    assert '__Other__<:arrow_down_grey:101>\n## 2/5 (40%)' in text
+    text=embed.description.replace("\u00a0", "")
+    assert '`Winner`<:arrow_up_blue:100> 🔥\n## 4/5 (80%)' in text
+    assert '`Other`<:arrow_down_grey:101>\n## 2/5 (40%)' in text
     assert '❌ <:dootpinkline:102> ✅ ✅ ✅' in text
     assert '\n🏆' in text and '<:dot3:103>' not in text and '⚪' not in text
     assert 'Current streak:' not in text and 'Best streak:' not in text and 'Oldest' not in text
@@ -89,7 +89,7 @@ def test_personal_stats_use_requested_summary_and_four_explained_sections():
     pending = [replace(prediction, winner_id=None) for prediction in recent[:7]]
     snapshot = CompetitionSnapshot([leader, row], None, {4: recent}, {4: pending}, 30)
     embed = personal_stats_embed(snapshot, 4, "Sample Player 4", previous={1: 1, 4: 3})
-    text = embed.description
+    text = embed.description.replace("\u00a0", "")
     assert embed.title == "My Worlds Stats · Sample Player 4"
     assert "**My rank: 2 of 2**\n**My correct predictions: 14 (70%)**" in text
     assert "My votes: **20 of 30 past matches**" in text
@@ -130,7 +130,7 @@ def test_renamed_insights_show_real_values_below_explanations():
     )
     snapshot = CompetitionSnapshot([PredictionStats(7, 8, 12, 15, 2, 4)], [], {7: [prediction]}, {}, 15, {7: advanced})
     embed = personal_stats_embed(snapshot, 7, "lua")
-    text = embed.description
+    text = embed.description.replace("\u00a0", "")
     assert "\n\n**T1** · **4/5 correct (80%)**" in text
     assert "\n\n**GEN** · **1/3 correct (33.3%)**" in text
     assert "\n\n**GEN** · **backed to win in 2 series they lost**" in text
@@ -216,3 +216,11 @@ def test_earned_trophies_are_labelled_by_matchday_and_stage():
     embed, = leaderboard_embeds([(row, 'Player')], trophies={1: case}, trophy_slots=slots)
     assert '**__Trophies:__**\n🏆 (Swiss day 2)\n🏆 (Quarterfinals)\n🏆 (Worlds 2026 overall)' in embed.description
     assert '⚪' not in embed.description and 'Full collection' not in embed.description
+
+
+def test_leaderboard_header_name_blocks_share_the_longest_width():
+    rows = [(PredictionStats(1, 2, 3, 4, 0, 2), 'Amy'),
+            (PredictionStats(2, 1, 3, 4, 0, 1), 'TheFluke')]
+    embed, = leaderboard_embeds(rows, previous={1:2, 2:1})
+    assert '# 1. `Amy' + '\N{NO-BREAK SPACE}' * 5 + '`⬆️' in embed.description
+    assert '# 2. `TheFluke`⬇️' in embed.description

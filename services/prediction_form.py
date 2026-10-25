@@ -21,11 +21,11 @@ def form_heading():
     return FORM_HEADING.replace('➖', str(custom_emoji('dootpinkline') or '➖'))
 
 
-def aligned_name_fields(names):
+def aligned_name_fields(names, *, prefix='@', max_length=64):
     def cells(name):
         return sum(0 if unicodedata.category(char) in {'Mn', 'Me', 'Cf'} else
                    2 if unicodedata.east_asian_width(char) in {'W', 'F'} else 1 for char in name)
-    labels = {uid: '@' + ' '.join(name.split())[:64] for uid, name in names.items()}
+    labels = {uid: prefix + ' '.join(name.split())[:max_length] for uid, name in names.items()}
     width = max(map(cells, labels.values()), default=0)
     result = {}
     for uid, label in labels.items():
