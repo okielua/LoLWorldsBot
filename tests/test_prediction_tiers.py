@@ -54,7 +54,7 @@ def test_group_headings_use_server_emojis_and_smaller_player_headers(monkeypatch
     assert 'Tiers follow leaderboard position' not in text and 'Merged ranks:' not in text
     notes = [line for line in text.splitlines() if line.startswith('-# ')]
     assert len(notes) == 8 and all('· ' in line for line in notes)
-    assert notes[4:] == [f'-# *' + '\N{NO-BREAK SPACE}' * 4 + f'· <:{key}:{100+i}> {label} {share}%*'
+    assert notes[4:] == [f'-# ' + '\N{NO-BREAK SPACE}' * 4 + f'*· <:{key}:{100+i}> {label} {share}%*'
                         for i, ((key, _, share), label) in enumerate(zip(TIERS, ('top', 'next', 'next', 'bottom')))]
     assert 'Standings include play-ins' not in text
     assert not any('%' in line for line in text.splitlines() if line.startswith('# '))

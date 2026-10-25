@@ -80,3 +80,12 @@ def test_leaderboard_uses_real_card_renderer_and_only_player_headers_are_bold():
     asyncio.run(scenario())
     embed = results_embed("Prediction results\n**C9**: 0% (0 votes)\n\u200b\n**KC**: 0% (0 votes)\n\u200b")
     assert all(line.startswith("-# • ") and "**" not in line for line in embed.fields[-1].value.splitlines())
+
+
+def test_indented_footnotes_keep_whitespace_outside_italic_markers_on_rerender():
+    indent = '\N{NO-BREAK SPACE}' * 4
+    source = '-# *' + indent + '· <:challenger:123> top 0.9%*'
+    expected = '-# ' + indent + '*· <:challenger:123> top 0.9%*'
+    assert format_footnotes(source) == expected
+    assert format_footnotes(expected) == expected
+    assert '*' + indent not in expected
