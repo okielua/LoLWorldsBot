@@ -76,7 +76,7 @@ def test_playin_votes_count_in_leaderboard_and_personal_stats_with_result_protec
         rendered = render_payload({"components": reply["view"].to_components()})
         text = "\n".join(child["content"] for card in rendered["components"] for child in card["components"]
                          if child.get("type") == 10)
-        assert "**My correct predictions: ||1||**" in text
+        assert "**My correct predictions: ||1|| (||100%||)**" in text
         assert "__Check Your PayPal__" in text
         assert text.count("Not enough data") == 4
         assert 'including Play-Ins' in text
@@ -93,7 +93,7 @@ def test_button_and_stats_command_return_identical_private_clicker_stats(stats_d
         clicked = caller.followup.send.call_args.kwargs
         rendered = rendered_payload(clicked)
         assert rendered.title == "__My Worlds Stats · Other user__"
-        assert "**My correct predictions: 0**" in rendered.description
+        assert "**My correct predictions: 0 (0%)**" in rendered.description
         assert "My incorrect predictions: **1**" in rendered.description
         assert "Pending votes" not in rendered.description
         assert all(label in rendered.description for label in ("## :PeyzPal: __Check Your PayPal__", "## :PepeKMS: __Can’t Read These Frauds__", "## :Copium: __Hopium Supplier__", "## :Discheesed: __Democracy Was a Mistake__"))
@@ -107,7 +107,7 @@ def test_button_and_stats_command_return_identical_private_clicker_stats(stats_d
         assert rendered_payload(command_caller.followup.send.call_args.kwargs) == rendered
         owner = interaction_for(data, 7)
         await button.callback(owner)
-        assert "**My correct predictions: 1**" in rendered_payload(owner.followup.send.call_args.kwargs).description
+        assert "**My correct predictions: 1 (100%)**" in rendered_payload(owner.followup.send.call_args.kwargs).description
     asyncio.run(scenario())
 
 

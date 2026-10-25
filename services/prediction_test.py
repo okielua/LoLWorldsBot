@@ -108,7 +108,7 @@ async def start_prediction_test(interaction, guild_id):
             text = "Test completed. Simulated winners were the first team in each matchup.\n"
             text += "\n".join(
                 f"{discord.utils.escape_mentions(discord.utils.escape_markdown(with_names.get(row.user_id, str(row.user_id))))}: "
-                f"{row.correct}/{row.submitted} correct · {float(row.accuracy):.1%} accuracy · "
+                f"{row.correct}/{row.submitted} correct ({float(row.accuracy):.1%}) · "
                 f"{row.submitted}/{row.eligible} predicted · {float(row.participation):.1%} participation\n"
                 f"-# Current streak: {row.current_streak} · Best streak: {row.longest_streak}"
                 for row in rows

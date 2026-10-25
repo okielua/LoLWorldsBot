@@ -52,9 +52,9 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
         movement = rank_movement(row.user_id, ranks, previous)
         streak = getattr(history_rows.get(row.user_id),'current_streak',0) if history is not None else row.current_streak
         streak_icon = ' 🔥' if streak>=3 else ''
-        block = (f"### `{ranks[row.user_id]}.` __{safe_name(name)}__: {row.correct} correct"
+        block = (f"### `{ranks[row.user_id]}.` __{safe_name(name)}__: {row.correct} correct ({accuracy_text(row)})"
                  + (f' {movement}' if movement else '') + streak_icon + '\n'
-                 + f'-# {accuracy_text(row)} accuracy · {row.submitted}/{row.eligible} voted\n')
+                 + f'-# {row.submitted}/{row.eligible} voted\n')
         if history is not None:
             choices = {pick.match_id:pick.chosen==pick.winner_id for pick in history.recent.get(row.user_id,[])}
             icons = [('✅' if choices[mid] else '❌') if mid in choices else str(custom_emoji('dootpinkline') or '➖')
@@ -109,9 +109,8 @@ def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous
     body = (
         "-# (All stats cover completed series across Worlds, including Play-Ins.)\n\n"
         f"**My rank: {aggregate_token(standing, rank_scope) if rank else standing}**\n"
-        f"**My correct predictions: {value(row.correct)}**\n\n"
+        f"**My correct predictions: {value(row.correct)} ({value(accuracy_text(row))})**\n\n"
         f"My votes: **{value(f'{row.submitted} of {row.eligible} past matches')}**\n"
-        f"My accuracy: **{value(accuracy_text(row) + (' correct' if row.submitted else ''))}**\n"
         f"My incorrect predictions: **{value(row.submitted - row.correct)}**\n"
         f"My missed votes: **{value(row.eligible - row.submitted)}**\n\n"
         f"My current streak: **{value(row.current_streak)}**\nMy best streak: **{value(row.longest_streak)}**"

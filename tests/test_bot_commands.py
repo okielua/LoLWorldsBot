@@ -697,7 +697,7 @@ def test_prediction_leaderboard_shows_tied_ranks_without_exposing_vote_counts():
     assert "### `1.` __Friend 2__: 2 correct" in text
     assert "### `3.` __Friend 3__: 1 correct" in text
     assert "behind" not in text and "Level on" not in text
-    assert "66.7% accuracy · 3/10 voted" in text
+    assert "(66.7%)" in text and "3/10 voted" in text
     assert 'Current streak:' not in text and 'Best streak:' not in text
     assert rendered_message(send.call_args).title == "__Communism Worlds Leaderboard__"
     assert "ephemeral" not in send.call_args.kwargs
@@ -1268,7 +1268,7 @@ def test_leaderboard_adds_fire_only_to_streaks_of_three_or_more():
     callback = load_command("leaderboard", data, discord=discord, leaderboard_context=context)
     asyncio.run(callback(interaction))
     text = rendered_message(interaction.followup.send.call_args).description
-    assert '### `1.` __Friend 7__: 4 correct 🔥' in text
-    assert '### `2.` __Friend 8__: 3 correct 🔥' not in text
+    assert '### `1.` __Friend 7__: 4 correct (80%) 🔥' in text
+    assert '### `2.` __Friend 8__: 3 correct (60%) 🔥' not in text
     assert 'Current streak:' not in text and 'Best streak:' not in text
     assert "points" not in text

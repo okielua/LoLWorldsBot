@@ -104,7 +104,7 @@ def mvp_pages(awards, names):
             lines = ['No MVP: no correct predictions were recorded.']
         else:
             row = award.winners[0]
-            lines = [f'-# {row.correct}/{row.submitted} correct · {float(row.accuracy):.1%} accuracy']
+            lines = [f'-# {row.correct}/{row.submitted} correct ({float(row.accuracy):.1%})']
             for winner in award.winners:
                 name = discord.utils.escape_mentions(discord.utils.escape_markdown(
                     ' '.join(names.get(winner.user_id, f'User {winner.user_id}').split())[:80]))
@@ -149,7 +149,7 @@ async def add_results_mvp(pages, manager, matches):
                         ' '.join(names.get(row.user_id, f'User {row.user_id}').split())[:80]))
                     lines.append(f'## 🏆 {name}')
                 row = award.winners[0]
-                lines.append(f'-# {row.correct}/{row.submitted} correct · {float(row.accuracy):.1%} accuracy')
+                lines.append(f'-# {row.correct}/{row.submitted} correct ({float(row.accuracy):.1%})')
             else:
                 lines.append('No MVP: no correct predictions were recorded.')
             blocks.append(lines)

@@ -850,7 +850,7 @@ class VotingManager:
                     winners.append(f"**{name}**")
                 row = mvps[0]  # Joint winners have the same correct/submitted ratio.
                 recap += (f"## 🏆 {', '.join(winners)}\n"
-                          f"{row.correct}/{row.submitted} correct · {float(row.accuracy):.1%} accuracy\n"
+                          f"{row.correct}/{row.submitted} correct ({float(row.accuracy):.1%})\n"
                           f"-# {row.submitted}/{row.eligible} matches predicted · {float(row.participation):.1%} participation\n")
                 recap = aggregate_token(recap)
             role_id = settings.worlds_role_id if not self.test_mode else None

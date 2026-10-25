@@ -1606,7 +1606,7 @@ async def leaderboard(interaction: discord.Interaction):
     await interaction.followup.send(**payload, allowed_mentions=discord.AllowedMentions.none())
 
 
-@bot.tree.command(name="myvotestats", description="View your rank, accuracy, streaks, and advanced personal prediction stats.")
+@bot.tree.command(name="myvotestats", description="View your rank, correct predictions, streaks, and advanced personal prediction stats.")
 @app_commands.guild_only()
 async def stats(interaction: discord.Interaction):
     await show_personal_stats(interaction, interaction.guild_id, worlds.tournament.id, data=worlds)
