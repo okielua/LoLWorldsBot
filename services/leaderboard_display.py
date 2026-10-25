@@ -71,7 +71,7 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
         streak = getattr(history_rows.get(row.user_id),'current_streak',0) if history is not None else row.current_streak
         streak_icon = ' 🔥' if streak>=3 else ''
         block = (f"# {ranks[row.user_id]}. __{safe_name(name)}__"
-                 + (f' {movement}' if movement else '') + streak_icon + '\n'
+                 + ((' ' if movement == 'New' else '') + movement if movement else '') + streak_icon + '\n'
                  + f'## {row.correct}/{row.submitted} ({accuracy_text(row)})\n')
         if history is not None:
             choices = {pick.match_id:pick.chosen==pick.winner_id for pick in history.recent.get(row.user_id,[])}

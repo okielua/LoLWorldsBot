@@ -16,10 +16,10 @@ def test_sample_leaderboard_matches_compact_specification():
     assert embed.title == "TEST: Communism Worlds Leaderboard"
     assert embed.colour.value == 0x5865F2
     assert "Sample results. The real leaderboard is unchanged." in text
-    assert "# 1. __lua__ ⬆️ 🔥\n## 18/24 (75%)" in text
-    assert "# 2. __Sample Player 2__ ⬇️\n## 18/26 (69.2%)" in text
+    assert "# 1. __lua__⬆️ 🔥\n## 18/24 (75%)" in text
+    assert "# 2. __Sample Player 2__⬇️\n## 18/26 (69.2%)" in text
     assert "# 2. __Sample Player 3__" in text
-    assert "# 4. __Sample Player 4__ ⬆️" in text
+    assert "# 4. __Sample Player 4__⬆️" in text
     assert '(69.2%)' in text and '(70%)' in text
     assert '## 18/24 (75%)' in text
     assert "# 6. __Sample Player 6__" in text
@@ -74,8 +74,8 @@ def test_full_swiss_history_skips_custom_rank_arrows_and_trophy_slots(monkeypatc
     embed,=leaderboard_embeds([(rows[0],'Winner'),(rows[1],'Other')],previous={1:2,2:1},
         history=history,trophies={1:case},trophy_slots=[('swiss', str(i)) for i in range(8)] + [('quarterfinals', ''), ('semifinals', ''), ('final', ''), ('overall', '')])
     text=embed.description
-    assert '__Winner__ <:arrow_up_blue:100> 🔥\n## 4/5 (80%)' in text
-    assert '__Other__ <:arrow_down_grey:101>\n## 2/5 (40%)' in text
+    assert '__Winner__<:arrow_up_blue:100> 🔥\n## 4/5 (80%)' in text
+    assert '__Other__<:arrow_down_grey:101>\n## 2/5 (40%)' in text
     assert '❌ <:dootpinkline:102> ✅ ✅ ✅' in text
     assert '\n🏆' in text and '<:dot3:103>' not in text and '⚪' not in text
     assert 'Current streak:' not in text and 'Best streak:' not in text and 'Oldest' not in text
