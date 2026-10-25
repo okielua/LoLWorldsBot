@@ -101,13 +101,13 @@ class LeaderboardView(SetupRequiredView):
     @property
     def section_media(self):
         media = {}
-        for key, name, _ in TIERS:
+        for key, _, _ in TIERS:
             emoji = custom_emoji(key)
             emoji_id = emoji.id if emoji else TIER_BADGE_IDS[key]
             extension = 'gif' if emoji and emoji.animated else 'png'
             heading = f"# {emoji or ':' + key + ':'}"
             media[heading] = (f'https://cdn.discordapp.com/emojis/{emoji_id}.{extension}?size=128',
-                              f'{name} prediction tier')
+                              None)
         return media
 
     def __init__(self, pages, guild_id, tournament_id):

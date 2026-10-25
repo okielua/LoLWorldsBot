@@ -244,7 +244,8 @@ def test_leaderboard_uses_native_dividers_between_tiers_not_players():
         assert isinstance(card.children[0], discord.ui.TextDisplay) and "Leaderboard" in card.children[0].content
         assert isinstance(card.children[1], discord.ui.Separator) and card.children[1].visible
         assert isinstance(card.children[2], discord.ui.MediaGallery)
-        assert [i.items[0].description for i in galleries] == ['Challenger prediction tier', 'Diamond prediction tier', 'Gold prediction tier', 'Iron prediction tier']
+        assert all(i.items[0].description is None for i in galleries)
+        assert all('description' not in i.to_component_dict()['items'][0] for i in galleries)
         assert 'Player1' in texts[2] and 'Player2' in texts[2]
         assert payload['view'].total_children_count <= 40
         payload['view'].stop()
@@ -268,7 +269,8 @@ def test_tier_badges_render_as_images_with_dividers_controls_and_pagination(monk
         assert isinstance(card.children[0], discord.ui.TextDisplay) and "Leaderboard" in card.children[0].content
         assert isinstance(card.children[1], discord.ui.Separator) and card.children[1].visible
         assert isinstance(card.children[2], discord.ui.MediaGallery)
-        assert [i.items[0].description for i in galleries] == [f'{name} prediction tier' for _, name, _ in TIERS]
+        assert all(i.items[0].description is None for i in galleries)
+        assert [i.items[0].media.url for i in galleries] == [f'https://cdn.discordapp.com/emojis/{100+i}.png?size=128' for i in range(4)]
         assert all('size=128' in i.items[0].media.url for i in galleries)
         assert all(not i.items[0].spoiler for i in galleries)
         assert len([i for i in card.children if isinstance(i, discord.ui.Separator) and i.visible]) == 5
