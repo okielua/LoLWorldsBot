@@ -13,11 +13,10 @@ from services.prediction_tiers import TIERS, prediction_tiers
 ACCENT = 0x5865F2
 UNAVAILABLE = "\u2014"  # Approved for unavailable rank and accuracy.
 LEADERBOARD_HELP = format_footnotes(
-    "-# Standings include play-ins; last 10 picks shown, starting at Swiss.\n"
-    "-# ✅ Correct · ❌ Wrong · ➖ Skipped\n"
-    "-# 🔥 Ongoing streak of 3+ (skipped matches don't break streaks)\n"
-    "-# 🏆 Earned MVP trophies.\n"
-    "-# First place is always Challenger. Remaining places follow the merged proportions; ties share a tier.\n"
+    "-# · ✅ Correct · ❌ Wrong · ➖ Skipped\n"
+    "-# · 🔥 Ongoing streak of 3+ (skipped matches don't break streaks)\n"
+    "-# · 🏆 Earned MVP trophies\n"
+    "-# · League ranks: first place is always Challenger. Remaining places are based on the merged LoL rank distribution:"
 )
 
 
@@ -66,10 +65,11 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
     names = aligned_name_fields({row.user_id: name for row, name in entries}, prefix='', max_length=80)
     history_rows = {row.user_id:row for row in history.rows} if history else {}
     help_text = LEADERBOARD_HELP.replace('➖',str(custom_emoji('dootpinkline') or '➖'))
-    distribution = ' · '.join(
-        f"{custom_emoji(key) or ':' + key + ':'} {label} {share}%"
+    indent = '\N{NO-BREAK SPACE}' * 4
+    distribution = '\n'.join(
+        f"-# *{indent}· {custom_emoji(key) or ':' + key + ':'} {label} {share}%*"
         for (key, _, share), label in zip(TIERS, ('top', 'next', 'next', 'bottom')))
-    help_text += '\n' + format_footnotes('-# ' + distribution)
+    help_text += '\n' + format_footnotes(distribution)
     slots = trophy_slots if trophy_slots is not None else (
         [('swiss', str(i)) for i in range(8)]
         + [('quarterfinals', ''), ('semifinals', ''), ('final', ''), ('overall', '')])

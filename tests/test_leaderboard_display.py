@@ -30,7 +30,7 @@ def test_sample_leaderboard_matches_compact_specification():
     assert 'Full collection' not in text and '12 trophies' not in text
     assert '**__Last 10 picks:__**' in text and '**__Trophies:__**\n🏆 (Swiss day 1)\n🏆 (Swiss day 2)' in text
     assert all("**" not in re.sub(r"\*\*\d+(?:\.\d+)?% correct\*\*", "", line) for line in text.splitlines() if line.startswith("-#"))
-    assert '-# *✅ Correct · ❌ Wrong · ➖ Skipped*' in text
+    assert '-# *· ✅ Correct · ❌ Wrong · ➖ Skipped*' in text
     assert "skipped matches don't break streaks" in text
 
 
@@ -44,7 +44,7 @@ def test_preview_has_no_actual_mentions_and_every_chunk_is_bounded():
         text = embed.description.replace("\u00a0", "")
         assert embed.title == "TEST: Communism Worlds Leaderboard"
         assert "<@123456789012345678>" not in text and "@everyone" not in text
-        assert '-# *✅ Correct' in text and 'Ongoing streak of 3+' in text
+        assert '-# *· ✅ Correct' in text and 'Ongoing streak of 3+' in text
 
 
 def test_shared_first_place_and_zero_scores_do_not_gain_a_gap_or_fake_movement():
@@ -206,8 +206,8 @@ def test_history_only_displays_latest_ten_matches_without_changing_totals():
     embed, = leaderboard_embeds([(row, 'Player')], history=history)
     assert '## 11/18 (61.1%)' in embed.description
     assert ' '.join(['✅'] * 10) in embed.description
-    assert '❌' not in embed.description.split('-# *Standings')[0]
-    assert 'last 10 picks shown' in embed.description
+    assert '❌' not in embed.description.split('-# ', 1)[0]
+    assert '**__Last 10 picks:__**' in embed.description
 
 
 def test_earned_trophies_are_labelled_by_matchday_and_stage():

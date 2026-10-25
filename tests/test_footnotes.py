@@ -72,7 +72,7 @@ def test_leaderboard_uses_real_card_renderer_and_only_player_headers_are_bold():
         assert notes and all(line.endswith("*") for line in notes)
         assert all(not line.startswith("-# •") for line in notes if "Voted on" in line or "Current streak:" in line)
         assert "Current streak:" not in text and "Best streak:" not in text
-        assert "-# *✅ Correct · ❌ Wrong" in text
+        assert "-# *· ✅ Correct · ❌ Wrong" in text
         assert len(text) <= 4000
         help_text = team_display("-# **Use** `/votehistory` to see votes.").content
         assert help_text == "\u00a0\n\n-# *Use `/votehistory` to see votes.*"

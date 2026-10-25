@@ -49,9 +49,12 @@ def test_group_headings_use_server_emojis_and_smaller_player_headers(monkeypatch
     assert '# <:gold:102> __Gold__' in text
     assert '# <:iron:103> __Iron__' in text
     assert '## 1. `Player0`' in text
-    assert 'First place is always Challenger' in text and 'not server percentiles' not in text
-    assert 'ties share a tier' in text
+    assert 'first place is always Challenger' in text and 'not server percentiles' not in text
+    assert 'based on the merged LoL rank distribution' in text
     assert 'Tiers follow leaderboard position' not in text and 'Merged ranks:' not in text
-    line = next(line for line in text.splitlines() if '<:challenger:100> top' in line)
-    assert '<:challenger:100> top 0.9% · <:diamond:101> next 35% · <:gold:102> next 44% · <:iron:103> bottom 19.7%' in line
+    notes = [line for line in text.splitlines() if line.startswith('-# ')]
+    assert len(notes) == 8 and all('· ' in line for line in notes)
+    assert notes[4:] == [f'-# *' + '\N{NO-BREAK SPACE}' * 4 + f'· <:{key}:{100+i}> {label} {share}%*'
+                        for i, ((key, _, share), label) in enumerate(zip(TIERS, ('top', 'next', 'next', 'bottom')))]
+    assert 'Standings include play-ins' not in text
     assert not any('%' in line for line in text.splitlines() if line.startswith('# '))
