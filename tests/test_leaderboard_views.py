@@ -156,3 +156,33 @@ def test_normal_weight_card_keeps_my_stats_button_and_pagination(stats_data):
         view.stop()
         payload["view"].stop()
     asyncio.run(scenario())
+
+
+def test_trophycase_button_includes_pending_only_voters_and_aligned_slots(stats_data):
+    from services.trophycase import TrophyCaseButton
+    # This player has only voted on an unresolved series and has no scored row.
+    match = stats_data.matches[1]
+    cast_vote(123, match.id, 9, match.team1_id, match.start_time - timedelta(hours=2), 'Pending player')
+    caller = interaction_for(stats_data, 7)
+    asyncio.run(TrophyCaseButton(123, stats_data.tournament.id).callback(caller))
+    caller.response.defer.assert_awaited_once_with(ephemeral=True)
+    payload = caller.followup.send.call_args.kwargs
+    text = '\n'.join(i.content for i in payload['view'].walk_children() if isinstance(i, discord.ui.TextDisplay))
+    assert 'Pending player' in text and 'Other user' in text and 'lua' in text
+    assert '\N{NO-BREAK SPACE}' in text
+    assert '12 trophies to win' in text and '⚪' in text
+    assert payload['ephemeral'] is True and payload['allowed_mentions'].to_dict() == {'parse': []}
+    payload['view'].stop()
+
+
+def test_leaderboard_contains_persistent_trophycase_button():
+    from services.trophycase import TrophyCaseButton
+    async def scenario():
+        payload = leaderboard_payload(sample_leaderboard_entries('lua'), 123, 'worlds-2026', preview=True)
+        buttons = [getattr(i, 'item', i) for i in payload['view'].walk_children()]
+        button = next(i for i in buttons if getattr(i, 'label', None) == 'Trophy Case')
+        assert str(button.emoji) == '🏆' and button.custom_id == 'worldstrophies:123:worlds-2026'
+        restored = await TrophyCaseButton.from_custom_id(None, button, {'guild':'123','tournament':'worlds-2026'})
+        assert restored.guild_id == 123
+        payload['view'].stop()
+    asyncio.run(scenario())

@@ -399,7 +399,7 @@ def test_leaderboard_preview_is_private_populated_and_does_not_write_results():
         interaction.response.defer.assert_awaited_once_with(ephemeral=True)
         messages = interaction.followup.send.call_args_list
         text = "\n".join(rendered_message(call).description for call in messages)
-        assert "Sample Player 6" in text and "Sample Player 7" not in text and "18 correct" in text
+        assert "Sample Player 6" in text and "Sample Player 7" not in text and "18/24 (75%)" in text
         assert "real leaderboard is unchanged" in text
         for call in messages:
             assert call.kwargs["ephemeral"] is True

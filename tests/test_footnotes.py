@@ -64,7 +64,7 @@ def test_leaderboard_uses_real_card_renderer_and_only_player_headers_are_bold():
         texts = [item.content for item in payload["view"].walk_children() if isinstance(item, discord.ui.TextDisplay)]
         text, = texts
         assert text.startswith("## __TEST: Communism Worlds Leaderboard__")
-        assert "### `1.` __lua__: 18 correct" in text
+        assert "# 1. __lua__" in text
         assert "Sample results. The real leaderboard is unchanged." in text
         assert "\u200b" not in text and "(75%)" in text
         notes = [line for line in text.splitlines() if line.startswith("-#")]

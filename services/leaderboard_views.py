@@ -9,6 +9,7 @@ from services.leaderboard_display import leaderboard_embeds, personal_stats_embe
 from services.prediction_stats import competition_ranks, get_competition_snapshot
 from services.presentation import message_payload, embed_card_payload
 from services.setup_gate import require_setup, SetupRequiredView
+from services.trophycase import TrophyCaseButton
 
 
 @dataclass(frozen=True)
@@ -87,6 +88,7 @@ class LeaderboardView(SetupRequiredView):
         super().__init__(timeout=900)
         self.pages, self.page, self.guild_id = pages, 0, guild_id
         self.add_item(MyStatsButton(guild_id, tournament_id))
+        self.add_item(TrophyCaseButton(guild_id, tournament_id))
         if len(pages) == 1:
             self.remove_item(self.previous)
             self.remove_item(self.next_page)

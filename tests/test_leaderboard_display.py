@@ -16,18 +16,18 @@ def test_sample_leaderboard_matches_compact_specification():
     assert embed.title == "TEST: Communism Worlds Leaderboard"
     assert embed.colour.value == 0x5865F2
     assert "Sample results. The real leaderboard is unchanged." in text
-    assert "### `1.` __lua__: 18 correct (75%) ⬆️1 🔥" in text
-    assert "### `2.` __Sample Player 2__: 18 correct (69.2%) ⬇️1" in text
-    assert "### `2.` __Sample Player 3__: 18 correct" in text
-    assert "### `4.` __Sample Player 4__: 14 correct (70%) ⬆️1" in text
+    assert "# 1. __lua__ ⬆️1 🔥\n## 18/24 (75%)" in text
+    assert "# 2. __Sample Player 2__ ⬇️1\n## 18/26 (69.2%)" in text
+    assert "# 2. __Sample Player 3__" in text
+    assert "# 4. __Sample Player 4__ ⬆️1" in text
     assert '(69.2%)' in text and '(70%)' in text
-    assert '24/30 voted' in text
-    assert "### `6.` __Sample Player 6__: 0 correct" in text
-    assert text.index("18 correct") < text.index("0 correct")
+    assert '## 18/24 (75%)' in text
+    assert "# 6. __Sample Player 6__" in text
+    assert text.index("18/24") < text.index("# 6. __Sample Player 6__")
     assert not any(word in text for word in ("participation", "75.0%", "behind", "Level on", "\u200b", "\n\n\n"))
     assert 'Current streak:' not in text and 'Best streak:' not in text
     assert '⚪' not in text and '🏆' in text and '✅' in text and '❌' in text
-    assert '12 trophies to win: 8 Swiss matchdays, 3 stages' in text and '1 overall Worlds 2026 winner' in text
+    assert '`/trophycase`' in text and '12 trophies' not in text
     assert all("**" not in re.sub(r"\*\*\d+(?:\.\d+)?% correct\*\*", "", line) for line in text.splitlines() if line.startswith("-#"))
     assert '-# *✅ Correct · ❌ Wrong · ➖ Skipped*' in text
     assert "skipped matches don't break streaks" in text
@@ -38,7 +38,7 @@ def test_preview_has_no_actual_mentions_and_every_chunk_is_bounded():
     entries = [(replace(row, user_id=i * 6 + row.user_id), name + "x" * 200) for i in range(20) for row, name in entries]
     chunks = leaderboard_embeds(entries, preview=True)
     assert len(chunks) > 1 and all(len(embed.description) <= 4096 and len(embed) <= 6000 for embed in chunks)
-    assert sum(len(re.findall(r"^### `\d+\.`", embed.description, re.MULTILINE)) for embed in chunks) == 120
+    assert sum(len(re.findall(r"^# \d+\.", embed.description, re.MULTILINE)) for embed in chunks) == 120
     for embed in chunks:
         text = embed.description
         assert embed.title == "TEST: Communism Worlds Leaderboard"
@@ -49,12 +49,12 @@ def test_preview_has_no_actual_mentions_and_every_chunk_is_bounded():
 def test_shared_first_place_and_zero_scores_do_not_gain_a_gap_or_fake_movement():
     entries = [(PredictionStats(1, 0, 1, 2, 0, 0), "A"), (PredictionStats(2, 0, 2, 2, 0, 0), "B")]
     embed, = leaderboard_embeds(entries)
-    assert "### `1.` __A__: 0 correct" in embed.description and "### `1.` __B__: 0 correct" in embed.description
+    assert "# 1. __A__" in embed.description and "# 1. __B__" in embed.description
     assert "behind" not in embed.description and "Level on" not in embed.description
     assert "New" not in embed.description
     assert '⬆️' not in embed.description and '⬇️' not in embed.description
     new, = leaderboard_embeds(entries, previous={})
-    assert "### `1.` __A__: 0 correct (0%) New" in new.description
+    assert "# 1. __A__ New" in new.description
 
 
 def test_full_swiss_history_skips_custom_rank_arrows_and_trophy_slots(monkeypatch):
@@ -73,10 +73,10 @@ def test_full_swiss_history_skips_custom_rank_arrows_and_trophy_slots(monkeypatc
     embed,=leaderboard_embeds([(rows[0],'Winner'),(rows[1],'Other')],previous={1:2,2:1},
         history=history,trophies={1:case},trophy_slots=list(range(12)))
     text=embed.description
-    assert '__Winner__: 4 correct (80%) <:arrow_up_green:100>1 🔥' in text
-    assert '__Other__: 2 correct (40%) <:arrow_down_red:101>1' in text
+    assert '__Winner__ <:arrow_up_green:100>1 🔥\n## 4/5 (80%)' in text
+    assert '__Other__ <:arrow_down_red:101>1\n## 2/5 (40%)' in text
     assert '❌ <:dootpinkline:102> ✅ ✅ ✅' in text
-    assert ' '.join('<:dot3:103>' if slot == '⚪' else slot for slot in case) in text
+    assert '\n🏆' in text and '<:dot3:103>' not in text and '⚪' not in text
     assert 'Current streak:' not in text and 'Best streak:' not in text and 'Oldest' not in text
 
 
@@ -200,7 +200,7 @@ def test_history_only_displays_latest_ten_matches_without_changing_totals():
     history = SimpleNamespace(rows=[row], recent={1: list(reversed(picks))},
                               result_match_ids=tuple(f's{i}' for i in range(18)))
     embed, = leaderboard_embeds([(row, 'Player')], history=history)
-    assert '11 correct (61.1%)' in embed.description and '18/18 voted' in embed.description
+    assert '## 11/18 (61.1%)' in embed.description
     assert ' '.join(['✅'] * 10) in embed.description
     assert '❌' not in embed.description.split('-# *Standings')[0]
     assert 'last 10 picks shown' in embed.description

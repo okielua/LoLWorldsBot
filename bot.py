@@ -36,6 +36,7 @@ from services.golgg import GOLGG_FOOTNOTES, team_stats_text
 from services.golgg_players import player_catalog, player_reply, refresh_players_loop
 from services.golgg_champions import champion_autocomplete, champion_winrate_reply, refresh_champions_loop
 from services.mvp import show_mvps
+from services.trophycase import TrophyCaseButton, show_trophycase
 from services.team_history import HistoryPages, TeamHistoryView
 from services.match_browser import show_match_games
 from services.vote_history import voter_autocomplete, show_vote_history
@@ -424,7 +425,7 @@ class WorldsBot(discord.Client):
         self.voting_manager = VotingManager(self, tournament_store, GUILD_ID)
         self.add_dynamic_items(ScheduleVoteButton, LegacyDailyVoteButton)
         self.add_dynamic_items(DailyPageButton)
-        self.add_dynamic_items(MyStatsButton)
+        self.add_dynamic_items(MyStatsButton, TrophyCaseButton)
         self.add_dynamic_items(OpenVotePanel, PublicVotersButton)
         self.server_delivery = ServerReminderDelivery(self, tournament_store, GUILD_ID, poll_manager=self.voting_manager)
         self.background_polling = BackgroundPolling(
@@ -1597,6 +1598,12 @@ async def mvp(interaction: discord.Interaction):
     await show_mvps(interaction)
 
 
+@bot.tree.command(name="trophycase", description="See every voter's Worlds 2026 MVP trophy collection.")
+@app_commands.guild_only()
+async def trophycase(interaction: discord.Interaction):
+    await show_trophycase(interaction, interaction.guild_id, worlds.tournament.id, data=worlds)
+
+
 @bot.tree.command(name="leaderboard", description="See Communism's Worlds prediction standings.")
 @app_commands.guild_only()
 async def leaderboard(interaction: discord.Interaction):
@@ -1648,6 +1655,9 @@ Choose a server member from the suggestions to view their past predictions and s
 
 `/leaderboard`
 See Communism’s leaderboard for predictions made through this bot.
+
+`/trophycase`
+See every voter’s MVP trophies and remaining trophy slots.
 
 `/mvp`
 See every completed Swiss matchday and knockout stage’s MVPs.

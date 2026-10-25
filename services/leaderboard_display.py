@@ -14,7 +14,7 @@ LEADERBOARD_HELP = format_footnotes(
     "-# Standings include play-ins; last 10 picks shown, starting at Swiss.\n"
     "-# ✅ Correct · ❌ Wrong · ➖ Skipped\n"
     "-# 🔥 Ongoing streak of 3+ (skipped matches don't break streaks)\n"
-    "-# 🏆 12 trophies to win: 8 Swiss matchdays, 3 stages (quarterfinals, semifinals, final), and 1 overall Worlds 2026 winner."
+    "-# 🏆 Earned MVP trophies · Full collection: `/trophycase`."
 )
 
 
@@ -52,9 +52,9 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
         movement = rank_movement(row.user_id, ranks, previous)
         streak = getattr(history_rows.get(row.user_id),'current_streak',0) if history is not None else row.current_streak
         streak_icon = ' 🔥' if streak>=3 else ''
-        block = (f"### `{ranks[row.user_id]}.` __{safe_name(name)}__: {row.correct} correct ({accuracy_text(row)})"
+        block = (f"# {ranks[row.user_id]}. __{safe_name(name)}__"
                  + (f' {movement}' if movement else '') + streak_icon + '\n'
-                 + f'-# {row.submitted}/{row.eligible} voted\n')
+                 + f'## {row.correct}/{row.submitted} ({accuracy_text(row)})\n')
         if history is not None:
             choices = {pick.match_id:pick.chosen==pick.winner_id for pick in history.recent.get(row.user_id,[])}
             icons = [('✅' if choices[mid] else '❌') if mid in choices else str(custom_emoji('dootpinkline') or '➖')
@@ -70,9 +70,9 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
         case = (trophies or {}).get(row.user_id,['⚪']*slot_count)
         if preview and trophies is None and row.correct:
             case = ['🏆' if i < (2 if row==entries[0][0] else 1) else '⚪' for i in range(slot_count)]
-        if case:
-            empty_slot = str(custom_emoji('dot3') or '·')
-            block += '\n' + ' '.join(empty_slot if slot == '⚪' else slot for slot in case)
+        earned = case.count('🏆')
+        if earned:
+            block += '\n' + ' '.join(['🏆'] * earned)
         blocks.append(block)
     prefix = "Sample results. The real leaderboard is unchanged.\n\n" if preview else ""
     title = "Communism Worlds Leaderboard"
