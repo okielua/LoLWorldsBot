@@ -3,13 +3,13 @@
 from services.prediction_stats import competition_ranks
 
 
-# Merged all-region shares supplied by the server owner. Header cutoffs are
-# cumulative reference percentages, not percentiles within this small server.
+# Rounded merged all-region shares supplied by the server owner. These are
+# reference shares, not percentiles within this small server.
 TIERS = (
     ('challenger', 'Challenger', '0.9'),
-    ('diamond', 'Diamond', '35.9'),
-    ('gold', 'Gold', '79.9'),
-    ('iron', 'Iron', '100.0'),
+    ('diamond', 'Diamond', '35'),
+    ('gold', 'Gold', '44'),
+    ('iron', 'Iron', '19.7'),
 )
 LOWER_WEIGHTS = (350, 440, 197)  # 35%, 44%, 19.7%; Challenger is reserved first.
 

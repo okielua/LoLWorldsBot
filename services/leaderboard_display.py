@@ -18,9 +18,9 @@ LEADERBOARD_HELP = format_footnotes(
     "-# 🔥 Ongoing streak of 3+ (skipped matches don't break streaks)\n"
     "-# 🏆 Earned MVP trophies.\n"
     "-# Tiers follow leaderboard position: correct picks first, then percentage.\n"
-    "-# First place is always Challenger. Remaining places use Diamond 35 : Gold 44 : Iron 19.7 proportions; ties share a tier.\n"
+    "-# First place is always Challenger. Remaining places follow the merged proportions; ties share a tier.\n"
     "-# Merged ranks: Challenger = Master–Challenger; Diamond = Platinum–Diamond; Gold = Silver–Gold; Iron = Iron–Bronze.\n"
-    "-# Top % labels are rounded League reference cutoffs, not server percentiles."
+    "-# Percentages are rounded League reference shares, not server percentiles."
 )
 
 
@@ -69,6 +69,10 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
     names = aligned_name_fields({row.user_id: name for row, name in entries}, prefix='', max_length=80)
     history_rows = {row.user_id:row for row in history.rows} if history else {}
     help_text = LEADERBOARD_HELP.replace('➖',str(custom_emoji('dootpinkline') or '➖'))
+    distribution = ' · '.join(
+        f"{custom_emoji(key) or ':' + key + ':'} {label} {share}%"
+        for (key, _, share), label in zip(TIERS, ('top', 'next', 'next', 'bottom')))
+    help_text += '\n' + format_footnotes('-# ' + distribution)
     slots = trophy_slots if trophy_slots is not None else (
         [('swiss', str(i)) for i in range(8)]
         + [('quarterfinals', ''), ('semifinals', ''), ('final', ''), ('overall', '')])
@@ -108,8 +112,8 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
     # An empty status contains no scored predictions to protect.
     protect = aggregate_token if entries else str
     previous_tier = None
-    headings = {key: f"# {custom_emoji(key) or ':' + key + ':'} __{name} (top {cutoff}%)__"
-                for key, name, cutoff in TIERS}
+    headings = {key: f"# {custom_emoji(key) or ':' + key + ':'} __{name}__"
+                for key, name, _ in TIERS}
     for tier, block in blocks or [(None, "No results yet. The standings update as matches finish.")]:
         heading = headings[tier] + '\n\n' if tier and tier != previous_tier else ''
         addition = heading + block

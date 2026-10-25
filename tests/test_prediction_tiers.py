@@ -44,10 +44,13 @@ def test_group_headings_use_server_emojis_and_smaller_player_headers(monkeypatch
     monkeypatch.setattr(leaderboard_display, 'custom_emoji', emojis.get)
     pages = leaderboard_embeds([(row, f'Player{row.user_id}') for row in players(7)])
     text = '\n'.join(page.description for page in pages)
-    assert '# <:challenger:100> __Challenger (top 0.9%)__' in text
-    assert '# <:diamond:101> __Diamond (top 35.9%)__' in text
-    assert '# <:gold:102> __Gold (top 79.9%)__' in text
-    assert '# <:iron:103> __Iron (top 100.0%)__' in text
+    assert '# <:challenger:100> __Challenger__' in text
+    assert '# <:diamond:101> __Diamond__' in text
+    assert '# <:gold:102> __Gold__' in text
+    assert '# <:iron:103> __Iron__' in text
     assert '## 1. `Player0`' in text
     assert 'First place is always Challenger' in text and 'not server percentiles' in text
     assert 'Master–Challenger' in text and 'ties share a tier' in text
+    line = next(line for line in text.splitlines() if '<:challenger:100> top' in line)
+    assert '<:challenger:100> top 0.9% · <:diamond:101> next 35% · <:gold:102> next 44% · <:iron:103> bottom 19.7%' in line
+    assert not any('%' in line for line in text.splitlines() if line.startswith('# '))
