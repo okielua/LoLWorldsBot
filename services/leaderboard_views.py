@@ -67,7 +67,7 @@ class MyStatsButton(discord.ui.DynamicItem[discord.ui.Button],
                     template=r"worldsstats:(?P<guild>\d+):(?P<tournament>[^\s]+)"):
     def __init__(self, guild_id, tournament_id):
         self.guild_id, self.tournament_id = guild_id, tournament_id
-        super().__init__(discord.ui.Button(label="My Advanced Stats", style=discord.ButtonStyle.primary,
+        super().__init__(discord.ui.Button(label="My Advanced Stats", emoji="🔍", style=discord.ButtonStyle.secondary,
                                           custom_id=f"worldsstats:{guild_id}:{tournament_id}"))
 
     @classmethod

@@ -137,7 +137,8 @@ def test_normal_weight_card_keeps_my_stats_button_and_pagination(stats_data):
         assert len(payload["view"].children) == 1
         button, = [item for item in payload["view"].walk_children() if isinstance(item, MyStatsButton)]
         assert button.item.label == "My Advanced Stats"
-        assert button.item.style == discord.ButtonStyle.primary
+        assert button.item.style == discord.ButtonStyle.secondary
+        assert str(button.item.emoji) == "🔍"
         many = [(replace(row, user_id=i * 6 + row.user_id), f"Long sample player {i} " + "x" * 90)
                 for i in range(30) for row, _ in entries]
         large = leaderboard_payload(many, 123, stats_data.tournament.id)
