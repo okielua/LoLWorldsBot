@@ -81,4 +81,4 @@ class TrophyCaseButton(discord.ui.DynamicItem[discord.ui.Button],
         return cls(int(match['guild']), match['tournament'])
 
     async def callback(self, interaction):
-        await show_trophycase(interaction, self.guild_id, self.tournament_id, ephemeral=True)
+        await show_trophycase(interaction, self.guild_id, self.tournament_id, ephemeral=False)

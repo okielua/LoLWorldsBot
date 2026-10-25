@@ -174,7 +174,7 @@ def test_trophycase_button_includes_pending_only_voters_and_aligned_slots(stats_
     cast_vote(123, match.id, 9, match.team1_id, match.start_time - timedelta(hours=2), 'Pending player')
     caller = interaction_for(stats_data, 7)
     asyncio.run(TrophyCaseButton(123, stats_data.tournament.id).callback(caller))
-    caller.response.defer.assert_awaited_once_with(ephemeral=True)
+    caller.response.defer.assert_awaited_once_with(ephemeral=False)
     payload = caller.followup.send.call_args.kwargs
     text = '\n'.join(i.content for i in payload['view'].walk_children() if isinstance(i, discord.ui.TextDisplay))
     assert 'Pending player' in text and 'Other user' in text and 'lua' in text
@@ -183,7 +183,7 @@ def test_trophycase_button_includes_pending_only_voters_and_aligned_slots(stats_
     for label in ('8x Swiss matchdays', '1x Quarterfinal', '1x Semifinals', '1x Final', '1x overall Worlds 2026 voting winner'):
         assert '-# ' + '\N{NO-BREAK SPACE}' * 2 + '*· ' + label + '*' in text
     assert 'Slots run chronologically' not in text and 'Not earned' not in text and 'Earned ·' not in text
-    assert payload['ephemeral'] is True and payload['allowed_mentions'].to_dict() == {'parse': []}
+    assert payload['ephemeral'] is False and payload['allowed_mentions'].to_dict() == {'parse': []}
     payload['view'].stop()
 
 
