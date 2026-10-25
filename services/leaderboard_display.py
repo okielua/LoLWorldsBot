@@ -11,7 +11,7 @@ from services.spoilers import aggregate_token
 ACCENT = 0x5865F2
 UNAVAILABLE = "\u2014"  # Approved for unavailable rank and accuracy.
 LEADERBOARD_HELP = format_footnotes(
-    "-# Standings include play-ins; history starts at Swiss.\n"
+    "-# Standings include play-ins; last 10 picks shown, starting at Swiss.\n"
     "-# ✅ Correct · ❌ Wrong · ➖ Skipped\n"
     "-# 🔥 Ongoing streak of 3+ (skipped matches don't break streaks)\n"
     "-# 🏆 12 trophies to win: 8 Swiss matchdays, 3 stages (quarterfinals, semifinals, final), and 1 overall Worlds 2026 winner."
@@ -66,12 +66,13 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
             icons = [str(custom_emoji('dootpinkline') or '➖') if i=='➖' else i for i in icons]
         else:
             icons = []
-        block += '\n'.join(' '.join(icons[i:i+12]) for i in range(0,len(icons),12))
+        block += ' '.join(icons[-10:])
         case = (trophies or {}).get(row.user_id,['⚪']*slot_count)
         if preview and trophies is None and row.correct:
             case = ['🏆' if i < (2 if row==entries[0][0] else 1) else '⚪' for i in range(slot_count)]
         if case:
-            block += '\n' + ' '.join(case)
+            empty_slot = str(custom_emoji('dot3') or '·')
+            block += '\n' + ' '.join(empty_slot if slot == '⚪' else slot for slot in case)
         blocks.append(block)
     prefix = "Sample results. The real leaderboard is unchanged.\n\n" if preview else ""
     title = "Communism Worlds Leaderboard"

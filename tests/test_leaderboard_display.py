@@ -26,7 +26,7 @@ def test_sample_leaderboard_matches_compact_specification():
     assert text.index("18 correct") < text.index("0 correct")
     assert not any(word in text for word in ("participation", "75.0%", "behind", "Level on", "\u200b", "\n\n\n"))
     assert 'Current streak:' not in text and 'Best streak:' not in text
-    assert '⚪' in text and '🏆' in text and '✅' in text and '❌' in text
+    assert '⚪' not in text and '🏆' in text and '✅' in text and '❌' in text
     assert '12 trophies to win: 8 Swiss matchdays, 3 stages' in text and '1 overall Worlds 2026 winner' in text
     assert all("**" not in re.sub(r"\*\*\d+(?:\.\d+)?% correct\*\*", "", line) for line in text.splitlines() if line.startswith("-#"))
     assert '-# *✅ Correct · ❌ Wrong · ➖ Skipped*' in text
@@ -62,7 +62,7 @@ def test_full_swiss_history_skips_custom_rank_arrows_and_trophy_slots(monkeypatc
     import discord
     from services import leaderboard_display
     logos = {name:discord.PartialEmoji(name=name,id=100+i) for i,name in enumerate(
-        ['arrow_up_green','arrow_down_red','dootpinkline'])}
+        ['arrow_up_green','arrow_down_red','dootpinkline','dot3'])}
     monkeypatch.setattr(leaderboard_display,'custom_emoji',logos.get)
     rows=[PredictionStats(1,4,5,6,4,4),PredictionStats(2,2,5,6,1,1)]
     start=datetime(2026,10,23,tzinfo=UTC)
@@ -76,7 +76,7 @@ def test_full_swiss_history_skips_custom_rank_arrows_and_trophy_slots(monkeypatc
     assert '__Winner__: 4 correct (80%) <:arrow_up_green:100>1 🔥' in text
     assert '__Other__: 2 correct (40%) <:arrow_down_red:101>1' in text
     assert '❌ <:dootpinkline:102> ✅ ✅ ✅' in text
-    assert ' '.join(case) in text
+    assert ' '.join('<:dot3:103>' if slot == '⚪' else slot for slot in case) in text
     assert 'Current streak:' not in text and 'Best streak:' not in text and 'Oldest' not in text
 
 
@@ -189,3 +189,18 @@ def test_personal_section_headers_use_real_custom_emojis_in_requested_order():
         assert all(line.startswith("-# *") and line.endswith("*") for line in notes)
     finally:
         configure_team_emojis(())
+
+
+def test_history_only_displays_latest_ten_matches_without_changing_totals():
+    from types import SimpleNamespace
+    row = PredictionStats(1, 11, 18, 18, 1, 5)
+    start = datetime(2026, 10, 23, tzinfo=UTC)
+    picks = [Prediction(f's{i}', 'A', 'B', start + timedelta(hours=i),
+                        'A' if i >= 8 else 'B', 'A') for i in range(18)]
+    history = SimpleNamespace(rows=[row], recent={1: list(reversed(picks))},
+                              result_match_ids=tuple(f's{i}' for i in range(18)))
+    embed, = leaderboard_embeds([(row, 'Player')], history=history)
+    assert '11 correct (61.1%)' in embed.description and '18/18 voted' in embed.description
+    assert ' '.join(['✅'] * 10) in embed.description
+    assert '❌' not in embed.description.split('-# *Standings')[0]
+    assert 'last 10 picks shown' in embed.description
