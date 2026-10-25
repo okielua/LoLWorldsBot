@@ -1601,16 +1601,16 @@ async def mvp(interaction: discord.Interaction):
 @bot.tree.command(name="trophycase", description="See every voter's Worlds 2026 MVP trophy collection.")
 @app_commands.guild_only()
 async def trophycase(interaction: discord.Interaction):
-    await show_trophycase(interaction, interaction.guild_id, worlds.tournament.id, data=worlds)
+    await show_trophycase(interaction, interaction.guild_id, worlds.tournament.id, data=worlds, ephemeral=True)
 
 
 @bot.tree.command(name="leaderboard", description="See Communism's Worlds prediction standings.")
 @app_commands.guild_only()
 async def leaderboard(interaction: discord.Interaction):
-    await interaction.response.defer()
+    await interaction.response.defer(ephemeral=True)
     context, entries, previous = await leaderboard_context(interaction, worlds.tournament.id, data=worlds)
     payload = leaderboard_payload(entries, interaction.guild_id, worlds.tournament.id, previous=previous, context=context)
-    await interaction.followup.send(**payload, allowed_mentions=discord.AllowedMentions.none())
+    await interaction.followup.send(**payload, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
 
 @bot.tree.command(name="myvotestats", description="View your rank, correct predictions, streaks, and advanced personal prediction stats.")
