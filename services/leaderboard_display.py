@@ -64,7 +64,7 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
     tiers = prediction_tiers([row for row, _ in entries])
     names = aligned_name_fields({row.user_id: name for row, name in entries}, prefix='', max_length=80)
     history_rows = {row.user_id:row for row in history.rows} if history else {}
-    help_text = LEADERBOARD_HELP.replace('➖',str(custom_emoji('empty') or '➖'))
+    help_text = LEADERBOARD_HELP
     indent = '\N{NO-BREAK SPACE}' * 4
     distribution = '\n'.join(
         f"-# *{indent}· {custom_emoji(key) or ':' + key + ':'} {label} {share}%*"
@@ -84,13 +84,12 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
                  + f'## {row.correct}/{row.submitted} ({accuracy_text(row)})\n')
         if history is not None:
             choices = {pick.match_id:pick.chosen==pick.winner_id for pick in history.recent.get(row.user_id,[])}
-            icons = [('✅' if choices[mid] else '❌') if mid in choices else str(custom_emoji('empty') or '➖')
+            icons = [('✅' if choices[mid] else '❌') if mid in choices else '➖'
                      for mid in history.result_match_ids or ()]
         elif preview:
             tail = min(row.current_streak,row.correct)
             icons = (['➖']*max(0,row.eligible-row.submitted) + ['✅']*(row.correct-tail)
                      + ['❌']*(row.submitted-row.correct) + ['✅']*tail)
-            icons = [str(custom_emoji('empty') or '➖') if i=='➖' else i for i in icons]
         else:
             icons = []
         block += '\n**__Last 10 picks:__**\n' + (' '.join(icons[-10:]) or 'No scored picks yet.')

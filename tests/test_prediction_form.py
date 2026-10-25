@@ -26,7 +26,8 @@ def test_skipped_legend_switches_to_custom_emoji_when_added(monkeypatch):
     monkeypatch.setattr(prediction_form, 'custom_emoji', lambda _: None)
     assert '➖ Skipped' in prediction_form.form_heading()
     monkeypatch.setattr(prediction_form, 'custom_emoji', lambda _: discord.PartialEmoji(name='empty',id=123456789012345678))
-    assert '<:empty:123456789012345678> Skipped' in prediction_form.form_heading()
+    assert '➖ Skipped' in prediction_form.form_heading()
+    assert '<:empty:' not in prediction_form.form_heading()
 
 
 def test_name_fields_use_nonbreaking_padding_and_leave_emojis_outside_code():
