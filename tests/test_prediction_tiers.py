@@ -49,7 +49,7 @@ def test_group_headings_use_server_emojis_and_smaller_player_headers(monkeypatch
     assert '# <:gold:102>' in text
     assert '# <:iron:103>' in text
     assert [line for line in text.splitlines() if line.startswith('# ')] == [f'# {emojis[key]}' for key, _, _ in TIERS]
-    assert '## 1. `Player0`' in text
+    assert '## `Player0`' in text
     assert 'first place is always Challenger' in text and 'not server percentiles' not in text
     assert 'based on the merged LoL rank distribution' in text
     assert 'Tiers follow leaderboard position' not in text and 'Merged ranks:' not in text
