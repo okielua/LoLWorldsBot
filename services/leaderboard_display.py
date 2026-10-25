@@ -17,9 +17,7 @@ LEADERBOARD_HELP = format_footnotes(
     "-# ✅ Correct · ❌ Wrong · ➖ Skipped\n"
     "-# 🔥 Ongoing streak of 3+ (skipped matches don't break streaks)\n"
     "-# 🏆 Earned MVP trophies.\n"
-    "-# Tiers follow leaderboard position: correct picks first, then percentage.\n"
     "-# First place is always Challenger. Remaining places follow the merged proportions; ties share a tier.\n"
-    "-# Merged ranks: Challenger = Master–Challenger; Diamond = Platinum–Diamond; Gold = Silver–Gold; Iron = Iron–Bronze.\n"
     "-# Percentages are rounded League reference shares, not server percentiles."
 )
 
