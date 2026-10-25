@@ -166,16 +166,16 @@ def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous
         if team is None:
             return "Not enough data"
         percentage = f"{float(team.accuracy) * 100:.1f}".rstrip("0").rstrip(".")
-        return value(team_text(f"**{team.team_id}** · **{team.correct}/{team.scored} correct ({percentage}%)**"))
+        return "### " + value(team_text(f"**{team.team_id}** · **{team.correct}/{team.scored} correct ({percentage}%)**"))
 
     backed = advanced.hopium_supplier
-    backing_text = value(team_text(f"**{backed.team_id}** · **backed to win in {backed.backed_losses} series they lost**")
-                         if backed else "Not enough data")
-    minority = (value(f"**{advanced.minority_correct}/{advanced.minority_total} minority predictions correct**")
+    backing_text = ("### " + value(team_text(f"**{backed.team_id}** · **backed to win in {backed.backed_losses} series they lost**"))
+                    if backed else "Not enough data")
+    minority = ("### " + value(f"**{advanced.minority_correct}/{advanced.minority_total} minority predictions correct**")
                 if advanced.minority_total else "Not enough data")
     if advanced.minority_teams:
         minority += '\n\n' + '\n'.join(
-            value(team_text(f"**{team.team_id}** · **{team.correct}/{team.total} correct**"))
+            "### " + value(team_text(f"**{team.team_id}** · **{team.correct}/{team.total} correct**"))
             for team in advanced.minority_teams)
     def section(name, title):
         return f"\n\n## {custom_emoji(name) or ':' + name + ':'} *{title}*\n"

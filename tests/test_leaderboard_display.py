@@ -135,10 +135,10 @@ def test_renamed_insights_show_real_values_below_explanations():
     snapshot = CompetitionSnapshot([PredictionStats(7, 8, 12, 15, 2, 4)], [], {7: [prediction]}, {}, 15, {7: advanced})
     embed = personal_stats_embed(snapshot, 7, "lua")
     text = embed.description.replace("\u00a0", "")
-    assert "\n\n**T1** · **4/5 correct (80%)**" in text
-    assert "\n\n**GEN** · **1/3 correct (33.3%)**" in text
-    assert "\n\n**GEN** · **backed to win in 2 series they lost**" in text
-    assert "**2/3 minority predictions correct**\n\n**T1** · **1/2 correct**\n**GEN** · **1/1 correct**" in text
+    assert "\n\n### **T1** · **4/5 correct (80%)**" in text
+    assert "\n\n### **GEN** · **1/3 correct (33.3%)**" in text
+    assert "\n\n### **GEN** · **backed to win in 2 series they lost**" in text
+    assert "### **2/3 minority predictions correct**\n\n### **T1** · **1/2 correct**\n### **GEN** · **1/1 correct**" in text
     assert "## :PeyzPal: *Check Your PayPal*\n\n-# *The team whose series `lua` predicts most accurately" in text
     assert "## :PepeKMS: *Can’t Read These Frauds*\n\n-# *The team whose series `lua` predicts least accurately" in text
     assert "## :Copium: *Hopium Supplier*\n\n-# *The team `lua` backed to win most often when they actually lost." in text
