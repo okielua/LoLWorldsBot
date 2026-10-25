@@ -108,6 +108,23 @@ def test_ties_use_accuracy_then_stable_user_id(competition):
     assert [row.user_id for row in get_competition_stats(123, data.tournament.id)] == [2, 3, 1]
 
 
+def test_minority_team_breakdown_excludes_even_splits_and_matches_aggregate_totals(competition):
+    from services.prediction_stats import advanced_prediction_stats, MinorityTeamStats
+    data = competition(4)
+    start = data.matches[0].start_time
+    eligible = [(start + timedelta(hours=i), f'm{i}', 'T1', 'GEN', winner)
+                for i, winner in enumerate(('T1', 'GEN', 'GEN', 'T1'))]
+    # User 1 backs T1 in a 1/3 minority twice, GEN in a 1/3 minority once,
+    # and T1 in an even split once (which must not count).
+    picks = {1: {'m0': 'T1', 'm1': 'T1', 'm2': 'GEN', 'm3': 'T1'},
+             2: {'m0': 'GEN', 'm1': 'GEN', 'm2': 'T1', 'm3': 'GEN'},
+             3: {'m0': 'GEN', 'm1': 'GEN', 'm2': 'T1'}}
+    stats = advanced_prediction_stats(eligible, picks)[1]
+    assert stats.minority_teams == (MinorityTeamStats('T1', 1, 2), MinorityTeamStats('GEN', 1, 1))
+    assert sum(team.correct for team in stats.minority_teams) == stats.minority_correct == 2
+    assert sum(team.total for team in stats.minority_teams) == stats.minority_total == 3
+
+
 def test_streaks_skip_missed_and_pending_matches_and_reset_on_wrong_pick(competition):
     data = competition(9)
     for index, match in enumerate(data.matches):

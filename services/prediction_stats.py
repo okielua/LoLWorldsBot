@@ -73,6 +73,13 @@ class MinorityCall:
 
 
 @dataclass(frozen=True)
+class MinorityTeamStats:
+    team_id: str
+    correct: int
+    total: int
+
+
+@dataclass(frozen=True)
 class AdvancedPredictionStats:
     best_read: TeamPredictionStats | None = None
     hardest: TeamPredictionStats | None = None
@@ -81,6 +88,7 @@ class AdvancedPredictionStats:
     minority_total: int = 0
     boldest: MinorityCall | None = None
     hopium_supplier: TeamPredictionStats | None = None
+    minority_teams: tuple[MinorityTeamStats, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -104,6 +112,7 @@ def advanced_prediction_stats(eligible, by_user):
     result = {}
     for user_id, picks in by_user.items():
         teams, minority_correct, minority_total, calls = {}, 0, 0, []
+        minority_teams = {}
         for match_id, chosen in picks.items():
             start, _, first, second, winner = matches[match_id]
             correct = chosen == winner
@@ -117,6 +126,9 @@ def advanced_prediction_stats(eligible, by_user):
             if backing * 2 < voters:
                 minority_total += 1
                 minority_correct += int(correct)
+                counts = minority_teams.setdefault(chosen, [0, 0])
+                counts[0] += int(correct)
+                counts[1] += 1
                 if correct and voters >= 5:
                     calls.append(MinorityCall(Prediction(match_id, first, second, start, chosen, winner), backing, voters))
         teams = [TeamPredictionStats(team_id, *counts) for team_id, counts in teams.items()]
@@ -131,7 +143,10 @@ def advanced_prediction_stats(eligible, by_user):
         boldest = min(calls, key=lambda call: (call.backing_share, -call.voters,
                                              -call.prediction.start_time.timestamp(), call.prediction.match_id), default=None)
         result[user_id] = AdvancedPredictionStats(best, hardest, backed, minority_correct, minority_total, boldest,
-                                                 hopium_supplier=hopium)
+                                                 hopium_supplier=hopium,
+                                                 minority_teams=tuple(MinorityTeamStats(team_id, *counts)
+                                                     for team_id, counts in sorted(minority_teams.items(),
+                                                         key=lambda item: (-item[1][1], item[0]))))
     return result
 
 

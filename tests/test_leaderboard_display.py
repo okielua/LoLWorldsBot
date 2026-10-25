@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from services.leaderboard_display import (leaderboard_embeds, sample_leaderboard_entries,
                                          personal_stats_embed, accuracy_text, UNAVAILABLE)
 from services.prediction_stats import (CompetitionSnapshot, Prediction, PredictionStats,
-                                      AdvancedPredictionStats, TeamPredictionStats, MinorityCall)
+                                      AdvancedPredictionStats, TeamPredictionStats, MinorityCall, MinorityTeamStats)
 
 
 def test_sample_leaderboard_matches_compact_specification():
@@ -129,6 +129,7 @@ def test_renamed_insights_show_real_values_below_explanations():
         TeamPredictionStats("G2", 3, 5, 4, 3),
         2, 3, MinorityCall(prediction, 2, 8),
         hopium_supplier=TeamPredictionStats("GEN", 1, 3, 2, 0),
+        minority_teams=(MinorityTeamStats("T1", 1, 2), MinorityTeamStats("GEN", 1, 1)),
     )
     snapshot = CompetitionSnapshot([PredictionStats(7, 8, 12, 15, 2, 4)], [], {7: [prediction]}, {}, 15, {7: advanced})
     embed = personal_stats_embed(snapshot, 7, "lua")
@@ -136,7 +137,7 @@ def test_renamed_insights_show_real_values_below_explanations():
     assert "\n\n**T1** · **4/5 correct (80%)**" in text
     assert "\n\n**GEN** · **1/3 correct (33.3%)**" in text
     assert "\n\n**GEN** · **backed to win in 2 series they lost**" in text
-    assert text.endswith("**2/3 minority predictions correct**")
+    assert "**2/3 minority predictions correct**\n\n**T1** · **1/2 correct**\n**GEN** · **1/1 correct**" in text
     assert "## :PeyzPal: __Check Your PayPal__\n\n-# *The team whose series I predict most accurately" in text
     assert "## :PepeKMS: __Can’t Read These Frauds__\n\n-# *The team whose series I predict least accurately" in text
     assert "## :Copium: __Hopium Supplier__\n\n-# *The team I backed to win most often when they actually lost." in text

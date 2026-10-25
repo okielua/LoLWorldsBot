@@ -171,6 +171,10 @@ def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous
                          if backed else "Not enough data")
     minority = (value(f"**{advanced.minority_correct}/{advanced.minority_total} minority predictions correct**")
                 if advanced.minority_total else "Not enough data")
+    if advanced.minority_teams:
+        minority += '\n\n' + '\n'.join(
+            value(team_text(f"**{team.team_id}** · **{team.correct}/{team.total} correct**"))
+            for team in advanced.minority_teams)
     def section(name, title):
         return f"\n\n## {custom_emoji(name) or ':' + name + ':'} __{title}__\n"
 
