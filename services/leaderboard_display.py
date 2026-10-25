@@ -142,16 +142,21 @@ def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous
         return aggregate_token(str(text), personal_scope)
 
     def streak_text(count):
-        return value(' '.join(['🔥'] * count) if count >= 2 else '-')
+        if count >= 2:
+            return value('🔥' * count)
+        return str(custom_emoji('dootpinkline') or discord.PartialEmoji(
+            name='dootpinkline', id=1563980159202103478))
 
+    tier = prediction_tiers(rows).get(user_id)
+    tier_name = next((name for key, name, _ in TIERS if key == tier), UNAVAILABLE)
+    tier_text = f"{custom_emoji(tier) or ':' + tier + ':'} {tier_name}" if tier else UNAVAILABLE
     body = (
         "-# (All stats cover completed series across Worlds, including Play-Ins.)\n\n"
-        f"**My rank: {aggregate_token(standing, rank_scope) if rank else standing}**\n"
-        f"**My correct predictions: {value(row.correct)} ({value(accuracy_text(row))})**\n\n"
-        f"My votes: **{value(f'{row.submitted} of {row.eligible} past matches')}**\n"
-        f"My incorrect predictions: **{value(row.submitted - row.correct)}**\n"
-        f"My missed votes: **{value(row.eligible - row.submitted)}**\n\n"
-        f"My current streak: **{streak_text(row.current_streak)}**\nMy best streak: **{streak_text(row.longest_streak)}**"
+        f"### My current rank: {aggregate_token(standing, rank_scope) if rank else standing}\n"
+        f"### My League rank: {aggregate_token(tier_text, rank_scope) if rank else tier_text}\n"
+        f"### My correct predictions: {value(f'{row.correct}/{row.submitted}')} ({value(accuracy_text(row))})\n"
+        f"### My current streak: {streak_text(row.current_streak)}\n"
+        f"### My best streak: {streak_text(row.longest_streak)}"
     )
     advanced = snapshot.advanced.get(user_id, AdvancedPredictionStats())
 

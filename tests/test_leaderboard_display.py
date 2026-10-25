@@ -91,10 +91,12 @@ def test_personal_stats_use_requested_summary_and_four_explained_sections():
     embed = personal_stats_embed(snapshot, 4, "Sample Player 4", previous={1: 1, 4: 3})
     text = embed.description.replace("\u00a0", "")
     assert embed.title == "My Worlds Stats · Sample Player 4"
-    assert "**My rank: 2 of 2**\n**My correct predictions: 14 (70%)**" in text
-    assert "My votes: **20 of 30 past matches**" in text
-    assert "My incorrect predictions: **6**\nMy missed votes: **10**" in text
-    assert "My current streak: **🔥 🔥**\nMy best streak: **🔥 🔥 🔥 🔥 🔥**" in text
+    assert "### My current rank: 2 of 2" in text
+    assert "### My League rank: :gold: Gold" in text
+    assert "### My correct predictions: 14/20 (70%)" in text
+    assert "My votes:" not in text
+    assert "My incorrect predictions:" not in text and "My missed votes:" not in text
+    assert "### My current streak: 🔥🔥\n### My best streak: 🔥🔥🔥🔥🔥" in text
     assert text.index("## :PeyzPal: __Check Your PayPal__") < text.index("## :PepeKMS: __Can’t Read These Frauds__") < text.index("## :Copium: __Hopium Supplier__") < text.index("## :Discheesed: __Democracy Was a Mistake__")
     assert text.startswith("-# *(All stats cover completed series across Worlds, including Play-Ins.)*")
     assert not any(label in text for label in ("Recent predictions", "Pending votes", "Boldest correct call", "Ranked by", "Rank movement", "behind the leader"))
@@ -108,14 +110,14 @@ def test_pending_only_and_no_votes_have_clear_empty_states():
     prediction = Prediction("m", "C9", "FUR", datetime(2026, 10, 17, tzinfo=UTC), "C9", None)
     snapshot = CompetitionSnapshot([], None, {}, {7: [prediction]}, 30)
     embed = personal_stats_embed(snapshot, 7, "lua")
-    assert f"**My rank: {UNAVAILABLE}**" in embed.description
-    assert "Pending votes" not in embed.description and "**My correct predictions: 0 (—)**" in embed.description
+    assert f"### My current rank: {UNAVAILABLE}" in embed.description
+    assert "Pending votes" not in embed.description and "### My correct predictions: 0/0 (—)" in embed.description
     assert "accuracy" not in embed.description.lower()
     assert accuracy_text(PredictionStats(7, 0, 0, 30, 0, 0)) == UNAVAILABLE
     empty = personal_stats_embed(snapshot, 8, "No votes")
     assert empty.description.count("Not enough data") == 4
     snapshot = replace(snapshot, rows=[PredictionStats(7, 1, 1, 30, 1, 1)], pending={})
-    assert "**My rank: 1 of 1**" in personal_stats_embed(snapshot, 7, "lua").description
+    assert "### My current rank: 1 of 1" in personal_stats_embed(snapshot, 7, "lua").description
 
 
 def test_renamed_insights_show_real_values_below_explanations():
@@ -230,7 +232,7 @@ def test_advanced_stats_replace_one_pick_streak_with_dash_and_show_earned_fires(
     row = PredictionStats(7, 4, 10, 19, 1, 5)
     snapshot = CompetitionSnapshot([row], None, {}, {}, 19)
     text = personal_stats_embed(snapshot, 7, 'Jerry').description
-    assert 'My current streak: **-**' in text
-    assert 'My best streak: **🔥 🔥 🔥 🔥 🔥**' in text
+    assert '### My current streak: <:dootpinkline:1563980159202103478>' in text
+    assert '### My best streak: 🔥🔥🔥🔥🔥' in text
     empty = personal_stats_embed(replace(snapshot, rows=[replace(row, current_streak=0, longest_streak=1)]), 7, 'Jerry').description
-    assert 'My current streak: **-**\nMy best streak: **-**' in empty
+    assert '### My current streak: <:dootpinkline:1563980159202103478>\n### My best streak: <:dootpinkline:1563980159202103478>' in empty
