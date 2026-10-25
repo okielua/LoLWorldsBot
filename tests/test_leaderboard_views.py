@@ -353,6 +353,8 @@ def test_stats_insights_keep_their_content_together_with_native_dividers(stats_d
         texts = [i.content for i in card.children if isinstance(i, discord.ui.TextDisplay)]
         dividers = [i for i in card.children if isinstance(i, discord.ui.Separator)]
         assert len(texts) == 4 and len(dividers) == 3
+        assert all(text.endswith("\n\n\u2800") for text in texts[:-1])
+        assert not texts[-1].endswith("\u2800")
         assert all(i.visible and i.spacing == discord.SeparatorSpacing.large for i in dividers)
         labels = ['Check Your PayPal', 'Can’t Read These Frauds', 'Hopium Supplier', 'Democracy Was a Mistake']
         for text, label in zip(texts, labels):

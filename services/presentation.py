@@ -42,7 +42,7 @@ class SpacedContainer(discord.ui.Container):
         return super().add_item(item)
 
 
-def add_match_sections(card, text, *, heading_pattern=None, footnote_divider=False, section_media=None, media_files=None):
+def add_match_sections(card, text, *, heading_pattern=None, footnote_divider=False, section_media=None, media_files=None, section_bottom_gap=False):
     """Native dividers between configured sections or matchups."""
     def add_section(content):
         for heading, (url, description) in (section_media or {}).items():
@@ -80,7 +80,10 @@ def add_match_sections(card, text, *, heading_pattern=None, footnote_divider=Fal
     boundaries = sorted(set(boundaries))
     cursor = 0
     for boundary in boundaries:
-        add_section(text[cursor:boundary].strip())
+        section = text[cursor:boundary].strip()
+        if section_bottom_gap:
+            section += "\n\n\u2800"
+        add_section(section)
         card.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.large))
         cursor = boundary
     add_section(text[cursor:].strip())
@@ -136,15 +139,18 @@ class MessageCard(discord.ui.LayoutView):
         section_pattern = getattr(controls, "section_heading_pattern", None)
         footnote_divider = getattr(controls, "footnote_divider", False)
         section_media = getattr(controls, "section_media", None)
+        section_bottom_gap = getattr(controls, "section_bottom_gap", False)
         add_match_sections(card, text, heading_pattern=section_pattern, footnote_divider=footnote_divider,
-                           section_media=section_media, media_files=self.media_files)
+                           section_media=section_media, media_files=self.media_files,
+                           section_bottom_gap=section_bottom_gap)
         if controls:
             items = {item.custom_id: item for item in controls.children}
             for index, row in enumerate(controls.to_components()):
                 card.add_item(discord.ui.ActionRow(*(items[item["custom_id"]] for item in row["components"])))
                 if index == 0 and after_first_row:
                     add_match_sections(card, after_first_row, heading_pattern=section_pattern,
-                                       footnote_divider=footnote_divider, section_media=section_media, media_files=self.media_files)
+                                       footnote_divider=footnote_divider, section_media=section_media, media_files=self.media_files,
+                           section_bottom_gap=section_bottom_gap)
         self.add_item(card)
 
     def stop(self):

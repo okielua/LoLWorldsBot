@@ -59,6 +59,7 @@ async def leaderboard_context(interaction, tournament_id, *, data=None):
 
 
 class StatsSections(SetupRequiredView):
+    section_bottom_gap = True
     section_heading_pattern = r'(?m)^## [^\n]+ __\*[^*\n]+\*__$'
 
 
