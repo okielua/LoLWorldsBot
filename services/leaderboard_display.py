@@ -141,6 +141,9 @@ def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous
     def value(text):
         return aggregate_token(str(text), personal_scope)
 
+    def streak_text(count):
+        return value(' '.join(['🔥'] * count) if count >= 2 else '-')
+
     body = (
         "-# (All stats cover completed series across Worlds, including Play-Ins.)\n\n"
         f"**My rank: {aggregate_token(standing, rank_scope) if rank else standing}**\n"
@@ -148,7 +151,7 @@ def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous
         f"My votes: **{value(f'{row.submitted} of {row.eligible} past matches')}**\n"
         f"My incorrect predictions: **{value(row.submitted - row.correct)}**\n"
         f"My missed votes: **{value(row.eligible - row.submitted)}**\n\n"
-        f"My current streak: **{value(row.current_streak)}**\nMy best streak: **{value(row.longest_streak)}**"
+        f"My current streak: **{streak_text(row.current_streak)}**\nMy best streak: **{streak_text(row.longest_streak)}**"
     )
     advanced = snapshot.advanced.get(user_id, AdvancedPredictionStats())
 

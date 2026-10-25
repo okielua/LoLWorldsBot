@@ -94,7 +94,7 @@ def test_personal_stats_use_requested_summary_and_four_explained_sections():
     assert "**My rank: 2 of 2**\n**My correct predictions: 14 (70%)**" in text
     assert "My votes: **20 of 30 past matches**" in text
     assert "My incorrect predictions: **6**\nMy missed votes: **10**" in text
-    assert "My current streak: **2**\nMy best streak: **5**" in text
+    assert "My current streak: **🔥 🔥**\nMy best streak: **🔥 🔥 🔥 🔥 🔥**" in text
     assert text.index("## :PeyzPal: __Check Your PayPal__") < text.index("## :PepeKMS: __Can’t Read These Frauds__") < text.index("## :Copium: __Hopium Supplier__") < text.index("## :Discheesed: __Democracy Was a Mistake__")
     assert text.startswith("-# *(All stats cover completed series across Worlds, including Play-Ins.)*")
     assert not any(label in text for label in ("Recent predictions", "Pending votes", "Boldest correct call", "Ranked by", "Rank movement", "behind the leader"))
@@ -224,3 +224,13 @@ def test_leaderboard_header_name_blocks_share_the_longest_width():
     embed, = leaderboard_embeds(rows, previous={1:2, 2:1})
     assert '## 1. `Amy' + '\N{NO-BREAK SPACE}' * 5 + '`⬆️' in embed.description
     assert '## 2. `TheFluke`⬇️' in embed.description
+
+
+def test_advanced_stats_replace_one_pick_streak_with_dash_and_show_earned_fires():
+    row = PredictionStats(7, 4, 10, 19, 1, 5)
+    snapshot = CompetitionSnapshot([row], None, {}, {}, 19)
+    text = personal_stats_embed(snapshot, 7, 'Jerry').description
+    assert 'My current streak: **-**' in text
+    assert 'My best streak: **🔥 🔥 🔥 🔥 🔥**' in text
+    empty = personal_stats_embed(replace(snapshot, rows=[replace(row, current_streak=0, longest_streak=1)]), 7, 'Jerry').description
+    assert 'My current streak: **-**\nMy best streak: **-**' in empty
