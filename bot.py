@@ -35,6 +35,7 @@ from services.standings_display import standings_text
 from services.golgg import GOLGG_FOOTNOTES, team_stats_text
 from services.golgg_players import player_catalog, player_reply, refresh_players_loop
 from services.golgg_champions import champion_autocomplete, champion_winrate_reply, refresh_champions_loop
+from services.mvp import show_mvps
 from services.team_history import HistoryPages, TeamHistoryView
 from services.match_browser import show_match_games
 from services.vote_history import voter_autocomplete, show_vote_history
@@ -1590,6 +1591,12 @@ async def myvotes(interaction: discord.Interaction):
         await interaction.followup.send(**embed_card_payload(embed), ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
 
+@bot.tree.command(name="mvp", description="See every completed Swiss round and knockout stage's prediction MVPs.")
+@app_commands.guild_only()
+async def mvp(interaction: discord.Interaction):
+    await show_mvps(interaction)
+
+
 @bot.tree.command(name="leaderboard", description="See Communism's Worlds prediction standings.")
 @app_commands.guild_only()
 async def leaderboard(interaction: discord.Interaction):
@@ -1641,6 +1648,9 @@ Choose a server member from the suggestions to view their past predictions and s
 
 `/leaderboard`
 See Communism’s leaderboard for predictions made through this bot.
+
+`/mvp`
+See every completed Swiss round and knockout stage’s MVPs.
 
 `/pickems`
 Open the server’s leaderboard for Riot’s official Pick’ems.

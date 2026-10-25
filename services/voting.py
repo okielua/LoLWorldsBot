@@ -23,6 +23,7 @@ from services.prediction_display import PREDICTION_BLUE, VOTE_CONFIRMATION_HELP,
 from services.server_reminders import validate_reminder_channel
 from services.server_settings import get_server_settings
 from services.prediction_stats import get_previous_day_mvp, get_voter_display_names
+from services.mvp import previous_mvp_award
 from services.status_labels import VOTING_CLOSED, VOTING_OPEN, VOTING_PENDING
 from services.user_settings import get_all_user_reminder_preferences
 from services.reminder_engine import get_server_ping_user_ids
@@ -834,12 +835,13 @@ class VotingManager:
                     polls.get_polls, self.guild_id, tournament_id,
                 )
             }
-            mvps = await asyncio.to_thread(get_previous_day_mvp, self.guild_id, self.store.data, day)
+            award = await asyncio.to_thread(previous_mvp_award, self.guild_id, self.store.data, day)
+            mvps = award.winners if award else await asyncio.to_thread(get_previous_day_mvp, self.guild_id, self.store.data, day)
             recap = ""
             if mvps:
                 names = await asyncio.to_thread(get_voter_display_names, self.guild_id, tournament_id)
                 guild = getattr(self.client, "get_guild", lambda _: None)(self.guild_id)
-                recap = "\n### __Previous Match-Day MVP__\n"
+                recap = f"\n### __{award.label + ' MVP' if award else 'Previous Match-Day MVP'}__\n"
                 winners = []
                 for row in mvps:
                     member = guild.get_member(row.user_id) if guild else None
@@ -847,7 +849,8 @@ class VotingManager:
                     name = discord.utils.escape_mentions(discord.utils.escape_markdown(" ".join(name.split())))
                     winners.append(f"**{name}**")
                 row = mvps[0]  # Joint winners have the same correct/submitted ratio.
-                recap += (f"{', '.join(winners)}: {row.correct}/{row.submitted} correct · {float(row.accuracy):.1%} accuracy\n"
+                recap += (f"## 🏆 {', '.join(winners)}\n"
+                          f"{row.correct}/{row.submitted} correct · {float(row.accuracy):.1%} accuracy\n"
                           f"-# {row.submitted}/{row.eligible} matches predicted · {float(row.participation):.1%} participation\n")
                 recap = aggregate_token(recap)
             role_id = settings.worlds_role_id if not self.test_mode else None

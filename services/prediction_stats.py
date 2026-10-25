@@ -145,7 +145,7 @@ def competition_ranks(rows):
     return result
 
 
-def get_competition_snapshot(guild_id, tournament_id, *, match_day=None, data=None, from_swiss=False):
+def get_competition_snapshot(guild_id, tournament_id, *, match_day=None, data=None, from_swiss=False, match_ids=None):
     with closing(get_connection()) as connection:
         connection.execute("BEGIN")
         polls = connection.execute("""
@@ -162,6 +162,8 @@ def get_competition_snapshot(guild_id, tournament_id, *, match_day=None, data=No
     swiss = next((stage for stage in data.stages if "swiss" in stage.name.casefold()), None) if data else None
 
     def in_scope(match_id):
+        if match_ids is not None and match_id not in match_ids:
+            return False
         if not from_swiss:
             return True
         match = data.matches_by_id.get(match_id) if data else None

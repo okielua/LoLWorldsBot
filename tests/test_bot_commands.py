@@ -498,6 +498,7 @@ def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeyp
     champion_option, = winrate_command.parameters
     assert champion_option.name == 'champion' and champion_option.required and champion_option.autocomplete
     assert 'Main Event, excluding play-ins' in winrate_command.description
+    assert namespace['bot'].tree.get_command('mvp').parameters == []
     assert namespace["bot"].tree.get_command("votehistory").guild_only is True
     assert namespace["bot"].tree.get_command("today") is not None
     assert namespace["bot"].tree.get_command("tomorrow") is not None
