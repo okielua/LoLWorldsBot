@@ -53,10 +53,11 @@ def form_rows(snapshot, participants):
 
 
 async def add_prediction_form(pages, manager, matches, votes_by_match):
+    from services.mvp import add_results_mvp
     participants = {uid: name or f'User {uid}' for match in matches
                     for uid, _, name in votes_by_match.get(match.id, [])}
     if not participants:
-        return pages
+        return await add_results_mvp(pages, manager, matches)
     # Later matches must never rewrite an old post's history or streak.
     boundary = max((match.start_time, match.id) for match in matches)
     ids = {match.id for match in manager.store.data.matches if (match.start_time, match.id) <= boundary}
@@ -64,7 +65,7 @@ async def add_prediction_form(pages, manager, matches, votes_by_match):
         manager.store.data.tournament.id, data=manager.store.data, match_ids=ids)
     lines = form_rows(snapshot, participants)
     if not lines:
-        return pages
+        return await add_results_mvp(pages, manager, matches)
     section = form_heading() + '\n\n' + '\n'.join(lines)
     def fits(text):
         return max(len(text), len(render_text(text))) <= 3600
@@ -73,7 +74,7 @@ async def add_prediction_form(pages, manager, matches, votes_by_match):
     merged = body + '\n\n' + section + marker + footer
     if fits(merged):
         pages[0] = merged
-        return pages
+        return await add_results_mvp(pages, manager, matches)
     # Stay inside the same Discord post if a large voter list needs more room.
     heading = pages[0].splitlines()[0] + '\n\n' + form_heading()
     current = heading
@@ -83,4 +84,4 @@ async def add_prediction_form(pages, manager, matches, votes_by_match):
             current = heading
         current += '\n\n' + line
     pages.append(current)
-    return pages
+    return await add_results_mvp(pages, manager, matches)

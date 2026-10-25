@@ -1,4 +1,4 @@
-"""MVP awards for complete Swiss rounds and knockout stages."""
+"""MVP awards for complete Swiss matchdays and knockout stages."""
 
 import asyncio
 from dataclasses import dataclass
@@ -10,7 +10,7 @@ import discord
 from models import MatchStatus
 from services.match_times import TOURNAMENT_TIMEZONE
 from services.prediction_stats import get_competition_snapshot, get_voter_display_names
-from services.series_results import SWISS_ROUND_MATCH_COUNTS, confirmed_result
+from services.series_results import SWISS_ROUND_MATCH_COUNTS, confirmed_result, swiss_result_groups
 from services.presentation import message_payload
 from services.team_history import HistoryPages
 
@@ -26,6 +26,8 @@ def get_mvp_awards(guild_id, data):
     periods = {}
     expected = {}
     labels = {}
+    zone = ZoneInfo(TOURNAMENT_TIMEZONE)
+    rounds = swiss_result_groups(data)
     for match in sorted(data.matches, key=lambda m: (m.start_time, m.id)):
         if match.status == MatchStatus.CANCELLED:
             continue
@@ -36,9 +38,13 @@ def get_mvp_awards(guild_id, data):
             number = re.match(r'Round (\d+)\b', match.round_name or '', re.I)
             if number is None or int(number[1]) not in SWISS_ROUND_MATCH_COUNTS:
                 continue
-            key = (match.stage_id, int(number[1]))
-            expected[key] = SWISS_ROUND_MATCH_COUNTS[int(number[1])]
-            labels[key] = f'Swiss Round {int(number[1])}'
+            full_round = rounds.get(f'swiss-round:{match.stage_id}:{int(number[1])}', [])
+            if len(full_round) != SWISS_ROUND_MATCH_COUNTS[int(number[1])]:
+                continue
+            day = match.start_time.astimezone(zone).date()
+            key = (match.stage_id, int(number[1]), day)
+            expected[key] = sum(m.start_time.astimezone(zone).date() == day for m in full_round)
+            labels[key] = f'Swiss Round {int(number[1])} · {day:%A, %d %B %Y}'
         else:
             count = next((n for name, n in [('quarterfinal', 4), ('semifinal', 2), ('final', 1)]
                           if name in match.stage_id.lower()), None)
@@ -70,7 +76,7 @@ def previous_mvp_award(guild_id, data, current_day):
 def mvp_pages(awards, names):
     heading = '# __Worlds 2026 MVPs__'
     if not awards:
-        return [heading + '\n\nMVPs will appear after each Swiss round and knockout stage is complete.']
+        return [heading + '\n\nMVPs will appear after each Swiss matchday and knockout stage is complete.']
     pages, body = [], heading
     for award in awards:
         title = f'\n\n## __{award.label} MVP__'
@@ -93,6 +99,64 @@ def mvp_pages(awards, names):
                 body = heading + title + ' (continued)'
             body += '\n\n' + line
     return pages + [body]
+
+
+async def add_results_mvp(pages, manager, matches):
+    """Put the relevant day's award directly below the recent-pick section."""
+    from services.spoilers import render_text
+    data = manager.store.data
+    target_ids = {m.id for m in matches}
+    supported = any('swiss' in m.stage_id.lower() or any(name in m.stage_id.lower()
+                    for name in ('quarterfinal', 'semifinal', 'final')) for m in matches)
+    if not supported:
+        return pages
+    awards = await asyncio.to_thread(get_mvp_awards, manager.guild_id, data)
+    awards = [a for a in awards if target_ids.intersection(m.id for m in a.matches)]
+    names = await asyncio.to_thread(get_voter_display_names, manager.guild_id, data.tournament.id)
+    blocks = []
+    if awards:
+        for award in awards:
+            swiss = 'swiss' in award.matches[0].stage_id.lower()
+            if swiss:
+                day = award.matches[0].start_time.astimezone(ZoneInfo(TOURNAMENT_TIMEZONE))
+                title = f'## __Matchday MVP · {day:%A, %d %B %Y}__'
+            else:
+                title = f'## __{award.label} MVP__'
+            lines = [title]
+            if award.winners:
+                for row in award.winners:
+                    name = discord.utils.escape_mentions(discord.utils.escape_markdown(
+                        ' '.join(names.get(row.user_id, f'User {row.user_id}').split())[:80]))
+                    lines.append(f'## 🏆 {name}')
+                row = award.winners[0]
+                lines.append(f'-# {row.correct}/{row.submitted} correct · {float(row.accuracy):.1%} accuracy')
+            else:
+                lines.append('No MVP: no correct predictions were recorded.')
+            blocks.append(lines)
+    else:
+        swiss = any('swiss' in m.stage_id.lower() for m in matches)
+        blocks = [['## __Matchday MVP__' if swiss else '## __Stage MVP__',
+                   'Waiting for all matchday results.' if swiss else 'Waiting for all stage results.']]
+    pages = list(pages)
+    index = max((i for i, page in enumerate(pages) if '__Last 5 picks__' in page), default=len(pages)-1)
+    body, marker, footer = pages[index].partition('\n\n-# • Use `/votehistory`')
+    following = []
+    for lines in blocks:
+        candidate = body + '\n\n' + '\n\n'.join(lines) + marker + footer
+        if max(len(candidate), len(render_text(candidate))) > 3600:
+            following.append(body + marker + footer)
+            body = pages[0].splitlines()[0]
+            marker = footer = ''
+        for line in lines:
+            candidate = body + '\n\n' + line + marker + footer
+            if max(len(candidate), len(render_text(candidate))) > 3600:
+                following.append(body + marker + footer)
+                body = pages[0].splitlines()[0] + '\n\n' + lines[0] + ' (continued)'
+                marker = footer = ''
+            body += '\n\n' + line
+    following.append(body + marker + footer)
+    pages[index:index+1] = following
+    return pages
 
 
 async def show_mvps(interaction):

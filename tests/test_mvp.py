@@ -59,26 +59,49 @@ def test_awards_are_scoped_to_each_swiss_round_and_knockout_stage(source):
     populate(data, choices)
     finish(data, data.matches)
     awards = mvp.get_mvp_awards(123, data)
-    assert [a.label for a in awards] == ['Swiss Round 1', 'Swiss Round 2', 'Quarterfinals']
+    assert [a.label.split(' ·')[0] for a in awards] == ['Swiss Round 1', 'Swiss Round 2', 'Quarterfinals']
     assert [[row.user_id for row in a.winners] for a in awards] == [[7], [8], [9]]
     assert [a.winners[0].correct for a in awards] == [8, 8, 4]
 
 
-def test_two_day_swiss_round_awards_wait_for_all_eight_and_share_exact_ties(source):
+def test_two_day_swiss_round_has_separate_daily_awards_and_shared_ties(source):
     matches = period(source, 'swiss', 8, datetime(2026, 10, 25, 17, tzinfo=UTC), round_number=3, offset=1)
     data = replace(source, matches=matches)
     populate(data, lambda _: [(7, True), (8, True)])
     finish(data, matches[:4])
-    assert mvp.get_mvp_awards(123, data) == []
+    first_day, = mvp.get_mvp_awards(123, data)
+    assert 'Sunday, 25 October' in first_day.label
+    assert {r.user_id for r in first_day.winners} == {7, 8}
+    assert all(r.correct == 4 for r in first_day.winners)
     finish(data, matches)
-    award, = mvp.get_mvp_awards(123, data)
+    first_day, award = mvp.get_mvp_awards(123, data)
     assert {r.user_id for r in award.winners} == {7, 8}
-    assert all(r.correct == 8 for r in award.winners)
-    assert mvp.previous_mvp_award(123, data, '2026-10-26') is None
-    assert mvp.previous_mvp_award(123, data, '2026-10-27').label == 'Swiss Round 3'
+    assert all(r.correct == 4 for r in award.winners)
+    assert 'Sunday' in mvp.previous_mvp_award(123, data, '2026-10-26').label
+    assert 'Monday' in mvp.previous_mvp_award(123, data, '2026-10-27').label
     pages = mvp.mvp_pages([award], {7: 'Lua', 8: 'Jerry'})
     assert '## 🏆 Lua' in pages[0] and '## 🏆 Jerry' in pages[0]
-    assert '8/8 correct' in pages[0]
+    assert '4/4 correct' in pages[0]
+
+
+def test_results_place_matchday_mvp_after_form_and_keep_days_separate(source):
+    from services.prediction_form import add_prediction_form
+    matches = period(source, 'swiss', 8, datetime(2026, 10, 25, 17, tzinfo=UTC), round_number=3, offset=1)
+    data = replace(source, matches=matches)
+    populate(data, lambda match: [(7,match in matches[:4]), (8,match in matches[4:])])
+    finish(data,matches[:4])
+    manager = SimpleNamespace(guild_id=123,store=SimpleNamespace(data=data))
+    votes = {match.id:polls.get_poll_results(123,match.id) for match in matches[:4]}
+    pages = asyncio.run(add_prediction_form(['# Results'],manager,matches[:4],votes))
+    text='\n'.join(pages)
+    assert text.index('__Last 5 picks__') < text.index('Matchday MVP') < text.index('🏆 Player 7')
+    assert '## __Matchday MVP · Sunday, 25 October 2026__' in text
+    finish(data,matches[4:])
+    votes = {match.id:polls.get_poll_results(123,match.id) for match in matches}
+    pages = asyncio.run(add_prediction_form(['# Results'],manager,matches,votes))
+    text='\n'.join(pages)
+    assert text.count('## __Matchday MVP')==2
+    assert '🏆 Player 7' in text and '🏆 Player 8' in text
 
 
 def test_accuracy_breaks_equal_correct_counts_and_missing_fixtures_do_not_award(source):

@@ -1591,7 +1591,7 @@ async def myvotes(interaction: discord.Interaction):
         await interaction.followup.send(**embed_card_payload(embed), ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
 
-@bot.tree.command(name="mvp", description="See every completed Swiss round and knockout stage's prediction MVPs.")
+@bot.tree.command(name="mvp", description="See every completed Swiss matchday and knockout stage's prediction MVPs.")
 @app_commands.guild_only()
 async def mvp(interaction: discord.Interaction):
     await show_mvps(interaction)
@@ -1650,7 +1650,7 @@ Choose a server member from the suggestions to view their past predictions and s
 See Communism’s leaderboard for predictions made through this bot.
 
 `/mvp`
-See every completed Swiss round and knockout stage’s MVPs.
+See every completed Swiss matchday and knockout stage’s MVPs.
 
 `/pickems`
 Open the server’s leaderboard for Riot’s official Pick’ems.
