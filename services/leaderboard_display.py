@@ -183,16 +183,16 @@ def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous
     body += (
         "\n\n\u2800\n\n# __Some other Stats__"
         + section("PeyzPal", "Check Your PayPal")
-        + f"-# The team whose series {name} predicts most accurately, whether {name} votes for or against them. Requires at least 3 scored predictions involving that team.\n\n"
+        + f"-# The team whose series {name} predicts most accurately, whether {name} votes for or against them. Requires at least 3 scored predictions involving that team.\n"
         f"{team_read(advanced.best_read)}"
         + section("PepeKMS", "Can’t Read These Frauds")
-        + f"-# The team whose series {name} predicts least accurately, whether {name} votes for or against them. Requires at least 3 scored predictions involving that team.\n\n"
+        + f"-# The team whose series {name} predicts least accurately, whether {name} votes for or against them. Requires at least 3 scored predictions involving that team.\n"
         f"{team_read(advanced.hardest)}"
         + section("Copium", "Hopium Supplier")
-        + f"-# The team {name} backed to win most often when they actually lost. Only completed series count.\n\n"
+        + f"-# The team {name} backed to win most often when they actually lost. Only completed series count.\n"
         f"{backing_text}"
         + section("Discheesed", "Democracy Was a Mistake")
-        + f"-# How often {name} predicts correctly when fewer than half the voters on Communism back {owner} chosen team. Evenly split votes don’t count.\n\n"
+        + f"-# How often {name} predicts correctly when fewer than half the voters on Communism back {owner} chosen team. Evenly split votes don’t count.\n"
         f"{minority}"
     )
     return discord.Embed(title=title, description=format_footnotes(body), colour=ACCENT)

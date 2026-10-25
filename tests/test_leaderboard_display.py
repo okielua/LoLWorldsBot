@@ -135,15 +135,16 @@ def test_renamed_insights_show_real_values_below_explanations():
     snapshot = CompetitionSnapshot([PredictionStats(7, 8, 12, 15, 2, 4)], [], {7: [prediction]}, {}, 15, {7: advanced})
     embed = personal_stats_embed(snapshot, 7, "lua")
     text = embed.description.replace("\u00a0", "")
-    assert "\n\n### **T1** · **4/5 correct (80%)**" in text
-    assert "\n\n### **GEN** · **1/3 correct (33.3%)**" in text
-    assert "\n\n### **GEN** · **backed to win in 2 series they lost**" in text
+    assert "\n### **T1** · **4/5 correct (80%)**" in text
+    assert "\n### **GEN** · **1/3 correct (33.3%)**" in text
+    assert "\n### **GEN** · **backed to win in 2 series they lost**" in text
     assert "### **2/3 minority predictions correct**\n\n### **T1** · **1/2 correct**\n### **GEN** · **1/1 correct**" in text
     assert "## :PeyzPal: __*Check Your PayPal*__\n\n-# *The team whose series `lua` predicts most accurately" in text
     assert "## :PepeKMS: __*Can’t Read These Frauds*__\n\n-# *The team whose series `lua` predicts least accurately" in text
     assert "## :Copium: __*Hopium Supplier*__\n\n-# *The team `lua` backed to win most often when they actually lost." in text
     assert "## :Discheesed: __*Democracy Was a Mistake*__\n\n-# *How often `lua` predicts correctly" in text
     assert "Boldest correct call" not in text and "Recent predictions" not in text
+    assert len(re.findall(r"(?m)^-# [^\n]+\n### ", text)) == 4
 
 
 def test_advanced_stats_show_minimums_and_remain_within_the_actual_card_limit_with_logos():
