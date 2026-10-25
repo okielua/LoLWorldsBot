@@ -362,3 +362,14 @@ def test_stats_insights_keep_their_content_together_with_native_dividers(stats_d
         assert payload['ephemeral'] is True
         payload['view'].stop()
     asyncio.run(scenario())
+
+
+def test_trophycase_groups_swiss_knockout_and_overall_with_wide_gaps():
+    from services.trophycase import trophycase_pages
+    slots = [('swiss', str(i)) for i in range(8)] + [('quarterfinals', ''), ('semifinals', ''), ('final', ''), ('overall', '')]
+    case = ['🏆'] + ['⚪'] * 7 + ['🏆', '⚪', '⚪'] + ['🏆']
+    page, = trophycase_pages({7: 'lua', 8: 'Other user'}, {7: case}, slots)
+    gap = '\N{NO-BREAK SPACE}' * 6
+    assert ' '.join(case[:8]) + gap + ' '.join(case[8:11]) + gap + case[11] in page
+    assert ' '.join(['⚪'] * 8) + gap + ' '.join(['⚪'] * 3) + gap + '⚪' in page
+    assert page.count('🏆') == 4  # Three earned trophies plus the title icon.

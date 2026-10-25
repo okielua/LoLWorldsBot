@@ -21,10 +21,21 @@ TROPHY_HELP = (
 )
 
 
+def grouped_trophies(case, slots):
+    groups, previous = [], None
+    for icon, (stage, _) in zip(case, slots):
+        group = stage if stage in {'swiss', 'overall'} else 'knockout'
+        if group != previous:
+            groups.append([])
+        groups[-1].append(icon)
+        previous = group
+    return ('\N{NO-BREAK SPACE}' * 6).join(' '.join(group) for group in groups)
+
+
 def trophycase_pages(names, cases, slots):
     heading = '# __🏆 Trophy Case__'
     aligned = aligned_name_fields(names)
-    lines = [f"{aligned[uid]} · {' '.join(cases.get(uid, ['⚪'] * len(slots)))}"
+    lines = [f"{aligned[uid]} · {grouped_trophies(cases.get(uid, ['⚪'] * len(slots)), slots)}"
              for uid in sorted(names, key=lambda uid: (names[uid].casefold(), uid))]
     pages, body = [], heading
     for line in lines or ['No votes have been cast yet.']:
