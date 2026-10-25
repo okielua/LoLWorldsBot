@@ -193,7 +193,7 @@ def test_movement_reconstructs_previous_scored_result_and_survives_restart(compe
     assert snapshot.previous_rows == before.rows
     ranks, previous = competition_ranks(snapshot.rows), competition_ranks(snapshot.previous_rows)
     assert ranks == {2: 1, 3: 2, 1: 3}
-    assert rank_movement(1, ranks, previous) == "⬇️2"
+    assert rank_movement(1, ranks, previous) == "⬇️"
     assert rank_movement(2, ranks, previous) == ""
     assert rank_movement(3, ranks, previous) == "New"
     with user_settings.get_connection() as connection:

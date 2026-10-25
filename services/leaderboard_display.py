@@ -37,8 +37,8 @@ def rank_movement(user_id, ranks, previous):
     if user_id not in previous:
         return "New"
     change = previous[user_id] - ranks[user_id]
-    return (f"{custom_emoji('arrow_up_blue') or '⬆️'}{change}" if change > 0 else
-            f"{custom_emoji('arrow_down_grey') or '⬇️'}{-change}" if change < 0 else '')
+    return (str(custom_emoji('arrow_up_blue') or '⬆️') if change > 0 else
+            str(custom_emoji('arrow_down_grey') or '⬇️') if change < 0 else '')
 
 
 def trophy_labels(slots):
