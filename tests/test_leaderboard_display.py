@@ -91,7 +91,7 @@ def test_personal_stats_use_requested_summary_and_four_explained_sections():
     embed = personal_stats_embed(snapshot, 4, "Sample Player 4", previous={1: 1, 4: 3})
     text = embed.description.replace("\u00a0", "")
     assert embed.title == "Worlds 2026 Voting Stats · `Sample Player 4`"
-    assert text.index("# `Sample Player 4`’s __Basic Stats__") < text.index("### · Current rank:") < text.index("# __Some other Stats__") < text.index("## :PeyzPal: __*Check Your PayPal*__")
+    assert text.index("# __Basic Stats__") < text.index("### · Current rank:") < text.index("# __Some other Stats__") < text.index("## :PeyzPal: __*Check Your PayPal*__")
     assert "### · Current rank: 2 of 2" in text
     assert "### · League rank: :gold:" in text
     assert "### · Correct predictions: 14/20 (70%)" in text

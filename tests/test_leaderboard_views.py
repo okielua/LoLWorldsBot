@@ -331,7 +331,8 @@ def test_stats_names_are_unpadded_while_leaderboard_names_stay_aligned(stats_dat
         name = '`lua`'
         assert padded_name not in card.title and padded_name not in card.description
         assert name in card.title
-        assert f'# {name}’s __Basic Stats__' in card.description
+        assert '# __Basic Stats__' in card.description
+        assert '’s __Basic Stats__' not in card.description
         assert f'whose series {name} predicts' in card.description
         assert f'whether {name} votes' in card.description
         assert '### · League rank: :challenger:' in card.description

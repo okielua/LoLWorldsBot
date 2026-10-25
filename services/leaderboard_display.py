@@ -153,7 +153,7 @@ def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous
     tier_text = str(custom_emoji(tier) or ":" + tier + ":") if tier else UNAVAILABLE
     body = (
         "-# (All stats cover completed series across Worlds, including Play-Ins.)\n\n"
-        f"# {owner} __Basic Stats__\n\n"
+        "# __Basic Stats__\n\n"
         f"### · Current rank: {aggregate_token(standing, rank_scope) if rank else standing}\n"
         f"### · League rank: {aggregate_token(tier_text, rank_scope) if rank else tier_text}\n"
         f"### · Correct predictions: {value(f'{row.correct}/{row.submitted}')} ({value(accuracy_text(row))})\n"
