@@ -171,7 +171,9 @@ def test_trophycase_button_includes_pending_only_voters_and_aligned_slots(stats_
     text = '\n'.join(i.content for i in payload['view'].walk_children() if isinstance(i, discord.ui.TextDisplay))
     assert 'Pending player' in text and 'Other user' in text and 'lua' in text
     assert '\N{NO-BREAK SPACE}' in text
-    assert '12 trophies to win' in text and '⚪' in text
+    assert 'In total there are 12 trophies to win:' in text and '⚪' in text
+    for label in ('8x Swiss matchdays', '1x Quarterfinal', '1x Semifinals', '1x Final', '1x overall Worlds 2026 voting winner'):
+        assert '-# *' + '\N{NO-BREAK SPACE}' * 2 + '· ' + label + '*' in text
     assert 'Slots run chronologically' not in text and 'Not earned' not in text and 'Earned ·' not in text
     assert payload['ephemeral'] is True and payload['allowed_mentions'].to_dict() == {'parse': []}
     payload['view'].stop()
