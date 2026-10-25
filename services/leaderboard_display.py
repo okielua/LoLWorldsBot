@@ -14,7 +14,7 @@ LEADERBOARD_HELP = format_footnotes(
     "-# Standings include play-ins; history starts at Swiss.\n"
     "-# ✅ Correct · ❌ Wrong · ➖ Skipped\n"
     "-# 🔥 Ongoing streak of 3+ (skipped matches don't break streaks)\n"
-    "-# 🏆 MVP trophies: Swiss matchdays, then quarterfinals, semifinals and final."
+    "-# 🏆 12 trophies to win: 8 Swiss matchdays, 3 stages (quarterfinals, semifinals, final), and 1 overall Worlds 2026 winner."
 )
 
 
@@ -47,7 +47,7 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
     blocks = []
     history_rows = {row.user_id:row for row in history.rows} if history else {}
     help_text = LEADERBOARD_HELP.replace('➖',str(custom_emoji('dootpinkline') or '➖'))
-    slot_count = len(trophy_slots) if trophy_slots is not None else 11
+    slot_count = len(trophy_slots) if trophy_slots is not None else 12
     for row, name in entries:
         movement = rank_movement(row.user_id, ranks, previous)
         streak = getattr(history_rows.get(row.user_id),'current_streak',0) if history is not None else row.current_streak

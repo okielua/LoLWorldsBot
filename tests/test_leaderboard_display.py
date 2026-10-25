@@ -27,6 +27,7 @@ def test_sample_leaderboard_matches_compact_specification():
     assert not any(word in text for word in ("participation", "75.0%", "behind", "Level on", "\u200b", "\n\n\n"))
     assert 'Current streak:' not in text and 'Best streak:' not in text
     assert '⚪' in text and '🏆' in text and '✅' in text and '❌' in text
+    assert '12 trophies to win: 8 Swiss matchdays, 3 stages' in text and '1 overall Worlds 2026 winner' in text
     assert all("**" not in re.sub(r"\*\*\d+(?:\.\d+)?% correct\*\*", "", line) for line in text.splitlines() if line.startswith("-#"))
     assert '-# *✅ Correct · ❌ Wrong · ➖ Skipped*' in text
     assert "skipped matches don't break streaks" in text
@@ -68,9 +69,9 @@ def test_full_swiss_history_skips_custom_rank_arrows_and_trophy_slots(monkeypatc
     recent=[Prediction(f's{i}','A','B',start+timedelta(hours=i),'A' if i else 'B','A') for i in (4,3,2,0)]
     history=SimpleNamespace(rows=[PredictionStats(1,3,4,5,3,3)],recent={1:recent},
                             result_match_ids=tuple(f's{i}' for i in range(5)))
-    case=['⚪','🏆']+['⚪']*9
+    case=['⚪','🏆']+['⚪']*10
     embed,=leaderboard_embeds([(rows[0],'Winner'),(rows[1],'Other')],previous={1:2,2:1},
-        history=history,trophies={1:case},trophy_slots=list(range(11)))
+        history=history,trophies={1:case},trophy_slots=list(range(12)))
     text=embed.description
     assert '__Winner__: 4 correct (80%) <:arrow_up_green:100>1 🔥' in text
     assert '__Other__: 2 correct (40%) <:arrow_down_red:101>1' in text

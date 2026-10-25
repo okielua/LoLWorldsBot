@@ -80,6 +80,7 @@ def trophy_cases(guild_id, data):
     slots = [('swiss', day) for day in days]
     slots += [(stage.id, '') for stage in sorted(data.stages,key=lambda s:s.order)
               if any(name in stage.id.lower() for name in ('quarterfinal','semifinal','final'))]
+    slots.append(('overall', ''))
     cases = {}
     for award in get_mvp_awards(guild_id,data):
         match = award.matches[0]
@@ -90,6 +91,18 @@ def trophy_cases(guild_id, data):
         for winner in award.winners:
             case = cases.setdefault(winner.user_id,['⚪']*len(slots))
             case[slots.index(key)] = '🏆'
+    # The overall trophy follows the full leaderboard, including play-ins,
+    # and remains unawarded until all 40 main-event series are confirmed.
+    main_event = [m for m in data.matches if m.status != MatchStatus.CANCELLED
+                  and ('swiss' in m.stage_id.lower() or any(name in m.stage_id.lower()
+                       for name in ('quarterfinal', 'semifinal', 'final')))]
+    if len(main_event) == 40 and all(confirmed_result(m) for m in main_event):
+        rows = get_competition_snapshot(guild_id, data.tournament.id, data=data).rows
+        if rows and rows[0].correct:
+            for row in rows:
+                if row.ranking_key == rows[0].ranking_key:
+                    case = cases.setdefault(row.user_id, ['⚪'] * len(slots))
+                    case[-1] = '🏆'
     return cases, slots
 
 

@@ -130,7 +130,7 @@ def test_mvp_command_uses_big_headings_and_never_pings(source, monkeypatch):
     assert payload['allowed_mentions'].to_dict() == {'parse': []}
 
 
-def test_eleven_trophy_slots_cover_eight_swiss_days_and_three_knockout_stages(source):
+def test_twelve_trophy_slots_cover_matchdays_stages_and_overall(source):
     first=period(source,'swiss',8,datetime(2026,10,23,17,tzinfo=UTC),round_number=1)
     second=period(source,'swiss',8,datetime(2026,10,24,17,tzinfo=UTC),round_number=2)
     third=period(source,'swiss',8,datetime(2026,10,25,17,tzinfo=UTC),round_number=3,offset=1)
@@ -144,8 +144,11 @@ def test_eleven_trophy_slots_cover_eight_swiss_days_and_three_knockout_stages(so
     populate(data,lambda _:[(7,True),(8,True)])
     finish(data,first)
     cases,slots=mvp.trophy_cases(123,data)
-    assert len(slots)==11 and sum(key[0]=='swiss' for key in slots)==8
-    assert cases[7]==['🏆']+['⚪']*10 and cases[8]==cases[7]
+    assert len(slots)==12 and sum(key[0]=='swiss' for key in slots)==8
+    assert cases[7]==['🏆']+['⚪']*11 and cases[8]==cases[7]
+    finish(data,data.matches[:-1])
+    cases,slots=mvp.trophy_cases(123,data)
+    assert slots[-1] == ('overall', '') and cases[7][-1] == '⚪'
     finish(data,data.matches)
     cases,slots=mvp.trophy_cases(123,data)
-    assert cases[7]==cases[8]==['🏆']*11
+    assert cases[7]==cases[8]==['🏆']*12
