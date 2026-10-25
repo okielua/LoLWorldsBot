@@ -303,14 +303,18 @@ def test_combined_round_keeps_all_eight_results_in_first_page(context, monkeypat
         assert payload['view'].total_children_count <= 40
 
 
-def test_round_two_posts_first_four_then_all_eight_exactly_once_across_restarts(context):
+@pytest.mark.parametrize('round_number', [2, 3])
+def test_swiss_posts_first_four_then_all_eight_exactly_once_across_restarts(context, round_number):
     from services.series_results import SeriesResults, latest_result
     manager, store, channel, current, matches = prepare(context)
     for match in matches:
-        match.round_name = 'Round 2 · 1–0 record'
+        match.round_name = f'Round {round_number} · 1–0 record'
         match.start_time += timedelta(days=1)
         match.voting_closes_at = voting_deadline(match, store.data)
     current[0] = matches[0].start_time - timedelta(hours=8)
+    if round_number == 3:
+        from services.voting_rules import round_three_publication_time
+        current[0] = round_three_publication_time(store.data)
     store.fetched_at = current[0]
     def finish(index):
         match = matches[index]

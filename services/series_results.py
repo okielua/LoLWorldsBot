@@ -22,6 +22,7 @@ from services.spoilers import team_token
 from services.team_history import HistoryPages
 from services.user_settings import get_all_user_reminder_preferences, get_connection
 from services.worlds_role import individual_subscribers
+from services.prediction_form import add_prediction_form
 
 logger = logging.getLogger(__name__)
 SWISS_ROUND_MATCH_COUNTS = {1: 8, 2: 8, 3: 8, 4: 6, 5: 3}
@@ -85,7 +86,7 @@ def swiss_result_batches(data):
     groups = swiss_result_groups(data)
     batches = dict(groups)
     for key, matches in groups.items():
-        if key.endswith(':2') and len(matches) == 8:
+        if key.endswith((':2', ':3')) and len(matches) == 8:
             batches[key + ':after-4'] = matches[:4]
     return batches
 
@@ -203,6 +204,7 @@ async def show_latest_results(interaction):
     if completed:
         match, votes = completed
         pages = result_pages(match, votes, test_mode=manager.test_mode)
+        pages = await add_prediction_form(pages, manager, [match], {match.id: votes})
         receipt = await asyncio.to_thread(latest_result, interaction.guild_id, manager.store.data.tournament.id, match_id=match.id)
         if receipt:
             channel_id, message_id, _ = receipt
@@ -301,11 +303,13 @@ class SeriesResults:
                                   for item in batch}
                 pages = swiss_result_pages(batch, votes_by_match, test_mode=manager.test_mode,
                                            intermediate=match_id.endswith(':after-4'))
+                pages = await add_prediction_form(pages, manager, batch, votes_by_match)
             else:
                 if match is None or match.status != MatchStatus.COMPLETED:
                     continue
                 votes = await asyncio.to_thread(polls.get_poll_results, manager.guild_id, match_id)
                 pages = result_pages(match, votes, test_mode=manager.test_mode)
+                pages = await add_prediction_form(pages, manager, [match], {match.id: votes})
             if pages == json.loads(saved):
                 continue
             try:
@@ -366,6 +370,7 @@ class SeriesResults:
                         pages = (swiss_result_pages(batch, votes_by_match, test_mode=manager.test_mode,
                                                     intermediate=intermediate) if is_swiss
                                  else result_pages(match, votes_by_match[match.id], test_mode=manager.test_mode))
+                        pages = await add_prediction_form(pages, manager, batch, votes_by_match)
                         role = settings.worlds_role_id if not manager.test_mode else None
                         recipients = []
                         if not manager.test_mode:
