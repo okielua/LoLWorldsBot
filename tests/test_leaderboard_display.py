@@ -63,7 +63,7 @@ def test_full_swiss_history_skips_custom_rank_arrows_and_trophy_slots(monkeypatc
     import discord
     from services import leaderboard_display
     logos = {name:discord.PartialEmoji(name=name,id=100+i) for i,name in enumerate(
-        ['arrow_up_blue','arrow_down_grey','dootpinkline','dot3'])}
+        ['arrow_up_blue','arrow_down_grey','empty','dot3'])}
     monkeypatch.setattr(leaderboard_display,'custom_emoji',logos.get)
     rows=[PredictionStats(1,4,5,6,4,4),PredictionStats(2,2,5,6,1,1)]
     start=datetime(2026,10,23,tzinfo=UTC)
@@ -76,7 +76,7 @@ def test_full_swiss_history_skips_custom_rank_arrows_and_trophy_slots(monkeypatc
     text=embed.description.replace("\u00a0", "")
     assert '`Winner`<:arrow_up_blue:100> 🔥\n## 4/5 (80%)' in text
     assert '`Other`<:arrow_down_grey:101>\n## 2/5 (40%)' in text
-    assert '❌ <:dootpinkline:102> ✅ ✅ ✅' in text
+    assert '❌ <:empty:102> ✅ ✅ ✅' in text
     assert '\n🏆' in text and '<:dot3:103>' not in text and '⚪' not in text
     assert 'Current streak:' not in text and 'Best streak:' not in text and 'Oldest' not in text
 

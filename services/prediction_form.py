@@ -18,7 +18,7 @@ FORM_HEADING = ('## __Last 5 picks__\n'
 
 
 def form_heading():
-    return FORM_HEADING.replace('➖', str(custom_emoji('dootpinkline') or '➖'))
+    return FORM_HEADING.replace('➖', str(custom_emoji('empty') or '➖'))
 
 
 def aligned_name_fields(names, *, prefix='@', max_length=64):
