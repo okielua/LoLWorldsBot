@@ -490,6 +490,10 @@ def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeyp
     assert namespace["bot"].tree.get_command("pickems").description == "Open the server's official Riot Pick'ems leaderboard."
     assert namespace["bot"].tree.get_command("leaderboard").guild_only is True
     assert namespace["bot"].tree.get_command("vote").guild_only is True
+    stats_command = namespace["bot"].tree.get_command("stats")
+    stats_option, = stats_command.parameters
+    assert stats_command.guild_only and stats_option.name == 'name' and stats_option.required
+    assert stats_option.type == discord.AppCommandOptionType.user
     for retired in ("changevote", "myvotes", "currentvotes", "dailyvote", "myvotestats", "whovoted"):
         assert namespace["bot"].tree.get_command(retired) is None
     player_option, = namespace["bot"].tree.get_command("player").parameters
@@ -542,7 +546,7 @@ def test_schedule_registers_a_required_dropdown_without_starting_discord(monkeyp
                 parameter, = item.parameters
                 assert parameter.name == "name" and not parameter.required and parameter.autocomplete
                 assert "`/votehistory [name]`" in text
-            elif item.name in {"schedule", "team", "player", "winrate"}:
+            elif item.name in {"schedule", "team", "player", "winrate", "stats"}:
                 parameter, = item.parameters
                 assert parameter.required
                 assert f"`/{item.name} <" in text

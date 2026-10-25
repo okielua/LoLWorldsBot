@@ -128,7 +128,9 @@ def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous
     rows = snapshot.rows if rows is None else rows
     ranks = competition_ranks(rows)
     row = next((row for row in rows if row.user_id == user_id), None)
-    title = f"My Worlds Stats · {safe_name(display_name)}"
+    name = safe_name(display_name)
+    owner = f"{name}’s"
+    title = f"Worlds 2026 Voting Stats · {name}"
     if row is None:
         row = PredictionStats(user_id, 0, 0, snapshot.eligible, 0, 0)
     rank = ranks.get(user_id)
@@ -152,11 +154,11 @@ def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous
     tier_text = f"{custom_emoji(tier) or ':' + tier + ':'} {tier_name}" if tier else UNAVAILABLE
     body = (
         "-# (All stats cover completed series across Worlds, including Play-Ins.)\n\n"
-        f"### My current rank: {aggregate_token(standing, rank_scope) if rank else standing}\n"
-        f"### My League rank: {aggregate_token(tier_text, rank_scope) if rank else tier_text}\n"
-        f"### My correct predictions: {value(f'{row.correct}/{row.submitted}')} ({value(accuracy_text(row))})\n"
-        f"### My current streak: {streak_text(row.current_streak)}\n"
-        f"### My best streak: {streak_text(row.longest_streak)}"
+        f"### {owner} current rank: {aggregate_token(standing, rank_scope) if rank else standing}\n"
+        f"### {owner} League rank: {aggregate_token(tier_text, rank_scope) if rank else tier_text}\n"
+        f"### {owner} correct predictions: {value(f'{row.correct}/{row.submitted}')} ({value(accuracy_text(row))})\n"
+        f"### {owner} current streak: {streak_text(row.current_streak)}\n"
+        f"### {owner} best streak: {streak_text(row.longest_streak)}"
     )
     advanced = snapshot.advanced.get(user_id, AdvancedPredictionStats())
 
@@ -180,16 +182,16 @@ def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous
 
     body += (
         section("PeyzPal", "Check Your PayPal")
-        + "-# The team whose series I predict most accurately, whether I vote for or against them. Requires at least 3 scored predictions involving that team.\n\n"
+        + f"-# The team whose series {name} predicts most accurately, whether {name} votes for or against them. Requires at least 3 scored predictions involving that team.\n\n"
         f"{team_read(advanced.best_read)}"
         + section("PepeKMS", "Can’t Read These Frauds")
-        + "-# The team whose series I predict least accurately, whether I vote for or against them. Requires at least 3 scored predictions involving that team.\n\n"
+        + f"-# The team whose series {name} predicts least accurately, whether {name} votes for or against them. Requires at least 3 scored predictions involving that team.\n\n"
         f"{team_read(advanced.hardest)}"
         + section("Copium", "Hopium Supplier")
-        + "-# The team I backed to win most often when they actually lost. Only completed series count.\n\n"
+        + f"-# The team {name} backed to win most often when they actually lost. Only completed series count.\n\n"
         f"{backing_text}"
         + section("Discheesed", "Democracy Was a Mistake")
-        + "-# How often I predict correctly when fewer than half the voters on Communism back my chosen team. Evenly split votes don’t count.\n\n"
+        + f"-# How often {name} predicts correctly when fewer than half the voters on Communism back {owner} chosen team. Evenly split votes don’t count.\n\n"
         f"{minority}"
     )
     return discord.Embed(title=title, description=format_footnotes(body), colour=ACCENT)

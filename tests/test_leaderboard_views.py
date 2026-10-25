@@ -76,7 +76,7 @@ def test_playin_votes_count_in_leaderboard_and_personal_stats_with_result_protec
         rendered = render_payload({"components": reply["view"].to_components()})
         text = "\n".join(child["content"] for card in rendered["components"] for child in card["components"]
                          if child.get("type") == 10)
-        assert "### My correct predictions: ||1/1|| (||100%||)" in text
+        assert "### lua’s correct predictions: ||1/1|| (||100%||)" in text
         assert "__Check Your PayPal__" in text
         assert text.count("Not enough data") == 4
         assert 'including Play-Ins' in text
@@ -92,22 +92,22 @@ def test_button_and_stats_command_return_identical_private_clicker_stats(stats_d
         await button.callback(caller)
         clicked = caller.followup.send.call_args.kwargs
         rendered = rendered_payload(clicked)
-        assert rendered.title == "__My Worlds Stats · Other user__"
-        assert "### My correct predictions: 0/1 (0%)" in rendered.description
-        assert "### My correct predictions: 0/1 (0%)" in rendered.description
+        assert rendered.title == "__Worlds 2026 Voting Stats · Other user__"
+        assert "### Other user’s correct predictions: 0/1 (0%)" in rendered.description
+        assert "### Other user’s correct predictions: 0/1 (0%)" in rendered.description
         assert "Pending votes" not in rendered.description
         assert all(label in rendered.description for label in ("## :PeyzPal: __Check Your PayPal__", "## :PepeKMS: __Can’t Read These Frauds__", "## :Copium: __Hopium Supplier__", "## :Discheesed: __Democracy Was a Mistake__"))
         first_text = next(item.content for item in clicked["view"].walk_children() if isinstance(item, discord.ui.TextDisplay))
-        assert first_text.startswith("# __My Worlds Stats · Other user__\n")
+        assert first_text.startswith("# __Worlds 2026 Voting Stats · Other user__\n")
         caller.response.defer.assert_awaited_once_with(ephemeral=True)
         assert clicked["ephemeral"] is True
         assert clicked["allowed_mentions"].to_dict() == {"parse": []}
         command_caller = interaction_for(data, 8)
-        await load_command("stats", data)(command_caller)
+        await load_command("stats", data, discord=discord)(command_caller, command_caller.user)
         assert rendered_payload(command_caller.followup.send.call_args.kwargs) == rendered
         owner = interaction_for(data, 7)
         await button.callback(owner)
-        assert "### My correct predictions: 1/1 (100%)" in rendered_payload(owner.followup.send.call_args.kwargs).description
+        assert "### lua’s correct predictions: 1/1 (100%)" in rendered_payload(owner.followup.send.call_args.kwargs).description
     asyncio.run(scenario())
 
 
@@ -186,5 +186,37 @@ def test_leaderboard_contains_persistent_trophycase_button():
         assert str(button.emoji) == '🏆' and button.custom_id == 'worldstrophies:123:worlds-2026'
         restored = await TrophyCaseButton.from_custom_id(None, button, {'guild':'123','tournament':'worlds-2026'})
         assert restored.guild_id == 123
+        payload['view'].stop()
+    asyncio.run(scenario())
+
+
+def test_stats_command_can_privately_view_another_member(stats_data):
+    from test_bot_commands import load_command
+    async def scenario():
+        caller = interaction_for(stats_data, 8)
+        target = interaction_for(stats_data, 7).user
+        await load_command('stats', stats_data, discord=discord)(caller, target)
+        payload = caller.followup.send.call_args.kwargs
+        rendered = rendered_payload(payload)
+        assert rendered.title == '__Worlds 2026 Voting Stats · lua__'
+        assert '### lua’s correct predictions: 1/1 (100%)' in rendered.description
+        assert 'Other user’s' not in rendered.description and '### My ' not in rendered.description
+        assert 'whether lua votes for or against them' in rendered.description
+        assert payload['ephemeral'] is True and payload['allowed_mentions'].to_dict() == {'parse': []}
+        payload['view'].stop()
+    asyncio.run(scenario())
+
+
+def test_stats_command_handles_a_member_with_no_votes(stats_data):
+    from test_bot_commands import load_command
+    async def scenario():
+        caller = interaction_for(stats_data, 8)
+        target = SimpleNamespace(id=99, display_name='New member')
+        await load_command('stats', stats_data, discord=discord)(caller, target)
+        payload = caller.followup.send.call_args.kwargs
+        text = rendered_payload(payload).description
+        assert 'New member’s correct predictions: 0/0 (—)' in text
+        assert 'New member’s League rank: —' in text
+        assert payload['ephemeral'] is True
         payload['view'].stop()
     asyncio.run(scenario())
