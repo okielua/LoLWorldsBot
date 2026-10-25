@@ -10,6 +10,16 @@ from services.prediction_stats import competition_ranks, get_competition_snapsho
 from services.presentation import message_payload, embed_card_payload
 from services.setup_gate import require_setup, SetupRequiredView
 from services.trophycase import TrophyCaseButton
+from services.prediction_tiers import TIERS
+from services.team_emojis import custom_emoji
+
+
+TIER_BADGE_IDS = {
+    'challenger': 1563990056312635454,
+    'diamond': 1563989985252741120,
+    'gold': 1563989937349459968,
+    'iron': 1563989868458016819,
+}
 
 
 @dataclass(frozen=True)
@@ -86,6 +96,18 @@ class MyStatsButton(discord.ui.DynamicItem[discord.ui.Button],
 class LeaderboardView(SetupRequiredView):
     footnote_divider = True
     section_heading_pattern = r'(?m)^# (?:<a?:\w+:\d+>|:(?:challenger|diamond|gold|iron):)$'
+
+    @property
+    def section_media(self):
+        media = {}
+        for key, name, _ in TIERS:
+            emoji = custom_emoji(key)
+            emoji_id = emoji.id if emoji else TIER_BADGE_IDS[key]
+            extension = 'gif' if emoji and emoji.animated else 'png'
+            heading = f"# {emoji or ':' + key + ':'}"
+            media[heading] = (f'https://cdn.discordapp.com/emojis/{emoji_id}.{extension}?size=128',
+                              f'{name} prediction tier')
+        return media
 
     def __init__(self, pages, guild_id, tournament_id):
         super().__init__(timeout=900)

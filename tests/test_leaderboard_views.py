@@ -148,7 +148,10 @@ def test_normal_weight_card_keeps_my_stats_button_and_pagination(stats_data):
         click = interaction_for(stats_data, 8)
         await view.next_page.callback(click)
         assert view.page == 1
-        assert view.pages[1].description in rendered_payload(click.response.edit_message.call_args.kwargs).description
+        rendered_page = rendered_payload(click.response.edit_message.call_args.kwargs).description
+        assert all(line.strip() in rendered_page for line in view.pages[1].description.splitlines()
+                   if line.strip() and not line.startswith("# "))
+        assert any(isinstance(item, discord.ui.MediaGallery) for item in click.response.edit_message.call_args.kwargs["view"].walk_children())
         assert click.response.edit_message.call_args.kwargs["embeds"] == []
         assert "embed" not in click.response.edit_message.call_args.kwargs
         assert len([item for item in click.response.edit_message.call_args.kwargs["view"].walk_children() if isinstance(item, MyStatsButton)]) == 1
@@ -232,12 +235,49 @@ def test_leaderboard_uses_native_dividers_between_tiers_not_players():
         card, = payload['view'].children
         texts = [i.content for i in card.children if isinstance(i, discord.ui.TextDisplay)]
         dividers = [i for i in card.children if isinstance(i, discord.ui.Separator)]
-        assert len(texts) == 5 and len(dividers) == 4
-        assert texts[4].startswith("-# ") and "League ranks:" in texts[4]
-        assert "-# " not in texts[3]
+        assert len(texts) == 6 and len(dividers) == 4
+        assert texts[5].startswith("-# ") and "League ranks:" in texts[5]
+        assert "-# " not in texts[4]
         assert all(i.visible and i.spacing == discord.SeparatorSpacing.large for i in dividers)
-        assert '# :challenger:' in texts[0] and '# :diamond:' in texts[1] and '# :gold:' in texts[2] and '# :iron:' in texts[3]
-        assert 'Player1' in texts[1] and 'Player2' in texts[1]
+        galleries = [i for i in card.children if isinstance(i, discord.ui.MediaGallery)]
+        assert len(galleries) == 4
+        assert [i.items[0].description for i in galleries] == ['Challenger prediction tier', 'Diamond prediction tier', 'Gold prediction tier', 'Iron prediction tier']
+        assert 'Player1' in texts[2] and 'Player2' in texts[2]
         assert payload['view'].total_children_count <= 40
         payload['view'].stop()
+    asyncio.run(scenario())
+
+
+def test_tier_badges_render_as_images_with_dividers_controls_and_pagination(monkeypatch):
+    from services import leaderboard_display, leaderboard_views
+    from services.prediction_stats import PredictionStats
+    from services.prediction_tiers import TIERS
+    from services.presentation import embed_card_payload
+    emojis = {key: discord.PartialEmoji(name=key, id=100+i) for i, (key, _, _) in enumerate(TIERS)}
+    monkeypatch.setattr(leaderboard_display, 'custom_emoji', emojis.get)
+    monkeypatch.setattr(leaderboard_views, 'custom_emoji', emojis.get)
+    async def scenario():
+        entries = [(PredictionStats(i, 7-i, 10, 10, 0, 0), f'Player{i}') for i in range(7)]
+        payload = leaderboard_payload(entries, 123, 'worlds-2026')
+        card, = payload['view'].children
+        galleries = [i for i in card.children if isinstance(i, discord.ui.MediaGallery)]
+        assert len(galleries) == 4
+        assert [i.items[0].description for i in galleries] == [f'{name} prediction tier' for _, name, _ in TIERS]
+        assert all('size=128' in i.items[0].media.url for i in galleries)
+        assert all(not i.items[0].spoiler for i in galleries)
+        assert len([i for i in card.children if isinstance(i, discord.ui.Separator) and i.visible]) == 4
+        texts = '\n'.join(i.content for i in card.children if isinstance(i, discord.ui.TextDisplay))
+        assert '# <:challenger:' not in texts and 'Player0' in texts and 'Player6' in texts
+        assert payload['view'].total_children_count <= 40
+        assert 'Trophy Case' in str(payload['view'].to_components())
+        payload['view'].stop()
+        large = [(PredictionStats(i, 40-i, 40, 40, 0, 0), f'Player{i}' + 'x'*60) for i in range(30)]
+        pages = leaderboard_display.leaderboard_embeds(large, preview=True)
+        assert len(pages) > 1
+        for page in pages:
+            controls = leaderboard_views.LeaderboardView(pages, 123, 'worlds-2026')
+            view = embed_card_payload(page, controls=controls)['view']
+            assert any(isinstance(i, discord.ui.MediaGallery) for i in view.walk_children())
+            assert view.total_children_count <= 40
+            view.stop()
     asyncio.run(scenario())

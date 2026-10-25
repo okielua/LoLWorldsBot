@@ -34,8 +34,25 @@ class SpacedContainer(discord.ui.Container):
         return super().add_item(item)
 
 
-def add_match_sections(card, text, *, heading_pattern=None, footnote_divider=False):
+def add_match_sections(card, text, *, heading_pattern=None, footnote_divider=False, section_media=None):
     """Native dividers between configured sections or matchups."""
+    def add_section(content):
+        for heading, (url, description) in (section_media or {}).items():
+            match = re.search(r'(?m)^' + re.escape(heading) + r'$', content)
+            if match:
+                before, after = content[:match.start()].strip(), content[match.end():].strip()
+                if before:
+                    card.add_item(team_display(before))
+                card.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(
+                    media=url, description=description)))
+                if after:
+                    card.add_item(team_display(after))
+                return
+        display = team_display(content)
+        if footnote_divider and content.startswith('-# '):
+            display.content = display.content.removeprefix(MATCH_GAP)
+        card.add_item(display)
+
     headings = list(re.finditer(heading_pattern or r'(?m)^#{2,3} [^\n]+ vs [^\n]+$', text))
     boundaries = []
     for heading in headings[1:]:
@@ -51,14 +68,10 @@ def add_match_sections(card, text, *, heading_pattern=None, footnote_divider=Fal
     boundaries = sorted(set(boundaries))
     cursor = 0
     for boundary in boundaries:
-        card.add_item(team_display(text[cursor:boundary].strip()))
+        add_section(text[cursor:boundary].strip())
         card.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.large))
         cursor = boundary
-    tail = text[cursor:].strip()
-    display = team_display(tail)
-    if footnote_divider and tail.startswith('-# '):
-        display.content = display.content.removeprefix(MATCH_GAP)
-    card.add_item(display)
+    add_section(text[cursor:].strip())
 
 
 class MessageCard(discord.ui.LayoutView):
@@ -100,13 +113,16 @@ class MessageCard(discord.ui.LayoutView):
                 after_first_row = paragraphs[split_after]
         section_pattern = getattr(controls, "section_heading_pattern", None)
         footnote_divider = getattr(controls, "footnote_divider", False)
-        add_match_sections(card, text, heading_pattern=section_pattern, footnote_divider=footnote_divider)
+        section_media = getattr(controls, "section_media", None)
+        add_match_sections(card, text, heading_pattern=section_pattern, footnote_divider=footnote_divider,
+                           section_media=section_media)
         if controls:
             items = {item.custom_id: item for item in controls.children}
             for index, row in enumerate(controls.to_components()):
                 card.add_item(discord.ui.ActionRow(*(items[item["custom_id"]] for item in row["components"])))
                 if index == 0 and after_first_row:
-                    add_match_sections(card, after_first_row, heading_pattern=section_pattern, footnote_divider=footnote_divider)
+                    add_match_sections(card, after_first_row, heading_pattern=section_pattern,
+                                       footnote_divider=footnote_divider, section_media=section_media)
         self.add_item(card)
 
     async def interaction_check(self, interaction):
