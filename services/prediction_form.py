@@ -10,10 +10,10 @@ from services.prediction_stats import get_competition_snapshot
 from services.spoilers import render_text
 
 
-FORM_HEADING = ('### __Last 5 picks__\n'
+FORM_HEADING = ('## __Last 5 picks__\n'
                 '-# Oldest → newest\n'
-                '-# ✅ Correct · ❌ Wrong\n'
-                "-# · 🔥 Current streak of 3+ (skipped matches don't break streaks)")
+                '-# ✅ Correct · ❌ Wrong · ➖ Skipped\n'
+                "-# 🔥 Ongoing streak of 3+ (skipped matches don't break streaks)")
 
 
 def aligned_name_fields(names):
