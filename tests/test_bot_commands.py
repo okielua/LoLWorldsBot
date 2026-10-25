@@ -706,8 +706,8 @@ def test_prediction_leaderboard_shows_tied_ranks_without_exposing_vote_counts():
     assert "2/3 (66.7%)" in text
     assert 'Current streak:' not in text and 'Best streak:' not in text
     assert rendered_message(send.call_args).title == "__Communism Worlds Leaderboard__"
-    assert send.call_args.kwargs["ephemeral"] is True
-    interaction.response.defer.assert_awaited_once_with(ephemeral=True)
+    assert send.call_args.kwargs["ephemeral"] is False
+    interaction.response.defer.assert_awaited_once_with(ephemeral=False)
     assert send.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
 
 
@@ -1281,10 +1281,10 @@ def test_leaderboard_adds_fire_only_to_streaks_of_three_or_more():
     assert "points" not in text
 
 
-def test_trophycase_command_is_private_for_testing():
+def test_trophycase_command_is_public():
     data = load_tournament_data(PROJECT_ROOT / 'data' / 'worlds_2026.json')
     show = AsyncMock()
     caller = SimpleNamespace(guild_id=123)
     callback = load_command('trophycase', data, show_trophycase=show)
     asyncio.run(callback(caller))
-    show.assert_awaited_once_with(caller, 123, data.tournament.id, data=data, ephemeral=True)
+    show.assert_awaited_once_with(caller, 123, data.tournament.id, data=data, ephemeral=False)

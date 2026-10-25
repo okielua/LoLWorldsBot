@@ -1601,16 +1601,16 @@ async def mvp(interaction: discord.Interaction):
 @bot.tree.command(name="trophycase", description="See every voter's Worlds 2026 MVP trophy collection.")
 @app_commands.guild_only()
 async def trophycase(interaction: discord.Interaction):
-    await show_trophycase(interaction, interaction.guild_id, worlds.tournament.id, data=worlds, ephemeral=True)
+    await show_trophycase(interaction, interaction.guild_id, worlds.tournament.id, data=worlds, ephemeral=False)
 
 
 @bot.tree.command(name="leaderboard", description="See Communism's Worlds prediction standings.")
 @app_commands.guild_only()
 async def leaderboard(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
+    await interaction.response.defer(ephemeral=False)
     context, entries, previous = await leaderboard_context(interaction, worlds.tournament.id, data=worlds)
     payload = leaderboard_payload(entries, interaction.guild_id, worlds.tournament.id, previous=previous, context=context)
-    await interaction.followup.send(**payload, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+    await interaction.followup.send(**payload, ephemeral=False, allowed_mentions=discord.AllowedMentions.none())
 
 
 @bot.tree.command(name="stats", description="Privately view a member's Worlds 2026 voting stats.")
@@ -1648,7 +1648,7 @@ Choose your timezone, time format, teams, and Worlds role and match reminder pre
 Open your private voting panel. Vote or change a pick; your selected team is marked green with ✓.
 Voter names appear publicly under each daily matchup, without pings. Picks stay private until voting closes.
 
-`/votehistory` — Privately view the latest completed series’ voting results, even if the automatic post is missing. No pings.
+`/votehistory` — View the latest completed series’ voting results, even if the automatic post is missing. No pings.
 `/votehistory [name]` (e.g. `/votehistory @apodso`)
 Choose a server member from the suggestions to view their past predictions and stats. Choose yourself for your own history and the My Stats button.
 
