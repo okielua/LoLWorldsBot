@@ -1,3 +1,4 @@
+from services.prediction_stats import prediction_icon
 """Compact leaderboard and personal statistics, sharing ranking and totals."""
 
 import discord
@@ -15,7 +16,7 @@ UNAVAILABLE = "\u2014"  # Approved for unavailable rank and accuracy.
 LEADERBOARD_HELP = format_footnotes(
     "-# · Points: correct picks through Swiss (including Play-Ins) earn 1; knockout scores earn 3/2/1 for the correct winner, 0 otherwise.\n"
     "-# · Overall ties are broken by correct winners. Through-Swiss fractions count submitted, scored predictions.\n"
-    "-# · ✅ Correct · ❌ Wrong · ➖ Skipped\n"
+    "-# · 🎯 Exact knockout score · ✅ Correct winner · ❌ Wrong · ➖ Skipped\n"
     "-# · 🔥 Ongoing streak of 3+ (skipped matches don't break streaks)\n"
     "-# · 🏆 Earned MVP trophies\n"
     "-# · League ranks: first place is always Challenger. Remaining places are based on the merged LoL rank distribution:"
@@ -93,8 +94,8 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
                  + ((' ' if movement == 'New' else '') + movement if movement else '') + streak_icon + '\n'
                  + f'## {row.total_points} points\n' + points_summary(row) + '\n')
         if history is not None:
-            choices = {pick.match_id:pick.chosen==pick.winner_id for pick in history.recent.get(row.user_id,[])}
-            icons = [('✅' if choices[mid] else '❌') if mid in choices else '➖'
+            choices = {pick.match_id:prediction_icon(pick) for pick in history.recent.get(row.user_id,[])}
+            icons = [choices.get(mid, '➖')
                      for mid in history.result_match_ids or ()]
         elif preview:
             tail = min(row.current_streak,row.correct)

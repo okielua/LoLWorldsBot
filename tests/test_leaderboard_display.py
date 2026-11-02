@@ -30,7 +30,7 @@ def test_sample_leaderboard_matches_compact_specification():
     assert 'Full collection' not in text and '12 trophies' not in text
     assert '**__Last 10 picks:__**' in text and '**__Trophies:__**\n🏆 (Swiss day 1)\n🏆 (Swiss day 2)' in text
     assert all("**" not in re.sub(r"\*\*\d+(?:\.\d+)?% correct\*\*", "", line) for line in text.splitlines() if line.startswith("-#"))
-    assert '-# *· ✅ Correct · ❌ Wrong · ➖ Skipped*' in text
+    assert '-# *· 🎯 Exact knockout score · ✅ Correct winner · ❌ Wrong · ➖ Skipped*' in text
     assert "skipped matches don't break streaks" in text
 
 
@@ -44,7 +44,7 @@ def test_preview_has_no_actual_mentions_and_every_chunk_is_bounded():
         text = embed.description.replace("\u00a0", "")
         assert embed.title == "TEST: Communism Worlds Leaderboard"
         assert "<@123456789012345678>" not in text and "@everyone" not in text
-        assert '-# *· ✅ Correct' in text and 'Ongoing streak of 3+' in text
+        assert '-# *· 🎯 Exact knockout score · ✅ Correct winner' in text and 'Ongoing streak of 3+' in text
 
 
 def test_shared_first_place_and_zero_scores_do_not_gain_a_gap_or_fake_movement():

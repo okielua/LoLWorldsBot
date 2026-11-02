@@ -6,14 +6,14 @@ import unicodedata
 
 import discord
 
-from services.prediction_stats import get_competition_snapshot
+from services.prediction_stats import get_competition_snapshot, prediction_icon
 from services.spoilers import render_text
 from services.team_emojis import custom_emoji
 
 
 FORM_HEADING = ('## __Last 5 picks__\n'
                 '-# Oldest → newest\n'
-                '-# ✅ Correct · ❌ Wrong · ➖ Skipped\n'
+                '-# 🎯 Exact knockout score · ✅ Correct winner · ❌ Wrong · ➖ Skipped\n'
                 "-# 🔥 Ongoing streak of 3+ (skipped matches don't break streaks)")
 
 
@@ -46,7 +46,7 @@ def form_rows(snapshot, participants):
         row = stats.get(user_id)
         if not recent or row is None:
             continue
-        icons = ' '.join('✅' if pick.chosen == pick.winner_id else '❌' for pick in reversed(recent))
+        icons = ' '.join(prediction_icon(pick) for pick in reversed(recent))
         fire = ' 🔥' if row.current_streak >= 3 else ''
         lines.append(f'{names[user_id]} · {icons} · Current streak: **{row.current_streak}**{fire}')
     return lines

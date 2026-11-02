@@ -51,6 +51,7 @@ class Prediction:
     start_time: datetime
     chosen: str
     winner_id: str | None
+    exact_score: bool = False
 
 
 @dataclass(frozen=True)
@@ -249,7 +250,16 @@ def get_competition_snapshot(guild_id, tournament_id, *, match_day=None, data=No
             continue
         score_picks[(user_id, match_id)] = predicted_score
         by_user.setdefault(user_id, {})[match_id] = chosen
-        recent.setdefault(user_id, []).append(Prediction(match_id, first, second, start, chosen, match[4]))
+        source = data.matches_by_id.get(match_id) if data else None
+        fmt = formats.get(match_id)
+        from services.knockout import is_knockout
+        knockout = is_knockout(source) if source else bool(fmt and fmt[1] == 5 and
+            any(stage in fmt[0].lower() for stage in ('quarterfinal', 'semifinal', 'final')))
+        scores = (source.team1_score, source.team2_score) if source else fmt[2:4] if fmt else ()
+        exact = bool(knockout and chosen == match[4] and predicted_score is not None
+                     and len(scores) == 2 and all(score is not None for score in scores)
+                     and predicted_score == min(scores))
+        recent.setdefault(user_id, []).append(Prediction(match_id, first, second, start, chosen, match[4], exact))
 
     def calculate(matches):
         result = []
@@ -332,3 +342,9 @@ def get_voter_display_names(guild_id, tournament_id):
             WHERE polls.guild_id = ? AND polls.tournament_id = ? ORDER BY votes.updated_at
         """, (guild_id, tournament_id)).fetchall()
     return {user_id: name or f"User {user_id}" for user_id, name in rows}
+
+
+def prediction_icon(pick):
+    if pick.chosen != pick.winner_id:
+        return '❌'
+    return '🎯' if getattr(pick, 'exact_score', False) else '✅'

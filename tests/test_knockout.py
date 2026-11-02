@@ -78,6 +78,10 @@ def test_score_votes_change_persist_and_cutoff_then_score_without_source(context
         assert [(r.user_id,r.total_points,r.pre_knockout_submitted) for r in snapshot.rows]==[(7,3,0),(8,2,0),(9,0,0)]
         assert get_competition_snapshot(123,store.data.tournament.id).rows==snapshot.rows
         assert competition_ranks(snapshot.rows)=={7:1,8:2,9:3}
+        from services.prediction_stats import prediction_icon
+        assert [prediction_icon(snapshot.recent[uid][0]) for uid in (7,8,9)] == ['🎯','✅','❌']
+        assert [r.current_streak for r in snapshot.rows] == [1,1,0]
+
         from services.series_results import result_pages
         text='\n'.join(result_pages(finished,polls.get_poll_results(123,match.id),score_predictions=polls.get_score_predictions(123,match.id)))
         assert '3–1 · 3 points' in text and '3–2 · 2 points' in text and '@Exact' in text
