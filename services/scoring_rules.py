@@ -2,35 +2,52 @@
 import discord
 from services.presentation import message_payload
 
-RULES = """# __Worlds 2026 Voting Rules__
+RULES = """# 🏆 Worlds 2026 Voting Rules
 
-## Before knockouts
-**Correct predictions through Swiss** (including Play-Ins) earn **1 point each**. Wrong or skipped picks earn **0**. These points carry into the overall leaderboard.
+## Play-Ins → End of Swiss
+**1 point** per correct winner
 
-## Knockout Bo5 predictions
-Choose either team to win **3–0, 3–1 or 3–2**.
-• **3 points:** correct winner and exact score.
-• **2 points:** correct winner, losing team's score off by one game.
-• **1 point:** correct winner, losing team's score off by two games.
-• **0 points:** wrong winner or no vote.
+- **Play-Ins: 1 point available** (the bot started late)
+- **Swiss: 33 points available**
+- **Total: 34 points available**
 
-**Example:** you pick KC 3–0. KC wins 3–0 → **3 points**; 3–1 → **2**; 3–2 → **1**. If KC loses → **0**.
-Older winner-only knockout votes earn **1 point** for the correct winner; no exact score is assumed.
+## Quarterfinals, Semifinals & Final (Bo5)
+Voting on the **winner as well as exact Bo5 score**:
 
-## Voting and standings
-You can change your pick until **5 minutes before the scheduled series start**. Only your latest saved pick counts.
-**Total points = points through Swiss + knockout prediction points.**
-Standings sort by **total points**, then **correct winners**. Remaining ties share a rank.
-The fraction and percentage use **submitted, scored predictions**; skipped matches are excluded from that denominator.
+- 🎯 Predicting the **exact Bo5 outcome:** **3 points**
+- ✅ Predicting the **correct winner, 1 game off:** **2 points**
+- ✅ Predicting the **correct winner, 2 games off:** **1 point**
+- ❌ Predicting the **wrong winner or skipping:** **0 points**
 
-## Recent picks and streaks
-✅ Correct winner · ❌ Wrong winner · ➖ Skipped.
-These track the **winner**, not whether the exact score was right. Skipped matches do not break streaks; 🔥 marks an ongoing streak of **3+**.
+**Points available:**
 
-## Trophies
-**12 trophies:** 8 Swiss matchdays, quarterfinals, semifinals, final and the overall Worlds winner.
-Swiss matchday trophies use correct predictions, then percentage, within that matchday.
-Knockout stage trophies use that stage's points, then correct winners. The overall trophy uses the overall standings. Tied winners share the trophy; a period with no correct predictions awards none.
+- **Quarterfinals: 12 points (4 matches)**
+- **Semifinals: 6 points (2 matches)**
+- **Final: 3 points (1 match)**
+- **Total: 21 points (7 matches)**
+
+### 🥇 Total points & how to win
+
+- **55 points available overall** (34 points from Play-Ins and Swiss + 21 points from knockouts).
+- All your points count towards the **overall leaderboard**.
+- The player with the **most points wins the overall Worlds 2026 trophy**.
+- If points are tied, **the most correct winners predicted** decides. If still tied, players **share the win**.
+
+### 🏆 Trophies
+
+**12 trophies to win:**
+
+- **8 Swiss matchday trophies** (most correct winners predicted that day; ties decided by percentage)
+- **1 Quarterfinals trophy** (most points across all 4 matches)
+- **1 Semifinals trophy** (most points across both matches)
+- **1 Final trophy** (most points in the final)
+- **1 Overall Worlds 2026 trophy** (highest total prediction points across Play-Ins, Swiss and knockouts; previous trophy wins don’t count towards it)
+
+For knockout and overall trophies, tied points are decided by **correct winners predicted**. If still tied, players **share the trophy**. Swiss ties remaining after percentage also share the trophy.
+**Trophies don’t add points to the leaderboard.** No trophy is awarded for a period with no correct predictions.
+
+### 🔒 Voting closes 5 minutes before the scheduled series start
+To change your prediction, **click another prediction button on the voting post** or use **`/vote`**. Your latest saved choice counts.
 """
 
 async def show_rules(interaction, *, ephemeral=False):
