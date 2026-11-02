@@ -473,6 +473,9 @@ class DailyPredictionsView(SetupRequiredLayoutView):
                 + f"## {stage_label} Rule Changes\n\n" + introduction)
         if not compact:
             card.add_item(header)
+            if knockout_board:
+                card.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.large))
+                card.add_item(discord.ui.TextDisplay("## Cast Your Vote"))
         match_texts = []
         for match_index, match in enumerate(matches):
             poll = poll_by_id.get(match.id)
