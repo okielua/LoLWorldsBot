@@ -1,3 +1,4 @@
+from services.scoring_rules import RulesButton, show_rules
 """Aligned trophy collections for every member who has cast a vote."""
 
 import asyncio
@@ -64,8 +65,16 @@ async def show_trophycase(interaction, guild_id, tournament_id, *, data=None, ep
             names[uid] = member.display_name
     cases, slots = await asyncio.to_thread(trophy_cases, guild_id, data)
     pages = trophycase_pages(names, cases, slots)
-    await interaction.followup.send(**message_payload(pages[0], controls=HistoryPages(pages)),
+    await interaction.followup.send(**message_payload(pages[0], controls=TrophyCasePages(pages)),
                                     ephemeral=ephemeral, allowed_mentions=discord.AllowedMentions.none())
+
+
+class TrophyCasePages(HistoryPages):
+    def __init__(self, pages):
+        super().__init__(pages)
+        rules = RulesButton()
+        rules.row = 1 if len(pages) > 1 else 0
+        self.add_item(rules)
 
 
 class TrophyCaseButton(discord.ui.DynamicItem[discord.ui.Button],

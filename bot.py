@@ -1,3 +1,4 @@
+from services.scoring_rules import RulesButton, show_rules
 import logging
 import asyncio
 import os
@@ -425,7 +426,7 @@ class WorldsBot(discord.Client):
         self.voting_manager = VotingManager(self, tournament_store, GUILD_ID)
         self.add_dynamic_items(ScheduleVoteButton, LegacyDailyVoteButton, ScoreVoteButton)
         self.add_dynamic_items(DailyPageButton)
-        self.add_dynamic_items(MyStatsButton, TrophyCaseButton)
+        self.add_dynamic_items(MyStatsButton, TrophyCaseButton, RulesButton)
         self.add_dynamic_items(OpenVotePanel, PublicVotersButton)
         self.server_delivery = ServerReminderDelivery(self, tournament_store, GUILD_ID, poll_manager=self.voting_manager)
         self.background_polling = BackgroundPolling(
@@ -1598,6 +1599,12 @@ async def myvotes(interaction: discord.Interaction):
         await interaction.followup.send(**embed_card_payload(embed), ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
 
+@bot.tree.command(name="rules", description="Learn how Worlds 2026 prediction points, rankings and trophies work.")
+@app_commands.guild_only()
+async def rules(interaction: discord.Interaction):
+    await show_rules(interaction)
+
+
 @bot.tree.command(name="trophycase", description="See every voter's Worlds 2026 MVP trophy collection.")
 @app_commands.guild_only()
 async def trophycase(interaction: discord.Interaction):
@@ -1659,6 +1666,9 @@ See Communism’s leaderboard for predictions made through this bot.
 
 `/stats <name>`
 View a member’s Worlds 2026 voting stats. Choose a server member from the name picker.
+
+`/rules`
+See prediction scoring, tie-breaks, streaks and trophy rules.
 
 `/trophycase`
 See every voter’s MVP trophies and remaining trophy slots.

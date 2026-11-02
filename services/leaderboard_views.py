@@ -1,3 +1,4 @@
+from services.scoring_rules import RulesButton, show_rules
 """Public leaderboard pages and the shared private /votehistory button handler."""
 
 import asyncio
@@ -119,6 +120,7 @@ class LeaderboardView(SetupRequiredView):
         self.pages, self.page, self.guild_id = pages, 0, guild_id
         self.add_item(MyStatsButton(guild_id, tournament_id))
         self.add_item(TrophyCaseButton(guild_id, tournament_id))
+        self.add_item(RulesButton())
         if len(pages) == 1:
             self.remove_item(self.previous)
             self.remove_item(self.next_page)

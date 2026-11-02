@@ -1,3 +1,4 @@
+from services.scoring_rules import RulesButton, show_rules
 """One private-prediction post per Worlds matchday, with five-minute cutoffs."""
 
 from services.knockout import is_knockout
@@ -234,7 +235,7 @@ class ScheduleVotesView(SetupRequiredLayoutView):
                 for buttons in vote_button_groups(manager, poll):
                     card.add_item(discord.ui.ActionRow(*buttons))
         if personal_panel and any(match.id in poll_by_id for match in self.matches):
-            card.add_item(discord.ui.ActionRow(OpenVotePanel(manager.guild_id, manager.store.data.tournament.id)))
+            card.add_item(discord.ui.ActionRow(OpenVotePanel(manager.guild_id, manager.store.data.tournament.id), RulesButton()))
         card.add_item(team_display(VOTE_CONFIRMATION_HELP))
 
 
@@ -552,7 +553,7 @@ class DailyPredictionsView(SetupRequiredLayoutView):
                 suffix += f"\n…and {len(names) - len(shown)} more (See All Voters)."
                 overflow = True
             text.content += suffix
-        if compact and overflow and self.total_children_count + 3 > 40:
+        if compact and overflow and self.total_children_count + 4 > 40:
             # Keep the complete voter list accessible when a busy board needs
             # a See All Voters control and therefore exceeds forty components.
             paged = DailyPredictionsView(manager, day, all_matches, poll_by_id, recap,
@@ -562,7 +563,20 @@ class DailyPredictionsView(SetupRequiredLayoutView):
             for item in paged.children:
                 self.add_item(item)
             return
+        rules_inline = compact and not overflow and self.total_children_count + 3 > 40
+        if rules_inline:
+            # Preserve an eight-game board within Discord's forty-component limit.
+            # Replace its final structural divider with a text divider, then put
+            # Rules beside the final matchup's vote buttons.
+            if self.total_children_count >= 40:
+                separator = next(item for item in reversed(card.children) if isinstance(item, discord.ui.Separator))
+                card.remove_item(separator)
+                match_texts[-1].content = "──────────────\n\n" + match_texts[-1].content
+            row = next(item for item in reversed(card.children) if isinstance(item, discord.ui.ActionRow))
+            row.add_item(RulesButton())
         buttons = [OpenVotePanel(manager.guild_id, data.tournament.id)]
+        if not rules_inline:
+            buttons.append(RulesButton())
         if overflow:
             buttons.append(PublicVotersButton(manager.guild_id, data.tournament.id))
         if self.total_children_count + len(buttons) + 1 <= 40:

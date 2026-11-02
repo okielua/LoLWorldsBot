@@ -1,3 +1,4 @@
+from services.scoring_rules import RulesButton, show_rules
 """Interactive, isolated knockout rehearsal available only in development."""
 import asyncio
 from dataclasses import replace
@@ -14,7 +15,7 @@ from services.series_results import result_pages
 from services.leaderboard_display import leaderboard_embeds
 from services.prediction_stats import get_competition_snapshot, get_voter_display_names
 from services.mvp import trophy_cases
-from services.trophycase import trophycase_pages
+from services.trophycase import trophycase_pages, TrophyCasePages
 from services.team_history import HistoryPages
 from services.runtime_config import development_enabled
 
@@ -34,7 +35,12 @@ class PreviewResults(HistoryPages):
     def __init__(self, pages, manager):
         super().__init__(pages)
         self.manager = manager
+        rules = RulesButton()
+        rules.row = 1 if len(pages) > 1 else 0
+        self.add_item(rules)
         for item in (self.stats, self.trophies):
+            if item not in self.children:
+                self.add_item(item)
             item.row = 1 if len(pages) > 1 else 0
 
     @discord.ui.button(label='My Advanced Stats', emoji='🔍', style=discord.ButtonStyle.secondary)
@@ -88,7 +94,7 @@ class FinishPreview(discord.ui.Select):
         for board in boards:
             await interaction.followup.send(**embed_card_payload(board), ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
         trophies = trophycase_pages(names, cases, slots)
-        await interaction.followup.send(**message_payload(trophies[0], controls=HistoryPages(trophies)), ephemeral=True,
+        await interaction.followup.send(**message_payload(trophies[0], controls=TrophyCasePages(trophies)), ephemeral=True,
                                         allowed_mentions=discord.AllowedMentions.none())
 
 

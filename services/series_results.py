@@ -1,3 +1,4 @@
+from services.scoring_rules import RulesButton, show_rules
 """Durable end-of-series voting announcements and latest-result lookup."""
 
 import asyncio
@@ -40,6 +41,9 @@ class ResultsPages(HistoryPages):
         stats.row = trophies.row = 1 if len(pages) > 1 else 0
         self.add_item(stats)
         self.add_item(trophies)
+        rules = RulesButton()
+        rules.row = stats.row
+        self.add_item(rules)
 
 
 def initialize():
