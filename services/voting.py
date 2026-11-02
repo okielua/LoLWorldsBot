@@ -1,5 +1,6 @@
 """One private-prediction post per Worlds matchday, with five-minute cutoffs."""
 
+from services.knockout import is_knockout
 from services.voting_rules import voting_deadline, swiss_batch, batch_help, voting_board_day, round_three_matches, round_three_publication_time
 from services.status_labels import upcoming_line
 
@@ -39,21 +40,22 @@ VOTING_WINDOW_TARGET = timedelta(hours=8)
 
 
 class VoteButton(discord.ui.Button):
-    def __init__(self, manager, poll, index):
+    def __init__(self, manager, poll, index, losing_games=None):
+        self.losing_games = losing_games
         self.manager, self.poll = manager, poll
         self.team_id = poll.team1_id if index == 1 else poll.team2_id
         super().__init__(
             label=self.team_label(), emoji=team_emoji(self.team_id), style=discord.ButtonStyle.primary, disabled=poll.closed,
-            custom_id=f"worldsprivatevote:{poll.guild_id}:{poll.match_id}:{index}",
+            custom_id=f"worldsprivatevote:{poll.guild_id}:{poll.match_id}:{index}" + (f":{losing_games}" if losing_games is not None else ""),
         )
 
     def team_label(self):
         # Simulated fixtures are separate from the live spoiler ledger. Their
         # announced participants are visible, so their controls must agree.
         if getattr(self.manager, "test_mode", False):
-            return team_token(self.team_id)
+            return team_token(self.team_id) + (f" 3–{self.losing_games}" if self.losing_games is not None else "")
         slot = 1 if self.team_id == self.poll.team1_id else 2
-        return team_token(self.team_id, self.poll.match_id, slot)
+        return team_token(self.team_id, self.poll.match_id, slot) + (f" 3–{self.losing_games}" if self.losing_games is not None else "")
 
     async def callback(self, interaction):
         if interaction.guild_id != self.poll.guild_id or self.poll.guild_id != self.manager.guild_id:
@@ -69,6 +71,7 @@ class VoteButton(discord.ui.Button):
             await self.manager.vote(
                 self.poll.match_id, interaction.user.id, self.team_id, interaction.user.display_name,
                 expected_pair=(self.poll.team1_id, self.poll.team2_id),
+                **({"predicted_loser_games": self.losing_games} if self.losing_games is not None else {}),
             )
             # Update the shared board before confirmations or announcements can
             # delay it. The saved vote must already be visible when we celebrate it.
@@ -96,6 +99,8 @@ class VoteButton(discord.ui.Button):
                 pairing = f"{team_token(match.team1_id)} vs {team_token(match.team2_id)}"
                 text = (f"Your prediction for {pairing} on {date} ({stage_name}):\n"
                         f"## {team_token(self.team_id)}")
+            if self.losing_games is not None:
+                text += f" 3–{self.losing_games}"
             saved = True
         except ValueError as error:
             text = str(error)
@@ -107,7 +112,7 @@ class VoteButton(discord.ui.Button):
             help_text = batch_help(VOTE_CONFIRMATION_HELP) if len(swiss_batch(self.manager.store.data, match)) > 1 else VOTE_CONFIRMATION_HELP
             embed.add_field(name="\u200b", value=help_text, inline=False)
             if isinstance(self.view, PersonalVotesView):
-                self.view.select_team(self.poll.match_id, self.team_id)
+                self.view.select_team(self.poll.match_id, self.team_id, self.losing_games)
                 if getattr(interaction, "message", None) is not None:
                     try:
                         await interaction.edit_original_response(view=self.view, allowed_mentions=discord.AllowedMentions.none())
@@ -122,10 +127,12 @@ class PersonalVoteView(SetupRequiredView):
     def __init__(self, manager, poll, user_id, selected_team=None):
         super().__init__(timeout=900)
         self.user_id = user_id
-        self.add_item(VoteButton(manager, poll, 1))
-        self.add_item(VoteButton(manager, poll, 2))
+        for row, buttons in enumerate(vote_button_groups(manager, poll, public=False)):
+            for button in buttons:
+                button.row = row
+                self.add_item(button)
         for button in self.children:
-            if button.team_id == selected_team:
+            if button.team_id == selected_team and button.losing_games == selected_score(manager, poll, user_id):
                 button.label = f"{button.team_label()} ✓"
                 button.style = discord.ButtonStyle.success
 
@@ -159,6 +166,40 @@ class ScheduleVoteButton(discord.ui.DynamicItem[discord.ui.Button],
         return cls(manager, poll, int(match["index"]))
 
 
+class ScoreVoteButton(discord.ui.DynamicItem[discord.ui.Button],
+                      template=r"worldsscore:(?P<guild>\d+):(?P<match>.+):(?P<first>[^:]+):(?P<second>[^:]+):(?P<index>[12]):(?P<score>[012])"):
+    def __init__(self, manager, poll, index, score):
+        button = VoteButton(manager, poll, index, score)
+        button.custom_id = f"worldsscore:{poll.guild_id}:{poll.match_id}:{poll.team1_id}:{poll.team2_id}:{index}:{score}"
+        super().__init__(button)
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match):
+        manager = interaction.client.voting_manager
+        current = manager.store.data.matches_by_id.get(match['match'])
+        poll = polls.Poll(int(match['guild']), match['match'], manager.store.data.tournament.id,
+                          match['first'], match['second'], current.start_time if current else manager.clock(), False, None)
+        return cls(manager, poll, int(match['index']), int(match['score']))
+
+
+def vote_button_groups(manager, poll, *, public=True):
+    from services.knockout import is_knockout
+    data = getattr(getattr(manager, "store", None), "data", None)
+    match = data.matches_by_id.get(poll.match_id) if data else None
+    if is_knockout(match):
+        factory = ScoreVoteButton if public else VoteButton
+        return [[factory(manager, poll, index, score) for score in (0, 1, 2)] for index in (1, 2)]
+    factory = ScheduleVoteButton if public else VoteButton
+    return [[factory(manager, poll, index) for index in (1, 2)]]
+
+
+def selected_score(manager, poll, user_id):
+    from services.knockout import is_knockout
+    data = getattr(getattr(manager, 'store', None), 'data', None)
+    match = data.matches_by_id.get(poll.match_id) if data else None
+    return polls.get_score_predictions(poll.guild_id, poll.match_id).get(user_id) if is_knockout(match) else None
+
+
 class LegacyDailyVoteButton(ScheduleVoteButton,
                           template=r"worldsvote:(?P<guild>\d+):(?P<match>.+):(?P<index>[12])"):
     """Keep already published daily buttons usable before a view is restored."""
@@ -190,7 +231,8 @@ class ScheduleVotesView(SetupRequiredLayoutView):
             card.add_item(team_display((MATCH_GAP if index else "") + text))
             poll = poll_by_id.get(match.id)
             if poll and not personal_panel:
-                card.add_item(discord.ui.ActionRow(ScheduleVoteButton(manager, poll, 1), ScheduleVoteButton(manager, poll, 2)))
+                for buttons in vote_button_groups(manager, poll):
+                    card.add_item(discord.ui.ActionRow(*buttons))
         if personal_panel and any(match.id in poll_by_id for match in self.matches):
             card.add_item(discord.ui.ActionRow(OpenVotePanel(manager.guild_id, manager.store.data.tournament.id)))
         card.add_item(team_display(VOTE_CONFIRMATION_HELP))
@@ -200,8 +242,10 @@ def current_votes_controls(manager, poll):
     """Public, restart-safe controls; each click saves the clicking user's pick."""
     controls = discord.ui.View(timeout=None)
     controls.first_control_after_paragraph = 3
-    controls.add_item(ScheduleVoteButton(manager, poll, 1))
-    controls.add_item(ScheduleVoteButton(manager, poll, 2))
+    for row, buttons in enumerate(vote_button_groups(manager, poll)):
+        for button in buttons:
+            button.row = row
+            controls.add_item(button)
     return controls
 
 
@@ -212,7 +256,7 @@ def schedule_vote_payloads(manager, title, context, entries, poll_by_id, *, pers
     for match, text in entries:
         entry = (match, team_text(text))
         length = len(entry[1]) + 4
-        if page and (len(page) >= 7 or size + length > 3800):
+        if page and (len(page) >= (3 if any(is_knockout(m) for m, _ in page) or is_knockout(match) else 7) or size + length > 3800):
             pages.append({"view": ScheduleVotesView(manager, title, context, page, poll_by_id, personal_panel=personal_panel)})
             page, size = [], base_size
         page.append(entry)
@@ -234,13 +278,14 @@ class PersonalVotesView(SetupRequiredLayoutView):
         for index, (poll, selected, text) in enumerate(rendered):
             body = text.partition("\n\n")[2]
             card.add_item(team_display((MATCH_GAP if index else "") + body))
-            card.add_item(discord.ui.ActionRow(VoteButton(manager, poll, 1), VoteButton(manager, poll, 2)))
-            self.select_team(poll.match_id, selected)
+            for buttons in vote_button_groups(manager, poll, public=False):
+                card.add_item(discord.ui.ActionRow(*buttons))
+            self.select_team(poll.match_id, selected, selected_score(manager, poll, user_id))
 
-    def select_team(self, match_id, team_id):
+    def select_team(self, match_id, team_id, losing_games=None):
         for item in self.walk_children():
             if isinstance(item, VoteButton) and item.poll.match_id == match_id:
-                selected = item.team_id == team_id
+                selected = item.team_id == team_id and item.losing_games == losing_games
                 item.label = item.team_label() + (" ✓" if selected else "")
                 item.style = discord.ButtonStyle.success if selected else discord.ButtonStyle.primary
 
@@ -277,11 +322,12 @@ class MyVotesView(PersonalVotesView):
             current = available.get(poll.match_id)
             if current and {poll.team1_id, poll.team2_id} == {current.team1_id, current.team2_id}:
                 self.pick_texts[poll.match_id] = text
-                card.add_item(discord.ui.ActionRow(VoteButton(manager, current, 1), VoteButton(manager, current, 2)))
-                self.select_team(poll.match_id, selected)
+                for buttons in vote_button_groups(manager, current, public=False):
+                    card.add_item(discord.ui.ActionRow(*buttons))
+                self.select_team(poll.match_id, selected, selected_score(manager, poll, user_id))
 
-    def select_team(self, match_id, team_id):
-        super().select_team(match_id, team_id)
+    def select_team(self, match_id, team_id, losing_games=None):
+        super().select_team(match_id, team_id, losing_games)
         if team_id is not None and match_id in self.pick_texts:
             text = self.pick_texts[match_id]
             lines = [line for line in text.content.splitlines() if not line.startswith("Your pick:")]
@@ -290,19 +336,20 @@ class MyVotesView(PersonalVotesView):
             match = policy.data.matches_by_id.get(match_id) if policy else None
             slot = 1 if match and team_id == match.team1_id else 2
             label = team_token(team_id, match_id, slot) if policy else discord.utils.escape_markdown(team_id)
-            lines.insert(position, f"Your pick: **{label}**")
+            lines.insert(position, f"Your pick: **{label}**" + (f" 3–{losing_games}" if losing_games is not None else ""))
             text.content = team_text("\n".join(lines))
 
 
 def my_vote_payloads(manager, rows, available, user_id, data, *, now, test_mode=False, **preferences):
     sections = {"🏁 Past Games": 0, "🔴 Ongoing Games": 1, "🕒 Upcoming Games": 2}
     rows = sorted(rows, key=lambda row: (sections[prediction_history_section(row[0], data, now)], row[0].start_time, row[0].match_id))
-    embeds = my_votes_embeds(rows, data, now=now, page_size=5, **preferences)
+    page_size = 3 if any(is_knockout(data.matches_by_id.get(p.match_id)) for p, _ in rows) else 5
+    embeds = my_votes_embeds(rows, data, now=now, page_size=page_size, **preferences)
     available = {poll.match_id: poll for poll in available}
     for index, embed in enumerate(embeds):
         if test_mode:
             embed.title = "__TEST: " + embed.title.removeprefix("__")
-        yield {"view": MyVotesView(manager, user_id, embed, rows[index * 5:(index + 1) * 5], available)}
+        yield {"view": MyVotesView(manager, user_id, embed, rows[index * page_size:(index + 1) * page_size], available)}
 
 
 def personal_vote_payloads(manager, available, user_id, saved, *, timezone_name=None, time_format="24h"):
@@ -315,7 +362,7 @@ def personal_vote_payloads(manager, available, user_id, saved, *, timezone_name=
         text = change_vote_text(manager.store.data.matches_by_id[poll.match_id], now=now, selected_team=selected,
                                 test_mode=getattr(manager, "test_mode", False), timezone_name=timezone_name, time_format=time_format)
         text = team_text(text)
-        if page and (len(page) >= 7 or size + len(text) > 3800):
+        if page and (len(page) >= (3 if any(is_knockout(manager.store.data.matches_by_id.get(p.match_id)) for p, _, _ in page) or is_knockout(manager.store.data.matches_by_id.get(poll.match_id)) else 7) or size + len(text) > 3800):
             pages.append({"view": PersonalVotesView(manager, user_id, page)})
             page, size = [], 0
         page.append((poll, selected, text))
@@ -373,6 +420,10 @@ class DailyPredictionsView(SetupRequiredLayoutView):
                             "(5 minutes before game 1)**\n\n")
         else:
             introduction = "Here are today's matchups. Voting for each matchup closes 5 minutes before match start.\n\n"
+        from services.knockout import is_knockout
+        if matches and all(is_knockout(m) for m in matches):
+            introduction = ("Choose the winner and exact score. **Voting closes 5 minutes before the series starts.**\n"
+                            "**3 points** exact · **2 points** one game off · **1 point** two games off · **0 points** wrong winner.\n\n")
         page = min(max(0, getattr(manager, "_daily_pages", {}).get(day, 0)), page_count - 1)
         matches = matches[page * page_size:(page + 1) * page_size]
         date = datetime.fromisoformat(day)
@@ -443,7 +494,8 @@ class DailyPredictionsView(SetupRequiredLayoutView):
                 card.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
             if not compact:
                 card.add_item(team_display(f"## {matchup(match)}"))
-                card.add_item(discord.ui.ActionRow(ScheduleVoteButton(manager, poll, 1), ScheduleVoteButton(manager, poll, 2)))
+                for buttons in vote_button_groups(manager, poll):
+                    card.add_item(discord.ui.ActionRow(*buttons))
             timing = upcoming_line(match, manager.clock()) + '\n\n' if match.status == MatchStatus.SCHEDULED else ''
             details_text = team_display(f"**{stage_label}**\n\n{timing}{times}\n\n{status}")
             if poll.voting_override_until and manager.clock() < poll.voting_override_until and not poll.closed:
@@ -460,7 +512,8 @@ class DailyPredictionsView(SetupRequiredLayoutView):
                 card.children[-2].content = date_prefix + card.children[-2].content
             card.add_item(details_text)
             if compact:
-                card.add_item(discord.ui.ActionRow(ScheduleVoteButton(manager, poll, 1), ScheduleVoteButton(manager, poll, 2)))
+                for buttons in vote_button_groups(manager, poll):
+                    card.add_item(discord.ui.ActionRow(*buttons))
             match_texts.append(details_text)
         if not compact:
             card.add_item(team_display(
@@ -593,8 +646,13 @@ class VotingManager:
             days.setdefault(day, []).append(match)
         return days
 
-    async def vote(self, match_id, user_id, team_id, display_name=None, expected_pair=None):
+    async def vote(self, match_id, user_id, team_id, display_name=None, expected_pair=None, predicted_loser_games=None):
         match = self.store.data.matches_by_id.get(match_id)
+        from services.knockout import is_knockout
+        if is_knockout(match) and predicted_loser_games not in (0, 1, 2):
+            raise ValueError("Choose an exact score using `/vote`: 3–0, 3–1 or 3–2.")
+        if predicted_loser_games is not None and not is_knockout(match):
+            raise ValueError("Exact scores are only available for knockout Bo5 series.")
         if not self.fresh():
             raise ValueError("Live data is temporarily unavailable; please try again shortly.")
         available = await asyncio.to_thread(polls.get_polls, self.guild_id, self.store.data.tournament.id)
@@ -614,7 +672,7 @@ class VotingManager:
         if {current.team1_id, current.team2_id} != {match.team1_id, match.team2_id}:
             raise ValueError("This matchup changed. Please use the current prediction buttons.")
         return await asyncio.to_thread(polls.cast_vote, self.guild_id, match_id, user_id, team_id, self.clock(), display_name,
-                                       (match.team1_id, match.team2_id))
+                                       (match.team1_id, match.team2_id), predicted_loser_games)
 
     async def announce_vote(self, match_id, display_name):
         """Celebrate participation without identifying the selected team."""
@@ -729,18 +787,25 @@ class VotingManager:
                 except (sqlite3.Error, OSError):
                     logger.exception("Could not flush daily prediction receipt for %s", day)
 
-    async def publish_daily_post(self):
+    async def publish_daily_post(self, day=None):
         if not self.fresh():
             raise ValueError("Live data is temporarily unavailable. Please try again shortly.")
         days = self.match_days()
-        day = next((day for day, matches in days.items() if any(
-            match.status not in {MatchStatus.COMPLETED, MatchStatus.CANCELLED} for match in matches)), None)
+        if day is None:
+            day = next((day for day, matches in days.items() if any(
+                match.status not in {MatchStatus.COMPLETED, MatchStatus.CANCELLED} for match in matches)), None)
         if day is None:
             raise ValueError("There is no upcoming matchday to publish.")
+        if day not in days:
+            raise ValueError("That Worlds day is no longer available. Open the day picker again.")
+        if not any(match.status == MatchStatus.SCHEDULED
+                   and 'TBD' not in {match.team1_id, match.team2_id}
+                   and self.clock() < voting_deadline(match, self.store.data) for match in days[day]):
+            raise ValueError("This Worlds day has no confirmed matchups still open for voting. Undrawn matchups cannot be published yet.")
         receipt = await self._sync_day(day, days[day], manual=True)
         if receipt is None:
             raise ValueError("The daily post could not be published. Select a reminder channel and check the bot's permissions. "
-                             "The matchday must be within 24 hours, earlier matchdays must be finished, and at least one confirmed matchup must still be open for voting.")
+                             "At least one confirmed matchup must still be open for voting; Round 3 requires all eight pairings.")
         return day, receipt[0], receipt[1]
 
     async def delete_daily_post(self):
@@ -784,7 +849,7 @@ class VotingManager:
             if day in self._posted and self._posted[day] != receipt:
                 receipt = self._posted[day]
                 await asyncio.to_thread(polls.save_daily_post, self.guild_id, tournament_id, day, *receipt)
-            if receipt is None and any(
+            if receipt is None and not manual and not any(is_knockout(m) for m in matches) and any(
                 earlier_day < day and any(
                     match.status not in {MatchStatus.COMPLETED, MatchStatus.CANCELLED}
                     for match in earlier_matches
@@ -796,7 +861,9 @@ class VotingManager:
                 return None
             if receipt is None:
                 starts = [match.start_time for match in matches if match.status != MatchStatus.CANCELLED]
-                if not starts or self.clock() < min(starts) - MAX_DAILY_POST_LEAD:
+                from services.knockout import publication_time
+                opens_at = min((publication_time(m) for m in matches if is_knockout(m)), default=None)
+                if not starts or (not manual and self.clock() < (opens_at or min(starts) - MAX_DAILY_POST_LEAD)):
                     return None
                 round_three = round_three_matches(self.store.data)
                 if round_three and day == voting_board_day(self.store.data, round_three[0]):

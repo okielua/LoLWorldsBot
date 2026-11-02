@@ -3,6 +3,8 @@
 import logging
 
 import discord
+from models import MatchStatus
+from services.voting import MATCHDAY_ZONE
 from services.presentation import message_payload
 from services.runtime_config import development_enabled
 from services.setup_gate import SetupRequiredView, SetupRequiredModal
@@ -42,9 +44,9 @@ def build_server_setup_content(guild_id):
         + f"\n\n### 🔔 __All-Game Worlds Ping Role:__\n{role}\n"
         "Choose a notification role without server permissions. Make it mentionable for daily posts and 5-minute match reminders.\n"
         "Members join or leave this role using Server Pings for All Games in `/mysetup`.\n\n"
-        + "### 📅 __Daily Voting Post:__\nPublish the eligible matchday and ping the configured role, or delete the latest daily post. Existing posts refresh silently.\n"
+        + "### 📅 __Daily Voting Post:__\nChoose a Worlds day to publish its voting post and ping the configured role, or delete the latest daily post. Existing posts refresh silently.\n"
         "Deleting pauses automatic recreation for that matchday and preserves all votes. Publish again to resume.\n"
-        "Publishing respects the 24-hour limit, earlier-matchday rule, and voting cutoff.\n"
+        "Manual posts can be published early. Undrawn days are listed but need confirmed matchups before publishing. Voting cutoffs still apply.\n"
         + ("### 🧪 __Test Posts:__\nPreview without pings, or send a five-minute test using members' `/mysetup` ping preferences.\n\n"
            if development_enabled() else "")
         + ("" if development_enabled() else "\n")
@@ -121,6 +123,65 @@ class WorldsPingRoleSelect(discord.ui.RoleSelect):
                                                 allowed_mentions=discord.AllowedMentions.none())
 
 
+class WorldsDaySelect(discord.ui.Select):
+    def __init__(self, manager, owner):
+        self.owner = owner
+        days = manager.match_days()
+        calendar = sorted({m.start_time.astimezone(MATCHDAY_ZONE).date().isoformat()
+                           for m in manager.store.data.matches if m.status != MatchStatus.CANCELLED})
+        options = []
+        for day, matches in days.items():
+            if all(m.status in {MatchStatus.COMPLETED, MatchStatus.CANCELLED} for m in matches):
+                continue
+            dates = sorted({m.start_time.astimezone(MATCHDAY_ZONE).date().isoformat()
+                            for m in matches if m.status != MatchStatus.CANCELLED})
+            numbers = [calendar.index(date) + 1 for date in dates]
+            number = str(numbers[0]) if len(numbers) == 1 else f'{numbers[0]}–{numbers[-1]}'
+            confirmed = sum('TBD' not in {m.team1_id, m.team2_id} for m in matches)
+            stages = ', '.join(dict.fromkeys(manager.store.data.stages_by_id[m.stage_id].name
+                                           for m in matches if m.stage_id in manager.store.data.stages_by_id))
+            options.append(discord.SelectOption(label=f'Worlds Day {number} · {day}', value=day,
+                description=f'{stages} · {confirmed}/{len(matches)} matchups confirmed'[:100]))
+        super().__init__(placeholder='Choose a Worlds day...', options=options[:25] or
+                         [discord.SelectOption(label='No upcoming Worlds days', value='none')],
+                         disabled=not options, row=0)
+
+    async def callback(self, interaction):
+        self.owner.selected_day = self.values[0]
+        for option in self.options:
+            option.default = option.value == self.values[0]
+        self.owner.publish_selected.disabled = False
+        await interaction.response.edit_message(**message_payload(self.owner.content, controls=self.owner),
+                                                allowed_mentions=discord.AllowedMentions.none())
+
+
+class WorldsDayPublishView(SetupRequiredView):
+    content = ('## Choose a Worlds Day\n\nChoose a day, then press **Publish Selected Day**. '
+               'New posts ping the configured Worlds role; existing posts refresh silently.\n\n'
+               '-# Dates follow the Los Angeles tournament calendar. Undrawn days need confirmed matchups before publishing.')
+
+    def __init__(self, manager):
+        super().__init__(timeout=900)
+        self.guild_id = manager.guild_id
+        self.selected_day = None
+        self.add_item(WorldsDaySelect(manager, self))
+
+    async def interaction_check(self, interaction):
+        if not await super().interaction_check(interaction):
+            return False
+        if not can_manage_server(interaction, self.guild_id):
+            await interaction.response.send_message(**message_payload('You need the Manage Server permission.'), ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label='Publish Selected Day', emoji='📅', disabled=True, row=1)
+    async def publish_selected(self, interaction, button):
+        if self.selected_day is None:
+            await interaction.response.send_message(**message_payload('Choose a Worlds day first.'), ephemeral=True)
+            return
+        await ServerSetupView.manage_daily_post(self, interaction, day=self.selected_day)
+
+
 class ServerSetupView(SetupRequiredView):
     control_after_paragraphs = (2, 3, 4, 5, 6)
 
@@ -171,7 +232,7 @@ class ServerSetupView(SetupRequiredView):
         )
         await interaction.followup.send(**message_payload(message), ephemeral=True)
 
-    async def manage_daily_post(self, interaction, *, delete=False):
+    async def manage_daily_post(self, interaction, *, delete=False, day=None):
         if not can_manage_server(interaction, self.guild_id):
             await interaction.response.send_message(**message_payload("You need the Manage Server permission."), ephemeral=True)
             return
@@ -184,9 +245,9 @@ class ServerSetupView(SetupRequiredView):
             if delete:
                 day = await manager.delete_daily_post()
                 text = (f"Daily post for **{day}** deleted. It will stay deleted through restarts.\n\n"
-                        "Votes are preserved. Use **Publish Daily Post** to restore it while voting is still open. Future matchdays are unaffected.")
+                        "Votes are preserved. Use **Choose Worlds Day** to restore it while voting is still open. Future matchdays are unaffected.")
             else:
-                day, channel_id, message_id = await manager.publish_daily_post()
+                day, channel_id, message_id = await manager.publish_daily_post(day=day)
                 link = f"https://discord.com/channels/{self.guild_id}/{channel_id}/{message_id}"
                 text = f"[Open the daily post for {day}]({link})\n\nNew posts mention the configured ping role; existing posts refresh silently. Automatic updates are enabled for this matchday."
         except ValueError as error:
@@ -196,9 +257,18 @@ class ServerSetupView(SetupRequiredView):
             text = "I couldn't change the daily post. Check the bot's access to the reminder channel and try again."
         await interaction.followup.send(**message_payload(text), ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
-    @discord.ui.button(label="Publish Daily Post", emoji="📅", row=3)
+    @discord.ui.button(label="Choose Worlds Day", emoji="📅", row=3)
     async def publish_daily(self, interaction, button):
-        await self.manage_daily_post(interaction)
+        if not can_manage_server(interaction, self.guild_id):
+            await interaction.response.send_message(**message_payload('You need the Manage Server permission.'), ephemeral=True)
+            return
+        manager = interaction.client.voting_manager
+        if manager.guild_id != self.guild_id:
+            await interaction.response.send_message(**message_payload('Daily posting is not configured for this server.'), ephemeral=True)
+            return
+        picker = WorldsDayPublishView(manager)
+        await interaction.response.send_message(**message_payload(picker.content, controls=picker),
+            ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
     @discord.ui.button(label="Delete Daily Post", emoji="🗑️", style=discord.ButtonStyle.danger, row=3)
     async def delete_daily(self, interaction, button):

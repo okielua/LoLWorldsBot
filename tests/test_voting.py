@@ -18,7 +18,7 @@ from services.polls import get_daily_post, get_leaderboard, get_poll_results, ge
 from services.server_reminders import ServerReminderDelivery
 from services.server_settings import initialize_server_settings, set_reminder_channel, set_worlds_role
 from services.tournament_data import load_tournament_data
-from services.voting import VotingManager
+from services.voting import MATCHDAY_ZONE, VotingManager
 
 
 @pytest.fixture
@@ -162,13 +162,34 @@ def test_manual_publish_works_with_automatic_reminders_off(context):
     channel.send.assert_awaited_once()
 
 
-@pytest.mark.parametrize("blocked", ["too-early", "stale", "cutoff", "unknown-teams"])
+def test_manual_publish_next_day_before_auto_window_survives_restart(context):
+    manager, store, channel, current, _ = context
+    first = store.data.matches[0]
+    completed = replace(first, status=MatchStatus.COMPLETED, winner_id=first.team1_id)
+    upcoming = replace(first, id="next-day", start_time=first.start_time + timedelta(days=3))
+    store.data = replace(store.data, matches=[completed, upcoming])
+    current[0] = first.start_time + timedelta(hours=1)
+    store.fetched_at = current[0]
+
+    async def scenario():
+        await manager.tick()
+        channel.send.assert_not_awaited()
+        receipt = await manager.publish_daily_post()
+        assert receipt[0] == upcoming.start_time.astimezone(MATCHDAY_ZONE).date().isoformat()
+        channel.send.assert_awaited_once()
+        assert {p.match_id for p in get_polls(123, store.data.tournament.id)} == {upcoming.id}
+        restarted = VotingManager(manager.client, store, 123, clock=lambda: current[0])
+        await restarted.tick()
+        assert await restarted.publish_daily_post() == receipt
+        channel.send.assert_awaited_once()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("blocked", ["stale", "cutoff", "unknown-teams"])
 def test_manual_publish_does_not_bypass_schedule_or_voting_safety(context, blocked):
     manager, store, channel, current, _ = context
-    if blocked == "too-early":
-        current[0] = store.data.matches[0].start_time - timedelta(hours=25)
-        store.fetched_at = current[0]
-    elif blocked == "stale":
+    if blocked == "stale":
         store.last_error = "offline"
     elif blocked == "cutoff":
         store.data = replace(store.data, matches=[store.data.matches[0]])
@@ -179,6 +200,28 @@ def test_manual_publish_does_not_bypass_schedule_or_voting_safety(context, block
     with pytest.raises(ValueError):
         asyncio.run(manager.publish_daily_post())
     channel.send.assert_not_awaited()
+
+
+def test_admin_can_select_a_later_worlds_day_without_waiting_for_current_day(context):
+    manager, store, channel, _, _ = context
+    first = store.data.matches[0]
+    later = replace(first, id='selected-later', start_time=first.start_time + timedelta(days=3))
+    store.data = replace(store.data, matches=[first, later])
+    day = later.start_time.astimezone(MATCHDAY_ZONE).date().isoformat()
+
+    async def scenario():
+        receipt = await manager.publish_daily_post(day=day)
+        assert receipt[0] == day
+        assert {p.match_id for p in get_polls(123, store.data.tournament.id)} == {later.id}
+        channel.send.assert_awaited_once()
+        with pytest.raises(ValueError, match='no longer available'):
+            await manager.publish_daily_post(day='2099-01-01')
+        store.data = replace(store.data, matches=[first, replace(later, team1_id='TBD')])
+        with pytest.raises(ValueError, match='no confirmed matchups'):
+            await manager.publish_daily_post(day=day)
+        channel.send.assert_awaited_once()
+
+    asyncio.run(scenario())
 
 
 def test_failed_admin_delete_keeps_existing_post_and_restores_auto_updates(context):

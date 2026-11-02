@@ -104,13 +104,13 @@ def test_results_place_matchday_mvp_after_form_and_keep_days_separate(source):
     assert '🏆 Player 7' in text and '🏆 Player 8' in text
 
 
-def test_accuracy_breaks_equal_correct_counts_and_missing_fixtures_do_not_award(source):
+def test_knockout_equal_points_and_winners_share_trophy_and_missing_fixtures_do_not_award(source):
     matches = period(source, 'quarterfinals', 4, datetime(2026, 11, 1, 17, tzinfo=UTC))
     data = replace(source, matches=matches)
     populate(data, lambda match: [(7, match in matches[:2])] + ([(8, True)] if match in matches[:2] else []))
     finish(data, matches)
     award, = mvp.get_mvp_awards(123, data)
-    assert [r.user_id for r in award.winners] == [8]
+    assert [r.user_id for r in award.winners] == [7, 8]
     assert mvp.get_mvp_awards(123, replace(data, matches=matches[:3])) == []
 
 

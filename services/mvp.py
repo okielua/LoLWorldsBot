@@ -60,7 +60,10 @@ def get_mvp_awards(guild_id, data):
             continue
         rows = get_competition_snapshot(guild_id, data.tournament.id, data=data,
                                         match_ids={m.id for m in matches}).rows
-        winners = ([row for row in rows if row.ranking_key == rows[0].ranking_key]
+        swiss = "swiss" in matches[0].stage_id.lower()
+        key_for = (lambda row: (row.correct, row.accuracy)) if swiss else (lambda row: row.ranking_key)
+        rows = sorted(rows, key=key_for, reverse=True)
+        winners = ([row for row in rows if key_for(row) == key_for(rows[0])]
                    if rows and rows[0].correct else [])
         awards.append(MvpAward(labels[key], matches, winners))
     return sorted(awards, key=lambda a: min(m.start_time for m in a.matches))
@@ -162,7 +165,7 @@ async def add_results_mvp(pages, manager, matches):
                         ' '.join(names.get(row.user_id, f'User {row.user_id}').split())[:80]))
                     lines.append(f'## 🏆 {name}')
                 row = award.winners[0]
-                lines.append(f'-# {row.correct}/{row.submitted} correct ({float(row.accuracy):.1%})')
+                lines.append(f'-# {row.correct}/{row.submitted} correct ({float(row.accuracy):.1%})' if swiss else f'-# {row.total_points} points · {row.correct}/{row.submitted} correct winners')
             else:
                 lines.append('No trophy awarded: no correct predictions were recorded.')
             blocks.append(lines)

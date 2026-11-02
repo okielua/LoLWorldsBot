@@ -15,7 +15,7 @@ LOWER_WEIGHTS = (350, 440, 197)  # 35%, 44%, 19.7%; Challenger is reserved first
 
 
 def prediction_tiers(rows):
-    rows = sorted(rows, key=lambda r: (-r.correct, -r.accuracy, r.user_id))
+    rows = sorted(rows, key=lambda r: (*(-v for v in r.ranking_key), r.user_id))
     ranks = competition_ranks(rows)
     leaders = sum(ranks[row.user_id] == 1 for row in rows)
     remaining = len(rows) - leaders

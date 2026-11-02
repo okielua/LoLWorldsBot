@@ -76,7 +76,7 @@ def test_playin_votes_count_in_leaderboard_and_personal_stats_with_result_protec
         rendered = render_payload({"components": reply["view"].to_components()})
         text = "\n".join(child["content"] for card in rendered["components"] for child in card["components"]
                          if child.get("type") == 10)
-        assert "### · Correct predictions: ||1/1|| (||100%||)" in text
+        assert "### · Correct winners overall: ||1/1|| (||100%||)" in text
         assert "__*Check Your PayPal*__" in text
         assert text.count("Not enough data") == 4
         assert 'including Play-Ins' in text
@@ -93,8 +93,8 @@ def test_button_and_public_stats_command_return_identical_clicker_stats(stats_da
         clicked = caller.followup.send.call_args.kwargs
         rendered = rendered_payload(clicked)
         assert rendered.title == "__Worlds 2026 Voting Stats · `Other user`__"
-        assert "### · Correct predictions: 0/1 (0%)" in rendered.description
-        assert "### · Correct predictions: 0/1 (0%)" in rendered.description
+        assert "### · Correct winners overall: 0/1 (0%)" in rendered.description
+        assert "### · Correct winners overall: 0/1 (0%)" in rendered.description
         assert "Pending votes" not in rendered.description
         assert all(label in rendered.description for label in ("## :PeyzPal: __*Check Your PayPal*__", "## :PepeKMS: __*Can’t Read These Frauds*__", "## :Copium: __*Hopium Supplier*__", "## :Discheesed: __*Democracy Was a Mistake*__"))
         first_text = next(item.content for item in clicked["view"].walk_children() if isinstance(item, discord.ui.TextDisplay))
@@ -109,7 +109,7 @@ def test_button_and_public_stats_command_return_identical_clicker_stats(stats_da
         assert command_caller.followup.send.call_args.kwargs["ephemeral"] is False
         owner = interaction_for(data, 7)
         await button.callback(owner)
-        assert "### · Correct predictions: 1/1 (100%)" in rendered_payload(owner.followup.send.call_args.kwargs).description
+        assert "### · Correct winners overall: 1/1 (100%)" in rendered_payload(owner.followup.send.call_args.kwargs).description
     asyncio.run(scenario())
 
 
@@ -209,7 +209,7 @@ def test_stats_command_can_publicly_view_another_member(stats_data):
         payload = caller.followup.send.call_args.kwargs
         rendered = rendered_payload(payload)
         assert rendered.title.replace('\u00a0', '') == '__Worlds 2026 Voting Stats · `lua`__'
-        assert '### · Correct predictions: 1/1 (100%)' in rendered.description
+        assert '### · Correct winners overall: 1/1 (100%)' in rendered.description
         assert 'Other user’s' not in rendered.description and '### My ' not in rendered.description
         assert 'whether `lua` votes for or against them' in rendered.description.replace('\u00a0', '')
         assert payload['ephemeral'] is False and payload['allowed_mentions'].to_dict() == {'parse': []}
@@ -225,7 +225,7 @@ def test_stats_command_handles_a_member_with_no_votes(stats_data):
         await load_command('stats', stats_data, discord=discord)(caller, target)
         payload = caller.followup.send.call_args.kwargs
         text = rendered_payload(payload).description
-        assert '### · Correct predictions: 0/0 (—)' in text
+        assert '### · Correct winners overall: 0/0 (—)' in text
         assert '### · League rank: —' in text
         assert payload['ephemeral'] is False
         payload['view'].stop()
@@ -340,7 +340,7 @@ def test_stats_names_are_unpadded_while_leaderboard_names_stay_aligned(stats_dat
         assert '### · League rank: :challenger:' in card.description
         assert 'League rank: :challenger: Challenger' not in card.description
         assert '\n\n\u2800\n\n# __Some other Stats__' in card.description
-        assert card.description.count('### · ') == 5
+        assert card.description.count('### · ') == 6
         assert '’s current rank:' not in card.description
         board['view'].stop()
         payload['view'].stop()

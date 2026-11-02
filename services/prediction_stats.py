@@ -20,6 +20,10 @@ class PredictionStats:
     eligible: int
     current_streak: int
     longest_streak: int
+    points: int | None = None
+    pre_knockout_correct: int = 0
+    pre_knockout_submitted: int = 0
+    knockout_points: int = 0
 
     @property
     def accuracy(self):
@@ -31,7 +35,12 @@ class PredictionStats:
 
     @property
     def ranking_key(self):
-        return (self.correct, self.accuracy)
+        return (self.total_points, self.correct) if self.points is not None else (self.correct, self.accuracy)
+
+
+    @property
+    def total_points(self):
+        return self.correct if self.points is None else self.points
 
 
 @dataclass(frozen=True)
@@ -152,7 +161,7 @@ def advanced_prediction_stats(eligible, by_user):
 
 def competition_ranks(rows):
     result, previous, rank = {}, None, 0
-    for index, row in enumerate(sorted(rows, key=lambda row: (-row.correct, -row.accuracy, row.user_id)), 1):
+    for index, row in enumerate(sorted(rows, key=lambda row: (*(-value for value in row.ranking_key), row.user_id)), 1):
         if row.ranking_key != previous:
             rank = index
         previous = row.ranking_key
@@ -169,10 +178,12 @@ def get_competition_snapshot(guild_id, tournament_id, *, match_day=None, data=No
         """, (guild_id, tournament_id)).fetchall()
         votes = connection.execute("""
             SELECT votes.match_id, votes.user_id, votes.team_id, votes.updated_at,
-                   votes.vote_team1_id, votes.vote_team2_id
+                   votes.vote_team1_id, votes.vote_team2_id, votes.predicted_loser_games
             FROM poll_votes AS votes JOIN match_polls AS polls USING (guild_id, match_id)
             WHERE polls.guild_id = ? AND polls.tournament_id = ?
         """, (guild_id, tournament_id)).fetchall()
+        formats = {row[0]: row[1:] for row in connection.execute(
+            'SELECT match_id,stage_id,best_of,team1_score,team2_score FROM poll_scoring_formats WHERE guild_id=?', (guild_id,))}
     eligible = []
     swiss = next((stage for stage in data.stages if "swiss" in stage.name.casefold()), None) if data else None
 
@@ -197,6 +208,17 @@ def get_competition_snapshot(guild_id, tournament_id, *, match_day=None, data=No
             continue
         if winner not in {first, second} or not published:
             continue
+        # Exact-score points wait for a complete, internally consistent result.
+        from services.knockout import is_knockout
+        format_row = formats.get(match_id)
+        knockout = is_knockout(source) if source else bool(format_row and format_row[1] == 5 and
+            any(name in format_row[0].lower() for name in ('quarterfinal', 'semifinal', 'final')))
+        if knockout:
+            scores = (source.team1_score, source.team2_score) if source else format_row[2:4]
+            if (any(score is None for score in scores) or max(scores) != 3
+                    or min(scores) not in (0, 1, 2)
+                    or winner != (first if scores[0] > scores[1] else second)):
+                continue
         if datetime.fromisoformat(published) >= (datetime.fromisoformat(cutoff) if cutoff else start - timedelta(minutes=5)):
             continue
         if match_day is not None and start.astimezone(zone).date().isoformat() != match_day:
@@ -207,7 +229,8 @@ def get_competition_snapshot(guild_id, tournament_id, *, match_day=None, data=No
     eligible.sort(key=lambda row: (row[0], row[1]))
     by_match = {row[1]: row for row in eligible}
     by_user, pending, recent = {}, {}, {}
-    for match_id, user_id, chosen, updated, first, second in votes:
+    score_picks = {}
+    for match_id, user_id, chosen, updated, first, second, predicted_score in votes:
         if not in_scope(match_id):
             continue
         match = by_match.get(match_id)
@@ -224,6 +247,7 @@ def get_competition_snapshot(guild_id, tournament_id, *, match_day=None, data=No
                 or {first, second} != set(match[2:4])
                 or datetime.fromisoformat(updated) >= deadline):
             continue
+        score_picks[(user_id, match_id)] = predicted_score
         by_user.setdefault(user_id, {})[match_id] = chosen
         recent.setdefault(user_id, []).append(Prediction(match_id, first, second, start, chosen, match[4]))
 
@@ -235,17 +259,30 @@ def get_competition_snapshot(guild_id, tournament_id, *, match_day=None, data=No
             if not submitted:
                 continue
             correct = streak = best = 0
+            pre_correct = pre_submitted = knockout_points = 0
             for _, match_id, _, _, winner in matches:
                 if match_id not in picks:
                     continue
+                from services.knockout import is_knockout, prediction_points
+                source = data.matches_by_id.get(match_id) if data else None
+                if source is None and match_id in formats:
+                    from types import SimpleNamespace
+                    stage, best_of, first_score, second_score = formats[match_id]
+                    source = SimpleNamespace(stage_id=stage,best_of=best_of,team1_score=first_score,
+                                             team2_score=second_score,winner_id=winner)
+                if is_knockout(source):
+                    knockout_points += prediction_points(source, picks[match_id], score_picks.get((user_id, match_id)))
+                else:
+                    pre_submitted += 1
+                    pre_correct += int(picks[match_id] == winner)
                 if picks[match_id] == winner:
                     correct += 1
                     streak += 1
                     best = max(best, streak)
                 else:
                     streak = 0
-            result.append(PredictionStats(user_id, correct, submitted, len(matches), streak, best))
-        return sorted(result, key=lambda row: (-row.correct, -row.accuracy, row.user_id))
+            result.append(PredictionStats(user_id, correct, submitted, len(matches), streak, best, pre_correct + knockout_points, pre_correct, pre_submitted, knockout_points))
+        return sorted(result, key=lambda row: (*(-value for value in row.ranking_key), row.user_id))
 
     # First-confirmation timestamps persist in SQLite. Removing the most recently
     # included result reconstructs the preceding ranking, independent of reads
@@ -280,7 +317,8 @@ def get_previous_day_mvp(guild_id, data, current_day):
     if any(match.status != MatchStatus.COMPLETED or match.winner_id not in {match.team1_id, match.team2_id}
            for match in days[previous_day]):
         return []
-    rows = get_competition_stats(guild_id, data.tournament.id, match_day=previous_day)
+    rows = sorted(get_competition_stats(guild_id, data.tournament.id, match_day=previous_day),
+                  key=lambda row: (-row.correct, -row.accuracy, row.user_id))
     if not rows or rows[0].correct == 0:
         return []
     return [row for row in rows if (row.correct, row.accuracy) == (rows[0].correct, rows[0].accuracy)]

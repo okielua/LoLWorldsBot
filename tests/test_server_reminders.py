@@ -19,7 +19,7 @@ from services.server_settings import (
     set_public_reminders_enabled, set_reminder_channel,
     set_pickems_url,
 )
-from services.server_setup import PickemsLinkModal, ServerSetupView, build_server_setup_content
+from services.server_setup import PickemsLinkModal, ServerSetupView, WorldsDayPublishView, build_server_setup_content
 from services.reminder_test import run_reminder_test
 from services.reminder_engine import ReminderKey, ReminderType, UserReminderPreferences
 from services.tournament_data import load_tournament_data
@@ -299,6 +299,9 @@ def test_daily_post_admin_buttons_recheck_permissions_and_reply_privately(databa
         view = ServerSetupView(123)
         manager = SimpleNamespace(guild_id=123, publish_daily_post=AsyncMock(return_value=("2026-10-15", 456, 789)),
                                   delete_daily_post=AsyncMock(return_value="2026-10-15"))
+        data = load_tournament_data(Path(__file__).resolve().parents[1] / 'data' / 'worlds_2026.json')
+        manager.store = SimpleNamespace(data=data)
+        manager.match_days = lambda: {'2026-10-15': data.matches}
         interaction = SimpleNamespace(guild_id=123,
             user=SimpleNamespace(id=7, guild_permissions=discord.Permissions.none()),
             client=SimpleNamespace(voting_manager=manager),
@@ -311,16 +314,52 @@ def test_daily_post_admin_buttons_recheck_permissions_and_reply_privately(databa
         manager.delete_daily_post.assert_not_awaited()
         interaction.user.guild_permissions.manage_guild = True
         await button.callback(interaction)
-        interaction.response.defer.assert_awaited_once_with(ephemeral=True, thinking=True)
-        assert interaction.followup.send.call_args.kwargs["ephemeral"] is True
-        assert interaction.followup.send.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
         if delete:
+            interaction.response.defer.assert_awaited_once_with(ephemeral=True, thinking=True)
+            assert interaction.followup.send.call_args.kwargs["ephemeral"] is True
+            assert interaction.followup.send.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
             manager.delete_daily_post.assert_awaited_once()
             assert "Votes are preserved" in rendered_message(interaction.followup.send.call_args).description
         else:
-            manager.publish_daily_post.assert_awaited_once()
+            manager.publish_daily_post.assert_not_awaited()
+            payload = interaction.response.send_message.call_args.kwargs
+            assert payload['ephemeral'] is True
+            picker = payload['view'].controls
+            assert isinstance(picker, WorldsDayPublishView)
+            select = next(item for item in picker.children if isinstance(item, discord.ui.Select))
+            assert select.options[0].label.startswith('Worlds Day 1')
+            assert picker.publish_selected.disabled
+            select._values = ['2026-10-15']
+            interaction.response.edit_message = AsyncMock()
+            await select.callback(interaction)
+            assert not picker.publish_selected.disabled
+            await picker.publish_selected.callback(interaction)
+            manager.publish_daily_post.assert_awaited_once_with(day='2026-10-15')
             assert "https://discord.com/channels/123/456/789" in rendered_message(interaction.followup.send.call_args).description
         view.stop()
+    asyncio.run(scenario())
+
+
+def test_worlds_day_picker_keeps_undrawn_days_and_calendar_day_numbers(database):
+    async def scenario():
+        data = load_tournament_data(Path(__file__).resolve().parents[1] / 'data' / 'worlds_2026.json')
+        first = replace(data.matches[0], status=MatchStatus.COMPLETED)
+        later = replace(first, id='undrawn', status=MatchStatus.SCHEDULED,
+                        team1_id='TBD', team2_id='TBD', start_time=first.start_time + timedelta(days=1))
+        data = replace(data, matches=[first, later])
+        manager = SimpleNamespace(guild_id=123, store=SimpleNamespace(data=data),
+                                  match_days=lambda: {'2026-10-15': [first], '2026-10-16': [later]})
+        picker = WorldsDayPublishView(manager)
+        select = next(item for item in picker.children if isinstance(item, discord.ui.Select))
+        assert len(select.options) == 1
+        assert select.options[0].label == 'Worlds Day 2 · 2026-10-16'
+        assert '0/1 matchups confirmed' in select.options[0].description
+        assert not select.disabled
+        interaction = SimpleNamespace(guild_id=123,
+            user=SimpleNamespace(guild_permissions=discord.Permissions.none()),
+            response=SimpleNamespace(send_message=AsyncMock()))
+        assert not await picker.interaction_check(interaction)
+        picker.stop()
     asyncio.run(scenario())
 
 

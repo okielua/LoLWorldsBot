@@ -97,7 +97,7 @@ def test_total_correct_outranks_perfect_single_prediction(competition):
     assert [row.user_id for row in get_competition_stats(123, data.tournament.id)] == [1, 2]
 
 
-def test_ties_use_accuracy_then_stable_user_id(competition):
+def test_equal_points_and_correct_winners_share_rank_with_stable_user_order(competition):
     data = competition(4)
     for match in data.matches:
         pick(match, 1, match in data.matches[:2])
@@ -105,7 +105,7 @@ def test_ties_use_accuracy_then_stable_user_id(competition):
         pick(match, 3, match in data.matches[:2])
         pick(match, 2, match in data.matches[:2])
     complete(data)
-    assert [row.user_id for row in get_competition_stats(123, data.tournament.id)] == [2, 3, 1]
+    assert [row.user_id for row in get_competition_stats(123, data.tournament.id)] == [1, 2, 3]
 
 
 def test_minority_team_breakdown_excludes_even_splits_and_matches_aggregate_totals(competition):
@@ -209,7 +209,7 @@ def test_movement_reconstructs_previous_scored_result_and_survives_restart(compe
     snapshot = get_competition_snapshot(123, data.tournament.id, data=completed)
     assert snapshot.previous_rows == before.rows
     ranks, previous = competition_ranks(snapshot.rows), competition_ranks(snapshot.previous_rows)
-    assert ranks == {2: 1, 3: 2, 1: 3}
+    assert ranks == {2: 1, 3: 2, 1: 2}
     assert rank_movement(1, ranks, previous) == "⬇️"
     assert rank_movement(2, ranks, previous) == ""
     assert rank_movement(3, ranks, previous) == "New"
@@ -418,7 +418,8 @@ def test_swiss_scope_excludes_playins_from_totals_ranks_history_and_team_insight
     for index, match in enumerate(matches):
         pick(match, 7, index != 1)
     pick(matches[0], 8)  # A Play-ins-only user must not be ranked.
-    completed = replace(data, matches=[replace(match, status=MatchStatus.COMPLETED, winner_id=match.team1_id)
+    completed = replace(data, matches=[replace(match, status=MatchStatus.COMPLETED, winner_id=match.team1_id,
+                                                              team1_score=match.best_of // 2 + 1, team2_score=0)
                                       if i < 3 else match for i, match in enumerate(matches)])
     reconcile_polls(123, completed, matches[-1].start_time - timedelta(minutes=7))
     snapshot = get_competition_snapshot(123, data.tournament.id, data=completed, from_swiss=True)

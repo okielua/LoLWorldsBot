@@ -13,6 +13,8 @@ from services.prediction_tiers import TIERS, prediction_tiers
 ACCENT = 0x5865F2
 UNAVAILABLE = "\u2014"  # Approved for unavailable rank and accuracy.
 LEADERBOARD_HELP = format_footnotes(
+    "-# · Points: correct picks through Swiss (including Play-Ins) earn 1; knockout scores earn 3/2/1 for the correct winner, 0 otherwise.\n"
+    "-# · Overall ties are broken by correct winners. Through-Swiss fractions count submitted, scored predictions.\n"
     "-# · ✅ Correct · ❌ Wrong · ➖ Skipped\n"
     "-# · 🔥 Ongoing streak of 3+ (skipped matches don't break streaks)\n"
     "-# · 🏆 Earned MVP trophies\n"
@@ -31,6 +33,14 @@ def accuracy_text(row):
     if not row.submitted:
         return UNAVAILABLE
     return f"{float(row.accuracy) * 100:.1f}".rstrip("0").rstrip(".") + "%"
+
+
+def points_summary(row):
+    correct = row.pre_knockout_correct if row.points is not None else row.correct
+    submitted = row.pre_knockout_submitted if row.points is not None else row.submitted
+    percent = f'{100 * correct / submitted:.1f}'.rstrip('0').rstrip('.') + '%' if submitted else '—'
+    return (f'**Correct predictions through Swiss: {correct}/{submitted} ({percent}) → {correct} points**\n'
+            f'**Knockout prediction points: {row.knockout_points}**')
 
 
 def rank_movement(user_id, ranks, previous):
@@ -58,7 +68,7 @@ def trophy_labels(slots):
 
 
 def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, trophies=None, trophy_slots=None):
-    entries = sorted(entries, key=lambda entry: (-entry[0].correct, -entry[0].accuracy, entry[0].user_id))
+    entries = sorted(entries, key=lambda entry: (*(-v for v in entry[0].ranking_key), entry[0].user_id))
     ranks = competition_ranks([row for row, _ in entries])
     blocks = []
     tiers = prediction_tiers([row for row, _ in entries])
@@ -81,7 +91,7 @@ def leaderboard_embeds(entries, *, previous=None, preview=False, history=None, t
         streak_icon = ' 🔥' if streak>=3 else ''
         block = (f"## {names[row.user_id]}"
                  + ((' ' if movement == 'New' else '') + movement if movement else '') + streak_icon + '\n'
-                 + f'## {row.correct}/{row.submitted} ({accuracy_text(row)})\n')
+                 + f'## {row.total_points} points\n' + points_summary(row) + '\n')
         if history is not None:
             choices = {pick.match_id:pick.chosen==pick.winner_id for pick in history.recent.get(row.user_id,[])}
             icons = [('✅' if choices[mid] else '❌') if mid in choices else '➖'
@@ -156,7 +166,9 @@ def personal_stats_embed(snapshot, user_id, display_name, *, rows=None, previous
         "# __Basic Stats__\n\n"
         f"### · Current rank: {aggregate_token(standing, rank_scope) if rank else standing}\n"
         f"### · League rank: {aggregate_token(tier_text, rank_scope) if rank else tier_text}\n"
-        f"### · Correct predictions: {value(f'{row.correct}/{row.submitted}')} ({value(accuracy_text(row))})\n"
+        f"### · Total points: {value(row.total_points)}\n"
+        + points_summary(row) + "\n"
+        + f"### · Correct winners overall: {value(f'{row.correct}/{row.submitted}')} ({value(accuracy_text(row))})\n"
         f"### · Current streak: {streak_text(row.current_streak)}\n"
         f"### · Best streak: {streak_text(row.longest_streak)}"
     )

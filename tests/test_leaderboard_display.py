@@ -16,12 +16,12 @@ def test_sample_leaderboard_matches_compact_specification():
     assert embed.title == "TEST: Communism Worlds Leaderboard"
     assert embed.colour.value == 0x5865F2
     assert "Sample results. The real leaderboard is unchanged." in text
-    assert "## `lua`⬆️ 🔥\n## 18/24 (75%)" in text
-    assert "## `Sample Player 2`⬇️\n## 18/26 (69.2%)" in text
+    assert "## `lua`⬆️ 🔥\n## 18 points" in text
+    assert "## `Sample Player 2`⬇️\n## 18 points" in text
     assert "## `Sample Player 3`" in text
     assert "## `Sample Player 4`⬆️" in text
     assert '(69.2%)' in text and '(70%)' in text
-    assert '## 18/24 (75%)' in text
+    assert '## 18 points' in text
     assert "## `Sample Player 6`" in text
     assert text.index("18/24") < text.index("## `Sample Player 6`")
     assert not any(word in text for word in ("participation", "75.0%", "behind", "Level on", "\u200b", "\n\n\n"))
@@ -74,8 +74,8 @@ def test_full_swiss_history_skips_custom_rank_arrows_and_trophy_slots(monkeypatc
     embed,=leaderboard_embeds([(rows[0],'Winner'),(rows[1],'Other')],previous={1:2,2:1},
         history=history,trophies={1:case},trophy_slots=[('swiss', str(i)) for i in range(8)] + [('quarterfinals', ''), ('semifinals', ''), ('final', ''), ('overall', '')])
     text=embed.description.replace("\u00a0", "")
-    assert '`Winner`<:arrow_up_blue:100> 🔥\n## 4/5 (80%)' in text
-    assert '`Other`<:arrow_down_grey:101>\n## 2/5 (40%)' in text
+    assert '`Winner`<:arrow_up_blue:100> 🔥\n## 4 points' in text
+    assert '`Other`<:arrow_down_grey:101>\n## 2 points' in text
     assert '❌ ➖ ✅ ✅ ✅' in text
     assert '\n🏆' in text and '<:dot3:103>' not in text and '⚪' not in text
     assert 'Current streak:' not in text and 'Best streak:' not in text and 'Oldest' not in text
@@ -94,7 +94,7 @@ def test_personal_stats_use_requested_summary_and_four_explained_sections():
     assert text.index("# __Basic Stats__") < text.index("### · Current rank:") < text.index("# __Some other Stats__") < text.index("## :PeyzPal: __*Check Your PayPal*__")
     assert "### · Current rank: 2 of 2" in text
     assert "### · League rank: :gold:" in text
-    assert "### · Correct predictions: 14/20 (70%)" in text
+    assert "### · Correct winners overall: 14/20 (70%)" in text
     assert "My votes:" not in text
     assert "My incorrect predictions:" not in text and "My missed votes:" not in text
     assert "### · Current streak: 🔥🔥\n### · Best streak: 🔥🔥🔥🔥🔥" in text
@@ -112,7 +112,7 @@ def test_pending_only_and_no_votes_have_clear_empty_states():
     snapshot = CompetitionSnapshot([], None, {}, {7: [prediction]}, 30)
     embed = personal_stats_embed(snapshot, 7, "lua")
     assert f"### · Current rank: {UNAVAILABLE}" in embed.description
-    assert "Pending votes" not in embed.description and "### · Correct predictions: 0/0 (—)" in embed.description
+    assert "Pending votes" not in embed.description and "### · Correct winners overall: 0/0 (—)" in embed.description
     assert "accuracy" not in embed.description.lower()
     assert accuracy_text(PredictionStats(7, 0, 0, 30, 0, 0)) == UNAVAILABLE
     empty = personal_stats_embed(snapshot, 8, "No votes")
@@ -206,7 +206,7 @@ def test_history_only_displays_latest_ten_matches_without_changing_totals():
     history = SimpleNamespace(rows=[row], recent={1: list(reversed(picks))},
                               result_match_ids=tuple(f's{i}' for i in range(18)))
     embed, = leaderboard_embeds([(row, 'Player')], history=history)
-    assert '## 11/18 (61.1%)' in embed.description
+    assert 'Correct predictions through Swiss: 11/18 (61.1%)' in embed.description
     assert ' '.join(['✅'] * 10) in embed.description
     assert '❌' not in embed.description.split('-# ', 1)[0]
     assert '**__Last 10 picks:__**' in embed.description

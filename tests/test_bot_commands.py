@@ -1278,7 +1278,7 @@ def test_leaderboard_adds_fire_only_to_streaks_of_three_or_more():
     assert '## `Friend 7` 🔥' in text
     assert '## `Friend 8` 🔥' not in text
     assert 'Current streak:' not in text and 'Best streak:' not in text
-    assert "points" not in text
+    assert "4 points" in text
 
 
 def test_trophycase_command_is_public():

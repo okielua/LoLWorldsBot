@@ -97,9 +97,19 @@ def swiss_result_groups(data):
 
 
 def swiss_result_batches(data):
+    from zoneinfo import ZoneInfo
+    from services.match_times import TOURNAMENT_TIMEZONE
     groups = swiss_result_groups(data)
     batches = dict(groups)
     for key, matches in groups.items():
+        if key.endswith(':4'):
+            del batches[key]
+            # Round 4 spans three days: report each day's two Bo3s together.
+            # Require the full round metadata before interpreting those groups.
+            if len(matches) == 6:
+                for match in matches:
+                    day = match.start_time.astimezone(ZoneInfo(TOURNAMENT_TIMEZONE)).date().isoformat()
+                    batches.setdefault(f'swiss-day:{match.stage_id}:{day}', []).append(match)
         if key.endswith((':2', ':3')) and len(matches) == 8:
             batches[key + ':after-4'] = matches[:4]
     return batches
@@ -168,7 +178,7 @@ def completed_vote_result(manager):
     return None
 
 
-def result_pages(match, votes, *, test_mode=False):
+def result_pages(match, votes, *, test_mode=False, score_predictions=None):
     """Explicit spoiler exception: completed-series results are fully visible."""
     pair = f"{team_token(match.team1_id)} vs {team_token(match.team2_id)}"
     heading = f"## {'TEST: ' if test_mode else ''}Series Voting Results\n\n## {pair}\n({format_tournament_date(match.start_time)})"
@@ -184,6 +194,20 @@ def result_pages(match, votes, *, test_mode=False):
         label = f"{team_token(team_id)} · {count} vote{'s' if count != 1 else ''} ({count / len(valid):.0%})"
         icon = "✅" if team_id == match.winner_id else "❌"
         lines.append((label, [f"{icon} {name}" for name in names] or ["No votes"]))
+    from services.knockout import is_knockout, prediction_points
+    if is_knockout(match):
+        lines = []
+        scores = score_predictions or {}
+        for team_id in (match.team1_id, match.team2_id):
+            for score in (0, 1, 2, None):
+                group = [(uid, name) for uid, team, name in valid if team == team_id and scores.get(uid) == score]
+                if not group:
+                    continue
+                points = prediction_points(match, team_id, score)
+                label = f"{team_token(team_id)} " + (f"3–{score}" if score is not None else "(winner only)") + f" · {points} points"
+                icon = '✅' if team_id == match.winner_id else '❌'
+                names = [f"{icon} @{discord.utils.escape_mentions(discord.utils.escape_markdown(name or f'User {uid}'))}" for uid, name in sorted(group, key=lambda pair: (pair[1] or '').casefold())]
+                lines.append((label, names))
     total = f"**{len(valid)} vote{'s' if len(valid) != 1 else ''} cast**"
     pages, body = [], heading + "\n\n" + (total if valid else "No votes were cast for this series.")
     for label, names in lines:
@@ -217,7 +241,7 @@ async def show_latest_results(interaction):
     completed = await asyncio.to_thread(completed_vote_result, manager)
     if completed:
         match, votes = completed
-        pages = result_pages(match, votes, test_mode=manager.test_mode)
+        pages = result_pages(match, votes, test_mode=manager.test_mode, score_predictions=await asyncio.to_thread(polls.get_score_predictions, manager.guild_id, match.id))
         pages = await add_prediction_form(pages, manager, [match], {match.id: votes})
         receipt = await asyncio.to_thread(latest_result, interaction.guild_id, manager.store.data.tournament.id, match_id=match.id)
         if receipt:
@@ -322,7 +346,7 @@ class SeriesResults:
                 if match is None or match.status != MatchStatus.COMPLETED:
                     continue
                 votes = await asyncio.to_thread(polls.get_poll_results, manager.guild_id, match_id)
-                pages = result_pages(match, votes, test_mode=manager.test_mode)
+                pages = result_pages(match, votes, test_mode=manager.test_mode, score_predictions=await asyncio.to_thread(polls.get_score_predictions, manager.guild_id, match.id))
                 pages = await add_prediction_form(pages, manager, [match], {match.id: votes})
             if pages == json.loads(saved):
                 continue
@@ -362,11 +386,14 @@ class SeriesResults:
                               if 'swiss' not in m.stage_id.lower()]
                 candidates.extend(swiss_result_batches(manager.store.data).items())
                 for receipt_key, batch in sorted(candidates, key=lambda item: item[1][0].start_time):
-                    is_swiss = receipt_key.startswith('swiss-round:')
+                    is_swiss_day = receipt_key.startswith('swiss-day:')
+                    is_swiss = is_swiss_day or receipt_key.startswith('swiss-round:')
                     intermediate = receipt_key.endswith(':after-4')
                     # A 16-team Swiss round must be complete in the source too.
                     # Never fall back to a one-match post when fixtures are missing.
-                    if is_swiss and not intermediate and len(batch) != SWISS_ROUND_MATCH_COUNTS.get(int(receipt_key.rsplit(':', 1)[1])):
+                    if is_swiss_day and len(batch) != 2:
+                        continue
+                    if is_swiss and not is_swiss_day and not intermediate and len(batch) != SWISS_ROUND_MATCH_COUNTS.get(int(receipt_key.rsplit(':', 1)[1])):
                         continue
                     if intermediate and all(confirmed_result(m) for m in swiss_result_groups(manager.store.data)[receipt_key.rsplit(':', 1)[0]]):
                         continue  # If recovery happens after all eight finish, only send the final.
@@ -383,7 +410,7 @@ class SeriesResults:
                                           for m in batch}
                         pages = (swiss_result_pages(batch, votes_by_match, test_mode=manager.test_mode,
                                                     intermediate=intermediate) if is_swiss
-                                 else result_pages(match, votes_by_match[match.id], test_mode=manager.test_mode))
+                                 else result_pages(match, votes_by_match[match.id], test_mode=manager.test_mode, score_predictions=await asyncio.to_thread(polls.get_score_predictions, manager.guild_id, match.id)))
                         pages = await add_prediction_form(pages, manager, batch, votes_by_match)
                         role = settings.worlds_role_id if not manager.test_mode else None
                         recipients = []

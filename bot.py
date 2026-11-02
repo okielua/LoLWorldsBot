@@ -27,7 +27,7 @@ from services.prediction_display import PREDICTION_BLUE, VOTE_CONFIRMATION_HELP,
 from services.match_times import TOURNAMENT_TIMEZONE, format_clock_time, format_timezone_times, private_match_details
 from services.user_settings import get_registered_timezones
 from services.server_settings import get_server_settings
-from services.voting import DailyPageButton, LegacyDailyVoteButton, ScheduleVoteButton, VotingManager, personal_vote_payloads, schedule_vote_payloads, my_vote_payloads, current_votes_controls
+from services.voting import DailyPageButton, LegacyDailyVoteButton, ScheduleVoteButton, ScoreVoteButton, VotingManager, personal_vote_payloads, schedule_vote_payloads, my_vote_payloads, current_votes_controls
 from services.prediction_stats import get_competition_stats
 from services.leaderboard_views import MyStatsButton, leaderboard_context, leaderboard_payload, show_personal_stats
 from services.status_labels import MATCH_STATUS_LABELS, upcoming_line
@@ -423,7 +423,7 @@ class WorldsBot(discord.Client):
 
         self.tree = SetupCommandTree(self)
         self.voting_manager = VotingManager(self, tournament_store, GUILD_ID)
-        self.add_dynamic_items(ScheduleVoteButton, LegacyDailyVoteButton)
+        self.add_dynamic_items(ScheduleVoteButton, LegacyDailyVoteButton, ScoreVoteButton)
         self.add_dynamic_items(DailyPageButton)
         self.add_dynamic_items(MyStatsButton, TrophyCaseButton)
         self.add_dynamic_items(OpenVotePanel, PublicVotersButton)
@@ -1407,6 +1407,13 @@ async def player(interaction: discord.Interaction, name: str):
     text = await player_reply(name, worlds.tournament.year)
     await interaction.followup.send(**message_payload(text),
                                     allowed_mentions=discord.AllowedMentions.none())
+
+
+@bot.tree.command(name="testknockout", description="Try exact-score voting and simulate knockout results, points and trophies.")
+@app_commands.guild_only()
+async def testknockout(interaction: discord.Interaction):
+    from services.knockout_preview import show_knockout_preview
+    await show_knockout_preview(interaction)
 
 
 @bot.tree.command(name="testteam", description="Privately preview a team's sample finished, live, and upcoming matches.")

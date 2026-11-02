@@ -367,12 +367,18 @@ and all user/role/everyone pings are disabled. Controlled prediction simulations
 send the same announcements with a clear TEST label. Missing channels or failed announcements never
 undo a saved vote or prevent its private confirmation.
 
-Members with **Manage Server** can use `/serversetup` → **Publish Daily Post**
-or **Delete Daily Post**. Manual publishing creates or refreshes the earliest
-unfinished matchday's board, even if automatic reminders are off. New posts ping
+Members with **Manage Server** can use `/serversetup` → **Choose Worlds Day**
+to select a voting board by Worlds day number and tournament date, then press
+**Publish Selected Day**; **Delete Daily Post** deletes the latest board.
+The dropdown includes unfinished days already present in the schedule, with a
+confirmed-matchup count, even when the draw is still unknown. Round 3's shared
+board lists both Worlds day numbers. Undrawn days need confirmed matchups before
+publishing; wholly unknown future schedule days cannot yet be listed.
+Manual publishing creates or refreshes the selected board, even if automatic reminders are off. New posts ping
 the configured role; refreshing an existing board does not send another ping.
-It respects fresh-source checks, the 24-hour lead limit, previous-matchday
-completion, known opponents, and the five-minute voting cutoff. Repeated clicks
+Manual publishing can happen more than 24 hours before the first match; automatic
+posting retains its 24-hour lead limit and previous-matchday completion rule.
+Manual publishing respects fresh-source checks, known opponents, and the five-minute voting cutoff. Repeated clicks
 reuse the existing board. Deleting preserves polls/votes and persists a pause for
 that matchday, preventing automatic recreation after restarts. Publishing again
 clears that pause. Future matchdays retain their normal automatic behavior.
@@ -540,6 +546,11 @@ the automatic announcement was missed, deleted, or skipped on first install.
 Only this server's published polls are eligible. It never shows live scores or
 creates an automatic-announcement receipt, so it does not consume later delivery.
 
+Swiss Round 4 posts one combined results report after each tournament day's
+two Bo3 series are confirmed complete. It does not also send a six-series
+round-wide report. Reports retain the saved votes, recent picks and matchday
+trophy section. Durable per-day receipts prevent duplicate sends after restarts.
+
 When a published poll's series completes, the bot posts its voting results once
 in the configured reminder channel, mentioning the Worlds role and subscribers
 to either team. Recipients are deduplicated and role members do not also get
@@ -688,3 +699,27 @@ project Python without starting Discord and tests parsing, pagination, cache
 recovery, reminder eligibility, queries, and command formatting.
 
 `/nextgames [count]` and `/previousgames [count]` accept an optional whole-number count from 1 to 100 (default 3). Results use pages of three matches with Previous/Next buttons. A **See 3 More Next Matches** or **See 3 More Previous Matches** button expands the current results and opens the next batch without sending another message. The button disappears when all available matches (up to 100) are loaded, and the title updates to the loaded total. Only scheduled future matches appear in `/nextgames`; only completed matches appear in `/previousgames`. Requests exceeding the available fixtures show all available matches with an explanatory note.
+
+
+### Knockout score voting and points
+
+Quarterfinals, semifinals and the final use six Bo5 predictions: either team winning
+3–0, 3–1 or 3–2. Voting closes five minutes before the scheduled series start.
+Correct winner plus exact score earns 3 points; one game off earns 2; two games off
+earns 1. A wrong winner or skipped series earns 0. Existing winner-only votes earn
+at most 1 point and are never assigned an invented score.
+
+Correct predictions through Swiss (including Play-Ins) retain one point each.
+The displayed fraction uses submitted, scored predictions as its denominator.
+Overall standings sort by total points, then correct winners; remaining ties share
+a rank. Last-pick icons and streaks continue to measure correct winners. Swiss
+matchday trophies retain their original rules; knockout stage trophies use points
+within that stage, and the overall trophy uses total points.
+
+Automatic knockout voting boards publish at 04:00 Europe/Berlin on each matchday,
+with durable duplicate prevention. Results publish after a confirmed completed
+series and include score picks, earned points, recent picks and trophy awards.
+
+In the development bot, run `/testknockout`, choose a prediction, then select a
+simulated final score. This private rehearsal uses an isolated sample competition
+and does not change the real tournament's votes or points or ping anyone.

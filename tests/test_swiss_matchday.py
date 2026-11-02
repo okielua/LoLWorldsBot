@@ -360,6 +360,52 @@ def test_swiss_posts_first_four_then_all_eight_exactly_once_across_restarts(cont
     asyncio.run(run())
 
 
+def test_round_four_posts_each_days_two_series_once_after_its_second_finish(context):
+    from services.series_results import SeriesResults, swiss_result_batches
+    from services.voting import MATCHDAY_ZONE
+    manager, store, channel, current, matches = prepare(context)
+    matches = matches[:6]
+    first = datetime(2026, 10, 28, 20, tzinfo=UTC)
+    for index, match in enumerate(matches):
+        match.best_of = 3
+        match.round_name = 'Round 4 · 2–1 record'
+        match.start_time = first + timedelta(days=index // 2, hours=3 * (index % 2))
+    store.data = replace(store.data, matches=matches)
+    current[0] = first - timedelta(hours=8)
+    store.fetched_at = current[0]
+    for match in matches:
+        match.voting_closes_at = voting_deadline(match, store.data)
+
+    async def run():
+        for day in manager.match_days():
+            await manager.publish_daily_post(day=day)
+        await manager.series_results.tick()
+        channel.send.reset_mock()
+        assert len(swiss_result_batches(store.data)) == 3
+        for index, match in enumerate(matches):
+            current[0] = match.start_time + timedelta(hours=2)
+            store.fetched_at = current[0]
+            match.status = MatchStatus.COMPLETED
+            match.winner_id = match.team1_id
+            match.team1_score, match.team2_score = 2, 0
+            polls.reconcile_polls(manager.guild_id, store.data, current[0], fresh=True)
+            await manager.series_results.tick()
+            assert channel.send.await_count == (index + 1) // 2
+            if index % 2:
+                text = str(channel.send.call_args.kwargs['view'].to_components())
+                assert text.count('Final score: 2–0') == 2
+                day = match.start_time.astimezone(MATCHDAY_ZONE).date().isoformat()
+                with polls.get_connection() as db:
+                    receipt = db.execute('SELECT message_id FROM series_result_posts WHERE match_id=?',
+                        (f'swiss-day:{match.stage_id}:{day}',)).fetchone()
+                assert receipt[0]
+                manager.series_results = SeriesResults(manager)
+                await manager.series_results.tick()
+                assert channel.send.await_count == (index + 1) // 2
+        assert channel.send.await_count == 3  # No extra full-round report.
+    asyncio.run(run())
+
+
 def test_round_three_publishes_all_eight_at_berlin_noon_after_clock_change(context):
     from zoneinfo import ZoneInfo
     from services.voting_rules import round_three_publication_time, voting_board_day

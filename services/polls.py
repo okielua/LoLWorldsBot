@@ -56,7 +56,13 @@ def initialize_polls():
                 PRIMARY KEY (guild_id, match_id)
             )
         """)
+        connection.execute("""CREATE TABLE IF NOT EXISTS poll_scoring_formats (
+            guild_id INTEGER NOT NULL, match_id TEXT NOT NULL, stage_id TEXT NOT NULL,
+            best_of INTEGER NOT NULL, team1_score INTEGER, team2_score INTEGER,
+            PRIMARY KEY(guild_id, match_id))""")
         columns = {row[1] for row in connection.execute("PRAGMA table_info(poll_votes)")}
+        if "predicted_loser_games" not in columns:
+            connection.execute("ALTER TABLE poll_votes ADD COLUMN predicted_loser_games INTEGER")
         if "display_name" not in columns:
             connection.execute("ALTER TABLE poll_votes ADD COLUMN display_name TEXT")
         poll_columns = {row[1] for row in connection.execute("PRAGMA table_info(match_polls)")}
@@ -165,7 +171,9 @@ def is_open_for_votes(match, poll, now, data):
     return not (poll and poll.closed) and now < (voting_deadline(poll) if poll else voting_deadline(match, data))
 
 
-def cast_vote(guild_id, match_id, user_id, team_id, now, display_name=None, expected_pair=None):
+def cast_vote(guild_id, match_id, user_id, team_id, now, display_name=None, expected_pair=None, predicted_loser_games=None):
+    if predicted_loser_games is not None and (type(predicted_loser_games) is not int or predicted_loser_games not in (0, 1, 2)):
+        raise ValueError('Choose a 3–0, 3–1 or 3–2 prediction.')
     if now.tzinfo is None:
         raise ValueError("Vote time must be timezone-aware.")
     with closing(get_connection()) as connection, connection:
@@ -181,18 +189,18 @@ def cast_vote(guild_id, match_id, user_id, team_id, now, display_name=None, expe
         if expected_pair is not None and set(row[2:4]) != set(expected_pair):
             raise ValueError("This matchup changed. Please use the current prediction buttons.")
         previous = connection.execute(
-            "SELECT team_id FROM poll_votes WHERE guild_id = ? AND match_id = ? AND user_id = ?",
+            "SELECT team_id, predicted_loser_games FROM poll_votes WHERE guild_id = ? AND match_id = ? AND user_id = ?",
             (guild_id, match_id, user_id),
         ).fetchone()
         connection.execute("""
-            INSERT INTO poll_votes (guild_id, match_id, user_id, team_id, updated_at, display_name, created_at, vote_team1_id, vote_team2_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO poll_votes (guild_id, match_id, user_id, team_id, updated_at, display_name, created_at, vote_team1_id, vote_team2_id, predicted_loser_games)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(guild_id, match_id, user_id)
             DO UPDATE SET team_id = excluded.team_id, updated_at = excluded.updated_at, display_name = excluded.display_name,
-                          vote_team1_id = excluded.vote_team1_id, vote_team2_id = excluded.vote_team2_id
+                          vote_team1_id = excluded.vote_team1_id, vote_team2_id = excluded.vote_team2_id, predicted_loser_games = excluded.predicted_loser_games
         """, (guild_id, match_id, user_id, team_id, now.astimezone(UTC).isoformat(), display_name,
-              now.astimezone(UTC).isoformat(), row[2], row[3]))
-        return previous is not None and previous[0] != team_id
+              now.astimezone(UTC).isoformat(), row[2], row[3], predicted_loser_games))
+        return previous is not None and (previous[0] != team_id or previous[1] != predicted_loser_games)
 
 
 def reconcile_polls(guild_id, data, now, *, fresh=True):
@@ -200,6 +208,13 @@ def reconcile_polls(guild_id, data, now, *, fresh=True):
     with closing(get_connection()) as connection, connection:
         for poll in get_polls(guild_id, data.tournament.id):
             match = matches.get(poll.match_id) if fresh else None
+            if match is not None:
+                connection.execute("""INSERT INTO poll_scoring_formats VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(guild_id,match_id) DO UPDATE SET stage_id=excluded.stage_id,
+                    best_of=excluded.best_of, team1_score=excluded.team1_score, team2_score=excluded.team2_score
+                    WHERE stage_id!=excluded.stage_id OR best_of!=excluded.best_of
+                    OR team1_score IS NOT excluded.team1_score OR team2_score IS NOT excluded.team2_score""",
+                    (guild_id,match.id,match.stage_id,match.best_of,match.team1_score,match.team2_score))
             start = match.start_time if match else poll.start_time
             deadline = voting_deadline(match, data) if match else voting_deadline(poll)
             if poll.voting_override_until:
@@ -446,3 +461,8 @@ def get_recent_completed_match_ids(guild_id, tournament_id, now):
         """, (guild_id, tournament_id)).fetchall()
     return {match_id for match_id, observed in rows
             if timedelta(0) <= now - datetime.fromisoformat(observed) < timedelta(hours=1)}
+
+
+def get_score_predictions(guild_id, match_id):
+    with closing(get_connection()) as connection:
+        return dict(connection.execute('SELECT user_id, predicted_loser_games FROM poll_votes WHERE guild_id=? AND match_id=?', (guild_id, match_id)))
