@@ -1310,14 +1310,14 @@ def test_next_board_waits_for_previous_matchday_and_includes_mvp_on_publication(
         store.data = replace(store.data, matches=[first, second, future])
         await manager.tick()
         assert channel.send.await_count == 1
-        assert "Previous Match-Day MVP" not in str(channel.send.call_args.kwargs["view"].to_components())
+        assert "Previous Matchday Trophy Winner" not in str(channel.send.call_args.kwargs["view"].to_components())
         current[0] = second.start_time + timedelta(hours=4)
         store.fetched_at = current[0]
         store.data = replace(store.data, matches=[replace(m, status=MatchStatus.COMPLETED, winner_id=m.team1_id)
                                                 if m.id != future.id else m for m in store.data.matches])
         await manager.tick()
         components = str(channel.send.call_args.kwargs["view"].to_components())
-        assert "Previous Match-Day MVP" in components
+        assert "Previous Matchday Trophy Winner" in components
         assert "Lua" in components and "2/2 correct" in components and "100.0% participation" in components
         assert "Jerry" in components
         assert "points" not in components

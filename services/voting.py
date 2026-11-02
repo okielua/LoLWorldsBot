@@ -422,7 +422,8 @@ class DailyPredictionsView(SetupRequiredLayoutView):
         else:
             introduction = "Here are today's matchups. Voting for each matchup closes 5 minutes before match start.\n\n"
         from services.knockout import is_knockout
-        if matches and all(is_knockout(m) for m in matches):
+        knockout_board = bool(matches) and all(is_knockout(m) for m in matches)
+        if knockout_board:
             introduction = ("Choose the winner and exact score. **Voting closes 5 minutes before the series starts.**\n"
                             "**3 points** exact · **2 points** one game off · **1 point** two games off · **0 points** wrong winner.\n\n")
         page = min(max(0, getattr(manager, "_daily_pages", {}).get(day, 0)), page_count - 1)
@@ -464,6 +465,12 @@ class DailyPredictionsView(SetupRequiredLayoutView):
             + f"## __{date_heading_token(date.date(), MATCHDAY_ZONE.key, now=manager.clock(), style='weekday')}__\n"
             + recap
         )
+        if knockout_board:
+            title = f"Worlds {data.tournament.year} Match Day {matchdays.index(day) + 1}/{len(matchdays)} ({date:%a, %d.%m.%Y})"
+            header = team_display(
+                (f"<@&{role_id}>\n" if role_id and not manager.test_mode else "")
+                + f"# {'TEST: ' if manager.test_mode else ''}{title}\n\n"
+                + f"## {stage_label} Rule Changes\n\n" + introduction)
         if not compact:
             card.add_item(header)
         match_texts = []
@@ -589,6 +596,10 @@ class DailyPredictionsView(SetupRequiredLayoutView):
                 DailyPageButton(manager.guild_id, day, min(page_count - 1, page + 1), tournament,
                                 label="Next Matches", disabled=page == page_count - 1),
             ))
+
+        if knockout_board and recap:
+            card.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+            card.add_item(team_display(recap))
 
 
 class VotingManager:
@@ -922,7 +933,7 @@ class VotingManager:
             if mvps:
                 names = await asyncio.to_thread(get_voter_display_names, self.guild_id, tournament_id)
                 guild = getattr(self.client, "get_guild", lambda _: None)(self.guild_id)
-                recap = f"\n### __{award.label + ' MVP' if award else 'Previous Match-Day MVP'}__\n"
+                recap = f"\n### __{award.label + ' Trophy Winner' if award else 'Previous Matchday Trophy Winner'}__\n"
                 winners = []
                 for row in mvps:
                     member = guild.get_member(row.user_id) if guild else None
