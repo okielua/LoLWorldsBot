@@ -472,13 +472,13 @@ class DailyPredictionsView(SetupRequiredLayoutView):
             title = f"Worlds {data.tournament.year} Match Day {matchdays.index(day) + 1}/{len(matchdays)} ({date:%a, %d.%m.%Y})"
             header = team_display(
                 (f"<@&{role_id}>\n" if role_id and not manager.test_mode else "")
-                + f"# {'TEST: ' if manager.test_mode else ''}{title}\n\n"
-                + f"## {stage_label} Rule Changes\n\n" + introduction)
+                + f"# __{'TEST: ' if manager.test_mode else ''}{title}__\n\n"
+                + f"## __{stage_label} Rule Changes__\n\n" + introduction)
         if not compact:
             card.add_item(header)
             if knockout_board:
                 card.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.large))
-                card.add_item(discord.ui.TextDisplay("## Cast Your Vote"))
+                card.add_item(discord.ui.TextDisplay("## __Cast Your Vote__"))
         match_texts = []
         for match_index, match in enumerate(matches):
             poll = poll_by_id.get(match.id)
@@ -947,7 +947,7 @@ class VotingManager:
                     name = discord.utils.escape_mentions(discord.utils.escape_markdown(" ".join(name.split())))
                     winners.append(f"**{name}**")
                 row = mvps[0]  # Joint winners have the same correct/submitted ratio.
-                recap += (f"## 🏆 {', '.join(winners)}\n"
+                recap += (f"## __🏆 {', '.join(winners)}__\n"
                           f"{row.correct}/{row.submitted} correct ({float(row.accuracy):.1%})\n"
                           f"-# {row.submitted}/{row.eligible} matches predicted · {float(row.participation):.1%} participation\n")
                 recap = aggregate_token(recap)
