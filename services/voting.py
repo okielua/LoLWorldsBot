@@ -425,7 +425,10 @@ class DailyPredictionsView(SetupRequiredLayoutView):
         knockout_board = bool(matches) and all(is_knockout(m) for m in matches)
         if knockout_board:
             introduction = ("Choose the winner and exact score. **Voting closes 5 minutes before the series starts.**\n"
-                            "**3 points** exact · **2 points** one game off · **1 point** two games off · **0 points** wrong winner.\n\n")
+                            "\n- 🎯 Predicting the **exact Bo5 outcome:** **3 points**\n"
+                            "- ✅ Predicting the **correct winner, 1 game off:** **2 points**\n"
+                            "- ✅ Predicting the **correct winner, 2 games off:** **1 point**\n"
+                            "- ❌ Predicting the **wrong winner or skipping:** **0 points**\n\n")
         page = min(max(0, getattr(manager, "_daily_pages", {}).get(day, 0)), page_count - 1)
         matches = matches[page * page_size:(page + 1) * page_size]
         date = datetime.fromisoformat(day)
