@@ -18,13 +18,6 @@ Voting on the **winner as well as exact Bo5 score**:
 - ✅ Predicting the **correct winner, 1 game off:** **2 points**
 - ✅ Predicting the **correct winner, 2 games off:** **1 point**
 - ❌ Predicting the **wrong winner or skipping:** **0 points**
-
-**Points available:**
-
-- **Quarterfinals: 12 points (4 matches)**
-- **Semifinals: 6 points (2 matches)**
-- **Final: 3 points (1 match)**
-- **Total: 21 points (7 matches)**
 """
 
 async def show_rules(interaction, *, ephemeral=False):
